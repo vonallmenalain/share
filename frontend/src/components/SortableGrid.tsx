@@ -22,16 +22,19 @@ interface Props {
   token: string;
   onReorder: (items: Item[]) => void;
   onOpen: (item: Item) => void;
+  onLongPress?: (item: Item) => void;
 }
 
 function SortableTile({
   item,
   token,
   onOpen,
+  onLongPress,
 }: {
   item: Item;
   token: string;
   onOpen: () => void;
+  onLongPress?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -48,16 +51,18 @@ function SortableTile({
       {...attributes}
       {...listeners}
     >
-      <Tile item={item} token={token} onOpen={onOpen} />
+      <Tile item={item} token={token} onOpen={onOpen} onLongPress={onLongPress} />
     </div>
   );
 }
 
 /** Galerie mit Drag-&-Drop-Sortierung (eigene Reihenfolge). */
-export default function SortableGrid({ items, token, onReorder, onOpen }: Props) {
+export default function SortableGrid({ items, token, onReorder, onOpen, onLongPress }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    // Auf Touch-Geräten erst nach längerem Halten ziehen; vorher greift das
+    // "lange Drücken" zum Wechsel in den Auswahl-Modus (siehe Tile).
+    useSensor(TouchSensor, { activationConstraint: { delay: 550, tolerance: 8 } }),
   );
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -74,7 +79,13 @@ export default function SortableGrid({ items, token, onReorder, onOpen }: Props)
       <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
         <div className="grid">
           {items.map((item) => (
-            <SortableTile key={item.id} item={item} token={token} onOpen={() => onOpen(item)} />
+            <SortableTile
+              key={item.id}
+              item={item}
+              token={token}
+              onOpen={() => onOpen(item)}
+              onLongPress={onLongPress ? () => onLongPress(item) : undefined}
+            />
           ))}
         </div>
       </SortableContext>
