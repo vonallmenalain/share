@@ -1,0 +1,11 @@
+# Override zum LOKALEN Bauen des Backend-Images auf dem QNAP (statt es aus der
+# GHCR zu ziehen). Verwenden mit:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build backend
+#
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: share-backend:local

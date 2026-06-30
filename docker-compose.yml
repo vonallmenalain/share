@@ -1,0 +1,70 @@
+# ============================================================================
+# Läuft auf dem QNAP (Container Station -> "Anwendung erstellen" mit dieser
+# Datei, oder via SSH:  docker compose pull && docker compose up -d).
+#
+#   - "backend"     = die API + Bild-/Video-Verarbeitung. Standardmässig wird
+#                     ein fertig gebautes Image aus der GitHub Container Registry
+#                     (GHCR) gezogen (GitHub Actions baut es bei jedem Push nach
+#                     main). Fotos, Videos und die SQLite-DB liegen unter /data.
+#   - "watchtower"  = optionale Auto-Updates: zieht neue Images automatisch.
+#                     Aktivieren mit:  docker compose --profile autoupdate up -d
+#   - "cloudflared" = optionaler Cloudflare-Tunnel, der die API sicher ins
+#                     Internet bringt (ohne Portfreigabe am Router).
+#
+# Kopiere backend/.env.example -> .env (neben diese Datei) und trage deine
+# Werte ein.
+# ============================================================================
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/vonallmenalain/share-backend:latest}
+    container_name: share-backend
+    restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATA_DIR: /data
+    volumes:
+      # WICHTIG: Linker Pfad = Ordner auf deinem QNAP (Freigabe "share" auf dem
+      # SSD-Volume). Passe ihn an deinen tatsächlichen Pfad an, z. B.:
+      #   /share/ZFS530_DATA/share/share-app   ODER
+      #   /share/CACHEDEV1_DATA/share/share-app
+      # Hier landen Originale, Varianten, Video-Vorschauen und die SQLite-DB.
+      - /share/share/share-app/data:/data
+    ports:
+      # Nur nötig, wenn du OHNE Cloudflare-Tunnel direkt (im LAN) zugreifen willst.
+      - "4000:4000"
+
+  # ---------------------------------------------------------------------------
+  # Optionale Auto-Updates: Watchtower zieht neue Backend-Images automatisch.
+  # Aktivieren mit:  docker compose --profile autoupdate up -d
+  # ---------------------------------------------------------------------------
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: share-watchtower
+    restart: unless-stopped
+    profiles: ["autoupdate"]
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # ---------------------------------------------------------------------------
+  # Optionaler Cloudflare Tunnel. Aktivieren mit:
+  #   docker compose --profile tunnel up -d
+  # Trage dein Tunnel-Token in .env als CLOUDFLARE_TUNNEL_TOKEN ein.
+  # ---------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: share-tunnel
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - backend
