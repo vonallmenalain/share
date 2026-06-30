@@ -8,7 +8,9 @@ Ergebnis: Deine API ist unter **`https://api.alae.app`** erreichbar und leitet
 intern an den Container `backend:4000` weiter.
 
 > Empfehlung: Nutze für die API bewusst `api.alae.app` (gleiche Hauptdomain wie
-> das Frontend `share.alae.app`). Dann sind Frontend und API „same-site“.
+> das Frontend `share.alae.app`). Dann sind Frontend und API „same-site“. Ist
+> `api.alae.app` bei dir schon durch ein anderes Projekt/Tunnel belegt, nimm
+> stattdessen z.&nbsp;B. `share-api.alae.app` – siehe Hinweis in [2.4](#24-public-hostname-routing-konfigurieren).
 
 ## 2.1 Voraussetzungen
 
@@ -42,14 +44,33 @@ Tunnel das Backend unter `http://backend:4000`.
 
 ## 2.4 Public Hostname (Routing) konfigurieren
 
+> ⚠️ **Hostname schon vergeben?** Ein Hostname (z. B. `api.alae.app`) kann immer
+> nur auf **einen** Tunnel zeigen – Cloudflare legt dafür automatisch einen
+> DNS-Eintrag an, der auf die Tunnel-ID zeigt. Hast du `alae.app` schon für ein
+> anderes Projekt mit einem eigenen Tunnel genutzt und dort bereits `api.alae.app`
+> als Public Hostname angelegt, **darfst du diesen Hostnamen hier nicht erneut
+> verwenden** – Cloudflare würde sonst entweder einen Fehler melden oder den
+> bestehenden DNS-Eintrag überschreiben und damit das andere Projekt
+> unerreichbar machen. Wähle in diesem Fall eine andere, garantiert freie
+> Subdomain, z. B. **`share-api.alae.app`**, und verwende sie konsequent überall,
+> wo in dieser Anleitung `api.alae.app` als Beispiel steht (insbesondere bei
+> `VITE_API_BASE_URL` in [3. Netlify](03-netlify.md)).
+
 Zurück im Cloudflare-Dashboard beim Tunnel:
 
 1. Reiter **Public Hostname** → **Add a public hostname**.
-2. **Subdomain**: `api` · **Domain**: `alae.app` → ergibt `api.alae.app`.
-3. **Service**: Type **HTTP**, URL **`backend:4000`**.
+2. **Subdomain**: `api` (oder deine alternative Subdomain, siehe oben) ·
+   **Domain**: `alae.app` → ergibt z.&nbsp;B. `api.alae.app`.
+3. **Path**: leer lassen (matcht alle Pfade).
+4. **Service URL**: `http://backend:4000` (im neueren Dashboard ist das ein
+   einzelnes Feld inkl. Protokoll, in älteren Versionen separate Felder
+   **Type** `HTTP` und **URL** `backend:4000`). Bewusst **`http://`**, nicht
+   `https://` – die Verbindung zwischen `cloudflared` und `backend` läuft
+   unverschlüsselt im selben Docker-Netzwerk, Cloudflare übernimmt TLS nach
+   aussen.
    - Läuft dein Tunnel ausnahmsweise nicht im selben Docker-Netz, stattdessen
      `http://<QNAP-IP>:4000`.
-4. **Save**. Cloudflare legt den DNS-Eintrag automatisch an.
+5. **Add route** / **Save**. Cloudflare legt den DNS-Eintrag automatisch an.
 
 ## 2.5 Wichtig: Upload-Limit erhöhen
 
@@ -63,6 +84,9 @@ Problem. Du musst hier normalerweise nichts ändern.
 
 ## 2.6 Testen
 
+Ersetze `api.alae.app` durch deinen tatsächlich gewählten Hostnamen (siehe
+Hinweis in 2.4), falls abweichend:
+
 ```bash
 curl https://api.alae.app/health
 # {"ok":true,"time":"..."}
@@ -70,7 +94,8 @@ curl https://api.alae.app/health
 
 ## 2.7 Diese URL brauchst du weiter
 
-- In **Netlify** als `VITE_API_BASE_URL=https://api.alae.app` (siehe [3. Netlify](03-netlify.md)).
+- In **Netlify** als `VITE_API_BASE_URL=https://api.alae.app` – bzw. dein
+  tatsächlich gewählter Hostname (siehe [3. Netlify](03-netlify.md)).
 - Im **Backend** zeigt `PUBLIC_APP_URL=https://share.alae.app` (für CORS).
 
 ➡️ Weiter mit **[3. Netlify](03-netlify.md)**.
