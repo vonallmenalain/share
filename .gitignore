@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+frontend/dist/
+
+# Daten (Fotos/Videos/DB) – liegen nur auf dem QNAP
+data/
+
+# Env / Secrets
+.env
+.env.*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# Logs / OS
+*.log
+npm-debug.log*
+.DS_Store

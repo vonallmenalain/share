@@ -1,0 +1,66 @@
+# ============================================================================
+# Baut das Backend-Docker-Image automatisch und schiebt es in die GitHub
+# Container Registry (GHCR). Das QNAP zieht dann nur noch das fertige Image.
+#
+#   - Pull Request  -> Image wird nur GEBAUT (Test, ob der Build durchläuft).
+#   - Push nach main -> Image wird gebaut UND nach GHCR gepusht:
+#       * ghcr.io/<owner>/share-backend:latest        (nur main)
+#       * ghcr.io/<owner>/share-backend:sha-<commit>
+# ============================================================================
+name: Build & Push Backend Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/build-backend-image.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/build-backend-image.yml"
+  workflow_dispatch: {}
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-backend
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

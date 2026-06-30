@@ -1,0 +1,38 @@
+{
+  "name": "share-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "share.alae.app – Backend-API für das Teilen von Fotos & Videos (läuft als Docker-Container auf dem QNAP)",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "nanoid": "^3.3.7",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/archiver": "^6.0.3",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
