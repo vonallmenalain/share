@@ -503,6 +503,22 @@ button {
   font-weight: 700;
   font-size: 14px;
 }
+.tray-summary {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fafbfc;
+}
+.tray-summary-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+  margin-bottom: 7px;
+}
+.bar-lg {
+  height: 9px;
+}
 .tray-body {
   max-height: 46vh;
   overflow-y: auto;
