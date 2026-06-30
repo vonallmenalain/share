@@ -9,10 +9,33 @@ import {
   ReactNode,
 } from 'react';
 import { api, API_BASE, Item } from '../api/client';
-import { completeUpload, createSession, putChunk } from '../lib/uploader';
+import { completeUpload, createSession, putChunk, UploadError } from '../lib/uploader';
 import { fingerprintOf, pendingStore } from '../lib/storage';
 
 const MAX_CONCURRENT = 3;
+// Wie oft ein kompletter Datei-Upload (Session anlegen → Chunks → abschliessen)
+// automatisch wiederholt wird, bevor er als Fehler gilt. Die einzelnen Chunks
+// werden zusätzlich pro Chunk mehrfach versucht (siehe lib/uploader.ts).
+const MAX_TASK_ATTEMPTS = 3;
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError';
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new DOMException('aborted', 'AbortError'));
+    const id = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(id);
+      reject(new DOMException('aborted', 'AbortError'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
 
 export type TaskStatus = 'queued' | 'uploading' | 'processing' | 'done' | 'error' | 'canceled';
 
@@ -87,6 +110,67 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
     [sync],
   );
 
+  // Ein einzelner Versuch: Session anlegen/fortsetzen, fehlende Chunks senden,
+  // abschliessen und auf die Verarbeitung warten. Wirft bei Fehlern; der
+  // Aufrufer entscheidet über Wiederholung.
+  const attemptUpload = useCallback(
+    async (task: UploadTask, signal: AbortSignal) => {
+      const session = await createSession(task.token, task.file, task.uploaderName, signal);
+      patch(task.id, { uploadId: session.uploadId });
+
+      pendingStore.upsert(task.spaceId, {
+        fingerprint: task.fingerprint,
+        uploadId: session.uploadId,
+        filename: task.file.name,
+        size: task.file.size,
+        totalChunks: session.totalChunks,
+        updatedAt: Date.now(),
+      });
+
+      const { chunkSize, totalChunks } = session;
+      const received = new Set(session.received);
+
+      let doneBytes = 0;
+      for (const idx of received) {
+        const start = idx * chunkSize;
+        const end = Math.min(start + chunkSize, task.file.size);
+        doneBytes += end - start;
+      }
+      patch(task.id, { uploadedBytes: doneBytes });
+
+      for (let index = 0; index < totalChunks; index++) {
+        if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+        if (received.has(index)) continue;
+        const start = index * chunkSize;
+        const end = Math.min(start + chunkSize, task.file.size);
+        const blob = task.file.slice(start, end);
+        const base = doneBytes;
+        await putChunk(
+          task.token,
+          session.uploadId,
+          index,
+          blob,
+          (loaded) => patch(task.id, { uploadedBytes: base + loaded }),
+          signal,
+        );
+        doneBytes += end - start;
+        patch(task.id, { uploadedBytes: doneBytes });
+      }
+
+      patch(task.id, { status: 'processing', uploadedBytes: task.file.size });
+      const item = await completeUpload(task.token, session.uploadId, signal);
+      pendingStore.remove(task.spaceId, task.fingerprint);
+      patch(task.id, { item });
+      notify(item); // zeigt das (noch verarbeitende) Item in der Galerie an
+
+      // Auf Fertigstellung der Verarbeitung warten.
+      const ready = await pollUntilReady(task.token, item.id, signal);
+      if (ready) notify(ready);
+      patch(task.id, { status: 'done', item: ready ?? item });
+    },
+    [notify, patch],
+  );
+
   const runTask = useCallback(
     async (task: UploadTask) => {
       const controller = new AbortController();
@@ -94,60 +178,31 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
       patch(task.id, { status: 'uploading', error: undefined });
 
       try {
-        const session = await createSession(task.token, task.file, task.uploaderName);
-        patch(task.id, { uploadId: session.uploadId });
-
-        pendingStore.upsert(task.spaceId, {
-          fingerprint: task.fingerprint,
-          uploadId: session.uploadId,
-          filename: task.file.name,
-          size: task.file.size,
-          totalChunks: session.totalChunks,
-          updatedAt: Date.now(),
-        });
-
-        const { chunkSize, totalChunks } = session;
-        const received = new Set(session.received);
-
-        let doneBytes = 0;
-        for (const idx of received) {
-          const start = idx * chunkSize;
-          const end = Math.min(start + chunkSize, task.file.size);
-          doneBytes += end - start;
-        }
-        patch(task.id, { uploadedBytes: doneBytes });
-
-        for (let index = 0; index < totalChunks; index++) {
+        let lastErr: unknown;
+        for (let attempt = 0; attempt < MAX_TASK_ATTEMPTS; attempt++) {
           if (controller.signal.aborted) throw new DOMException('aborted', 'AbortError');
-          if (received.has(index)) continue;
-          const start = index * chunkSize;
-          const end = Math.min(start + chunkSize, task.file.size);
-          const blob = task.file.slice(start, end);
-          const base = doneBytes;
-          await putChunk(
-            task.token,
-            session.uploadId,
-            index,
-            blob,
-            (loaded) => patch(task.id, { uploadedBytes: base + loaded }),
-            controller.signal,
-          );
-          doneBytes += end - start;
-          patch(task.id, { uploadedBytes: doneBytes });
+          try {
+            await attemptUpload(task, controller.signal);
+            return; // Erfolg – Status wurde bereits auf 'done' gesetzt.
+          } catch (err) {
+            if (isAbortError(err)) throw err;
+            lastErr = err;
+            const retryable = err instanceof UploadError ? err.retryable : false;
+            // 409 = Server meldet fehlende Chunks / falsche Grösse. Ein neuer
+            // Versuch setzt die Session fort und lädt nur den fehlenden Rest neu.
+            const isConflict = err instanceof UploadError && err.status === 409;
+            const last = attempt === MAX_TASK_ATTEMPTS - 1;
+            if ((retryable || isConflict) && !last) {
+              patch(task.id, { status: 'uploading', error: undefined });
+              await sleep(Math.min(8000, 1500 * 2 ** attempt), controller.signal);
+              continue;
+            }
+            throw err;
+          }
         }
-
-        patch(task.id, { status: 'processing', uploadedBytes: task.file.size });
-        const item = await completeUpload(task.token, session.uploadId);
-        pendingStore.remove(task.spaceId, task.fingerprint);
-        patch(task.id, { item });
-        notify(item); // zeigt das (noch verarbeitende) Item in der Galerie an
-
-        // Auf Fertigstellung der Verarbeitung warten.
-        const ready = await pollUntilReady(task.token, item.id, controller.signal);
-        if (ready) notify(ready);
-        patch(task.id, { status: 'done', item: ready ?? item });
+        throw lastErr;
       } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') {
+        if (isAbortError(err)) {
           patch(task.id, { status: 'canceled' });
         } else {
           patch(task.id, {
@@ -160,7 +215,7 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
         pump();
       }
     },
-    [notify, patch],
+    [attemptUpload, patch],
   );
 
   const pump = useCallback(() => {
