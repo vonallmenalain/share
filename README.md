@@ -37,8 +37,9 @@ Die Dateien liegen **lokal auf deinem QNAP** – kein Cloud-Speicher Dritter.
 - **Grosse Dateien / Videos**: Uploads werden in Teile (Chunks) zerlegt und sind
   **fortsetzbar** – ein abgebrochener Upload kann weiterlaufen (siehe
   [docs/05-uploads-und-videos.md](docs/05-uploads-und-videos.md)).
-- **Schöne Galerie** mit drei Ansichten: *Galerie* (frei sortierbar per Drag &amp; Drop),
-  *Nach Person* und *Chronologisch* (nach Aufnahmedatum).
+- **Schöne Galerie** mit drei Ansichten: *Galerie* (Foto-Collage mit
+  unterschiedlich grossen Kacheln), *Nach Person* und *Chronologisch*
+  (nach Aufnahmedatum).
 - **Video-Wiedergabe in der App** über eine kleinere, gut streambare Vorschau;
   **Download** liefert immer das **Original**.
 - **Download** einzeln oder als **ZIP** (mehrere/alle Originale auf einmal).

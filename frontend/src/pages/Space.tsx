@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
-import Tile from '../components/Tile';
-import SortableGrid from '../components/SortableGrid';
+import CollageGrid from '../components/CollageGrid';
 import Lightbox from '../components/Lightbox';
 import UploadTray from '../components/UploadTray';
 import { api, ApiError, fileUrl, Item, Space as SpaceType } from '../api/client';
@@ -152,18 +151,6 @@ export default function Space() {
     setDragOver(false);
     if (e.dataTransfer.files) startUpload(Array.from(e.dataTransfer.files));
   };
-
-  // ---- Reihenfolge ---------------------------------------------------------
-  const persistOrder = useCallback(
-    (ordered: Item[]) => {
-      setItems(ordered);
-      if (!token) return;
-      api('/api/items/order', { method: 'PATCH', token, body: { order: ordered.map((i) => i.id) } }).catch(
-        () => undefined,
-      );
-    },
-    [token],
-  );
 
   // ---- Auswahl / Download / Löschen ---------------------------------------
   const toggleSelect = (id: string) => {
@@ -441,12 +428,6 @@ export default function Space() {
           )}
         </div>
 
-        {view === 'gallery' && (
-          <p className="hint" style={{ marginBottom: 12 }}>
-            Tipp: Im Galerie-Modus kannst du die Kacheln per Drag &amp; Drop selbst anordnen.
-          </p>
-        )}
-
         {stalePending.length > 0 && (
           <div className="banner">
             <strong>Unterbrochene Uploads gefunden.</strong> Wähle dieselben Dateien noch einmal
@@ -477,30 +458,15 @@ export default function Space() {
             </div>
           </div>
         ) : view === 'gallery' ? (
-          selectMode ? (
-            <div className="grid">
-              {readyItems.map((item) => (
-                <Tile
-                  key={item.id}
-                  item={item}
-                  token={token}
-                  selectMode
-                  selected={selected.has(item.id)}
-                  onToggle={() => toggleSelect(item.id)}
-                  onOpen={() => setLightboxId(item.id)}
-                  onLongPress={() => longPressSelect(item.id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <SortableGrid
-              items={readyItems}
-              token={token}
-              onReorder={persistOrder}
-              onOpen={(item) => setLightboxId(item.id)}
-              onLongPress={(item) => longPressSelect(item.id)}
-            />
-          )
+          <CollageGrid
+            items={readyItems}
+            token={token}
+            selectMode={selectMode}
+            selected={selected}
+            onToggle={(item) => toggleSelect(item.id)}
+            onOpen={(item) => setLightboxId(item.id)}
+            onLongPress={(item) => longPressSelect(item.id)}
+          />
         ) : view === 'people' ? (
           peopleGroups.map(([person, arr]) => (
             <section key={person}>
@@ -511,20 +477,15 @@ export default function Space() {
                 <h2>{person}</h2>
                 <span className="count">{arr.length}</span>
               </div>
-              <div className="grid">
-                {arr.map((item) => (
-                  <Tile
-                    key={item.id}
-                    item={item}
-                    token={token}
-                    selectMode={selectMode}
-                    selected={selected.has(item.id)}
-                    onToggle={() => toggleSelect(item.id)}
-                    onOpen={() => setLightboxId(item.id)}
-                    onLongPress={() => longPressSelect(item.id)}
-                  />
-                ))}
-              </div>
+              <CollageGrid
+                items={arr}
+                token={token}
+                selectMode={selectMode}
+                selected={selected}
+                onToggle={(item) => toggleSelect(item.id)}
+                onOpen={(item) => setLightboxId(item.id)}
+                onLongPress={(item) => longPressSelect(item.id)}
+              />
             </section>
           ))
         ) : (
@@ -534,20 +495,15 @@ export default function Space() {
                 <h2>{formatDayHeading(key)}</h2>
                 <span className="count">{arr.length}</span>
               </div>
-              <div className="grid">
-                {arr.map((item) => (
-                  <Tile
-                    key={item.id}
-                    item={item}
-                    token={token}
-                    selectMode={selectMode}
-                    selected={selected.has(item.id)}
-                    onToggle={() => toggleSelect(item.id)}
-                    onOpen={() => setLightboxId(item.id)}
-                    onLongPress={() => longPressSelect(item.id)}
-                  />
-                ))}
-              </div>
+              <CollageGrid
+                items={arr}
+                token={token}
+                selectMode={selectMode}
+                selected={selected}
+                onToggle={(item) => toggleSelect(item.id)}
+                onOpen={(item) => setLightboxId(item.id)}
+                onLongPress={(item) => longPressSelect(item.id)}
+              />
             </section>
           ))
         )}
