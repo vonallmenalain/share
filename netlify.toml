@@ -1,0 +1,12 @@
+# Wird von Netlify ZUERST im Repo-Root gesucht, bevor irgendein Base-Directory
+# bekannt ist. Ohne diese Datei findet Netlify `frontend/netlify.toml` beim
+# allerersten Verbinden des Repos u. U. NICHT automatisch (Henne-Ei-Problem),
+# baut dann vom Repo-Root aus und veröffentlicht nichts Sinnvolles -> die
+# Domain zeigt die generische Netlify-Seite "Page not found".
+#
+# Diese Datei setzt nur das Base-Directory; alle übrigen Einstellungen
+# (Build-Command, Publish-Directory, Redirects, Headers) stehen in
+# frontend/netlify.toml und werden von Netlify automatisch nachgeladen,
+# sobald das Base-Directory bekannt ist.
+[build]
+  base = "frontend"
