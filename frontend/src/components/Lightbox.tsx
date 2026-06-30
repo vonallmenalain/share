@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Item, fileUrl } from '../api/client';
 import { formatBytes, formatDateTime } from '../lib/format';
 
@@ -31,6 +31,23 @@ export default function Lightbox({ items, index, token, onClose, onNavigate, onD
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, prev, next]);
 
+  // Mit dem Zurück-Button (Browser/Android) das Bild schliessen, statt die Seite
+  // zu verlassen. Beim Öffnen legen wir einen History-Eintrag an; "Zurück" löst
+  // dann popstate aus und schliesst nur die Lightbox.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    window.history.pushState({ lightbox: true }, '');
+    const onPop = () => onCloseRef.current();
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      // Wird die Lightbox per Klick/✕/Esc geschlossen (nicht über "Zurück"),
+      // entfernen wir unseren History-Eintrag wieder.
+      if (window.history.state?.lightbox) window.history.back();
+    };
+  }, []);
+
   if (!item) return null;
 
   return (
@@ -51,9 +68,18 @@ export default function Lightbox({ items, index, token, onClose, onNavigate, onD
         </button>
       </div>
 
-      <div className="lb-stage" onClick={(e) => e.stopPropagation()}>
+      {/* Klick auf die freie Fläche neben dem Foto/Video schliesst ebenfalls.
+          Das Medium selbst und die Navigationspfeile stoppen den Klick. */}
+      <div className="lb-stage" onClick={onClose}>
         {items.length > 1 && (
-          <button className="lb-nav lb-prev" onClick={prev} aria-label="Zurück">
+          <button
+            className="lb-nav lb-prev"
+            onClick={(e) => {
+              e.stopPropagation();
+              prev();
+            }}
+            aria-label="Zurück"
+          >
             ‹
           </button>
         )}
@@ -67,9 +93,13 @@ export default function Lightbox({ items, index, token, onClose, onNavigate, onD
               controls
               autoPlay
               playsInline
+              onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <div style={{ color: '#fff', textAlign: 'center' }}>
+            <div
+              style={{ color: '#fff', textAlign: 'center' }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="spinner lg white" style={{ margin: '0 auto 14px' }} />
               Vorschau wird noch erstellt…
               <div style={{ marginTop: 14 }}>
@@ -80,15 +110,27 @@ export default function Lightbox({ items, index, token, onClose, onNavigate, onD
             </div>
           )
         ) : item.hasPreview ? (
-          <img key={item.id} src={fileUrl(`/files/preview/${item.id}`, token)} alt={item.filename} />
+          <img
+            key={item.id}
+            src={fileUrl(`/files/preview/${item.id}`, token)}
+            alt={item.filename}
+            onClick={(e) => e.stopPropagation()}
+          />
         ) : (
-          <div style={{ color: '#fff' }}>
+          <div style={{ color: '#fff' }} onClick={(e) => e.stopPropagation()}>
             <div className="spinner lg white" style={{ margin: '0 auto' }} />
           </div>
         )}
 
         {items.length > 1 && (
-          <button className="lb-nav lb-next" onClick={next} aria-label="Weiter">
+          <button
+            className="lb-nav lb-next"
+            onClick={(e) => {
+              e.stopPropagation();
+              next();
+            }}
+            aria-label="Weiter"
+          >
             ›
           </button>
         )}
