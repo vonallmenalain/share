@@ -20,9 +20,32 @@ das **Base directory** auf `frontend` zeigt. Netlify liest dann automatisch:
 
 Falls Netlify die Werte nicht automatisch übernimmt, trage sie manuell so ein.
 
+### Build-Einstellungen nachträglich ändern (Site existiert schon)
+
+Wurde die Site bereits angelegt (z. B. über **Import an existing project**) und du
+willst Base directory/Build command/Publish directory nachträglich prüfen oder
+korrigieren:
+
+1. Im Netlify-Dashboard die Site öffnen.
+2. Im linken Menü **Project configuration → Build & deploy → Continuous
+   deployment** wählen.
+3. Im Abschnitt **Build settings** auf **Edit settings** (bzw. **Configure**,
+   falls noch nichts gesetzt ist) klicken.
+4. Die Werte wie oben eintragen (**Base directory**: `frontend`, **Build
+   command**: `npm run build`, **Publish directory**: `dist`) und speichern.
+5. Danach unter **Deploys → Trigger deploy → Clear cache and deploy site**
+   einen neuen Build anstoßen, damit die geänderten Einstellungen wirksam
+   werden.
+
+> Eine im Repo liegende `netlify.toml` (wie `frontend/netlify.toml`) überschreibt
+> diese UI-Einstellungen bei jedem Deploy wieder. Die manuelle Eingabe ist also
+> nur als Fallback nötig, falls Netlify die Datei beim Verbinden nicht
+> automatisch erkennt.
+
 ## 3.3 Umgebungsvariable setzen (sehr wichtig)
 
-**Site configuration → Environment variables → Add a variable:**
+**Project configuration → Environment variables → Add a variable:**
+(in älteren Netlify-Oberflächen: **Site configuration → Environment variables**)
 
 | Key | Value |
 |---|---|
@@ -33,7 +56,8 @@ Falls Netlify die Werte nicht automatisch übernimmt, trage sie manuell so ein.
 
 ## 3.4 Eigene Domain (share.alae.app)
 
-1. **Site configuration → Domain management → Add a domain** → `share.alae.app`.
+1. **Project configuration → Domain management → Add a domain** → `share.alae.app`.
+   (in älteren Netlify-Oberflächen: **Site configuration → Domain management**)
 2. Im DNS deiner Domain `alae.app` einen **CNAME** `share` auf die
    `*.netlify.app`-Adresse deiner Site setzen (oder Netlify-DNS verwenden).
 3. Netlify stellt automatisch ein **HTTPS-Zertifikat** aus (Let’s Encrypt).
