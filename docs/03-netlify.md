@@ -11,14 +11,24 @@ unter **`share.alae.app`** erreichbar.
 
 ## 3.2 Build-Einstellungen
 
-Die Datei `frontend/netlify.toml` ist bereits vorbereitet. Wichtig ist nur, dass
-das **Base directory** auf `frontend` zeigt. Netlify liest dann automatisch:
+Die Dateien `netlify.toml` (Repo-Root) und `frontend/netlify.toml` sind bereits
+vorbereitet und sollten beim Import automatisch erkannt werden:
 
 - **Base directory**: `frontend`
 - **Build command**: `npm run build`
 - **Publish directory**: `frontend/dist` (relativ: `dist`)
 
-Falls Netlify die Werte nicht automatisch übernimmt, trage sie manuell so ein.
+> Warum zwei `netlify.toml`-Dateien? Netlify sucht beim allerersten Deploy nur
+> im **Repo-Root** nach Konfiguration – bevor das Base directory überhaupt
+> bekannt ist. Die Root-Datei setzt deshalb nur `base = "frontend"`; Netlify
+> lädt dann automatisch zusätzlich `frontend/netlify.toml` mit Build-Command,
+> Publish-Directory, Redirects und Headers nach. Ohne die Root-Datei kann es
+> passieren, dass Netlify vom Repo-Root aus baut (dort gibt es kein
+> `package.json`), nichts Sinnvolles veröffentlicht und die Domain dauerhaft
+> die generische Netlify-Seite **„Page not found“** zeigt – siehe 3.6.
+
+Falls Netlify die Werte trotzdem nicht automatisch übernimmt, trage sie manuell
+so ein.
 
 ### Build-Einstellungen nachträglich ändern (Site existiert schon)
 
@@ -88,5 +98,24 @@ docker compose up -d backend
 Zeigt der Upload/Login „Failed to fetch“: meist falsche `VITE_API_BASE_URL`,
 fehlendes HTTPS, oder `PUBLIC_APP_URL` im Backend passt nicht zu
 `share.alae.app` (CORS). Siehe **[4. Betrieb](04-betrieb.md)**.
+
+Zeigt `share.alae.app` stattdessen die generische Netlify-Seite **„Page not
+found“** (nicht die App selbst), wurde noch kein gültiger Deploy
+veröffentlicht. Prüfe in dieser Reihenfolge:
+
+1. **Deploys → letzter Deploy**: Ist er **„Published“** (grün) oder
+   fehlgeschlagen/„Skipped“? Bei Fehlern im **Deploy log** nachsehen
+   (häufig: kein `package.json` gefunden → Base directory fehlt/falsch).
+2. **Project configuration → Build & deploy → Build settings**: Stehen dort
+   wirklich **Base directory** `frontend`, **Build command** `npm run build`,
+   **Publish directory** `dist`? Falls nicht, manuell eintragen (siehe oben)
+   und unter **Deploys → Trigger deploy → Clear cache and deploy site** neu
+   bauen.
+3. **Project configuration → Domain management**: Ist `share.alae.app`
+   wirklich **dieser** Site zugeordnet (und nicht versehentlich einer anderen/
+   leeren Site)? Im DNS sollte der **CNAME** `share` auf die `*.netlify.app`-
+   Adresse genau dieser Site zeigen.
+4. Erst wenn unter **Deploys** ein grüner „Published“-Deploy mit Inhalt aus
+   `frontend/dist` steht, liefert die Domain die App statt der 404-Seite.
 
 ➡️ Weiter mit **[4. Betrieb &amp; Troubleshooting](04-betrieb.md)**.
