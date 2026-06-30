@@ -19,9 +19,13 @@ sondern in **Teile (Chunks) zu je 5 MB** zerlegt:
 
 ### Was passiert bei Abbruch / Browser schliessen?
 
-- **Einzelner Netzwerk-Fehler:** Der betroffene Chunk wird automatisch erneut
-  versucht (über „Erneut“ in der Upload-Leiste). Bereits übertragene Chunks
-  bleiben auf dem Server liegen.
+- **Einzelner Netzwerk-Fehler:** Jeder Chunk wird bei vorübergehenden Fehlern
+  (Netzwerk, Zeitüberschreitung, Server 5xx) **automatisch mehrfach** wiederholt
+  (mit wachsender Wartezeit). Hängt eine Anfrage zu lange ohne Fortschritt – wie
+  es in mobilen Netzen vorkommt –, wird sie abgebrochen und neu gestartet. Auch
+  der gesamte Datei-Upload wird bei Bedarf automatisch wiederholt; erst danach
+  erscheint ein Fehler mit der Schaltfläche „Erneut“. Bereits übertragene Chunks
+  bleiben dabei auf dem Server liegen.
 - **Tab/Browser während des Uploads geschlossen:** Die fertig übertragenen
   Chunks bleiben serverseitig erhalten. Beim nächsten Besuch zeigt die App einen
   Hinweis „Unterbrochene Uploads gefunden“. Wählst du **dieselbe Datei** noch

@@ -200,25 +200,30 @@ router.post(
     const originalDest = variantPath('original', storageKey, ext);
     await fsp.mkdir(path.dirname(originalDest), { recursive: true });
 
-    // Chunks der Reihe nach zur Originaldatei zusammenfügen.
+    // Chunks der Reihe nach zur Originaldatei zusammenfügen. Wir lesen jeden
+    // Teil als Stream und warten über den write-Callback, bis er tatsächlich
+    // geschrieben wurde (inkl. Backpressure). So entsteht keine Race-Condition,
+    // bei der die zusammengefügte Datei zu kurz wäre.
     const tmpOriginal = `${originalDest}.assembling`;
     const out = fs.createWriteStream(tmpOriginal);
     try {
       for (let i = 0; i < upload.total_chunks; i++) {
-        await new Promise<void>((resolve, reject) => {
-          const rs = fs.createReadStream(partPath(upload.id, i));
-          rs.on('error', reject);
-          rs.on('end', resolve);
-          rs.pipe(out, { end: false });
-        });
+        const rs = fs.createReadStream(partPath(upload.id, i));
+        for await (const chunk of rs) {
+          if (!out.write(chunk as Buffer)) {
+            await new Promise<void>((resolve, reject) => {
+              out.once('drain', resolve);
+              out.once('error', reject);
+            });
+          }
+        }
       }
     } finally {
-      out.end();
+      await new Promise<void>((resolve, reject) => {
+        out.end(() => resolve());
+        out.on('error', reject);
+      });
     }
-    await new Promise<void>((resolve, reject) => {
-      out.on('finish', resolve);
-      out.on('error', reject);
-    });
 
     const stat = await fsp.stat(tmpOriginal);
     if (stat.size !== upload.size_bytes) {

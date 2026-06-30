@@ -175,6 +175,17 @@ export default function Space() {
     });
   };
 
+  // Langes Drücken auf einer Kachel (mobil) → Auswahl-Modus starten und das
+  // betreffende Medium direkt markieren.
+  const longPressSelect = useCallback((id: string) => {
+    setSelectMode(true);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
+
   const downloadOriginal = (item: Item) => {
     const a = document.createElement('a');
     a.href = fileUrl(`/files/original/${item.id}`, token);
@@ -477,6 +488,7 @@ export default function Space() {
                   selected={selected.has(item.id)}
                   onToggle={() => toggleSelect(item.id)}
                   onOpen={() => setLightboxId(item.id)}
+                  onLongPress={() => longPressSelect(item.id)}
                 />
               ))}
             </div>
@@ -486,6 +498,7 @@ export default function Space() {
               token={token}
               onReorder={persistOrder}
               onOpen={(item) => setLightboxId(item.id)}
+              onLongPress={(item) => longPressSelect(item.id)}
             />
           )
         ) : view === 'people' ? (
@@ -508,6 +521,7 @@ export default function Space() {
                     selected={selected.has(item.id)}
                     onToggle={() => toggleSelect(item.id)}
                     onOpen={() => setLightboxId(item.id)}
+                    onLongPress={() => longPressSelect(item.id)}
                   />
                 ))}
               </div>
@@ -530,6 +544,7 @@ export default function Space() {
                     selected={selected.has(item.id)}
                     onToggle={() => toggleSelect(item.id)}
                     onOpen={() => setLightboxId(item.id)}
+                    onLongPress={() => longPressSelect(item.id)}
                   />
                 ))}
               </div>
