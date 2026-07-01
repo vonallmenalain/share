@@ -3,7 +3,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
   ReactNode,
@@ -84,6 +83,17 @@ let localId = 0;
 const nextId = () => `t${Date.now()}_${localId++}`;
 
 export function UploadsProvider({ children }: { children: ReactNode }) {
+  // Die Task-Liste lebt bewusst in einer Ref statt in State: `patch()` wird
+  // während eines Uploads sehr häufig aufgerufen (bei jedem Fortschritts-Tick
+  // jedes Chunks) und darf dafür keine neuen Task-Objekte/Arrays allozieren.
+  // `force` ist NUR ein Signal an React "bitte neu rendern" – der Zählerwert
+  // selbst wird nirgends gelesen. Genau das ist beim Ableiten von `tasks`
+  // weiter unten zu beachten (siehe Kommentar dort): sie dürfen nicht über
+  // ein `useMemo` mit den Callback-Referenzen als Dependency berechnet werden,
+  // sonst rendert die Komponente zwar neu, die Anzeige bleibt aber für immer
+  // auf dem allerersten (meist leeren) Stand eingefroren – exakt der Grund,
+  // wieso der Upload-Fortschritt bisher nie sichtbar war, obwohl der Upload
+  // selbst einwandfrei lief.
   const tasksRef = useRef<UploadTask[]>([]);
   const abortRef = useRef<Map<string, AbortController>>(new Map());
   const subscribersRef = useRef<Set<(item: Item) => void>>(new Set());
@@ -346,26 +356,41 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
-  const value = useMemo<UploadsContextValue>(() => {
-    const tasks: PublicTask[] = tasksRef.current.map((t) => ({
-      id: t.id,
-      spaceId: t.spaceId,
-      uploaderName: t.uploaderName,
-      fingerprint: t.fingerprint,
-      status: t.status,
-      uploadedBytes: t.uploadedBytes,
-      totalBytes: t.totalBytes,
-      error: t.error,
-      uploadId: t.uploadId,
-      item: t.item,
-      name: t.file.name,
-    }));
-    const activeCount = tasks.filter((t) =>
-      ['queued', 'uploading', 'processing'].includes(t.status),
-    ).length;
-    return { tasks, addFiles, retry, retryFailed, cancel, clearFinished, subscribe, activeCount };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addFiles, retry, retryFailed, cancel, clearFinished, subscribe, force]);
+  // Bewusst OHNE useMemo: `tasksRef.current` wird ausserhalb von React
+  // mutiert (siehe patch()), daher gibt es keine Dependency, die "richtig"
+  // wäre, um eine Neuberechnung auszulösen – jeder Versuch, das über die
+  // Callback-Referenzen oder den `force`-Zähler zu memoisieren, führt dazu,
+  // dass diese Liste beim erneuten Rendern nicht aktualisiert wird (siehe
+  // Kommentar oben). Die Berechnung ist mit wenigen aktiven Uploads trivial
+  // günstig, und UploadsProvider rendert ohnehin nur neu, wenn sync() nach
+  // einer echten Änderung aufgerufen wurde – hier also bei jedem Render neu
+  // aus der Ref lesen ist sowohl korrekt als auch günstig.
+  const tasks: PublicTask[] = tasksRef.current.map((t) => ({
+    id: t.id,
+    spaceId: t.spaceId,
+    uploaderName: t.uploaderName,
+    fingerprint: t.fingerprint,
+    status: t.status,
+    uploadedBytes: t.uploadedBytes,
+    totalBytes: t.totalBytes,
+    error: t.error,
+    uploadId: t.uploadId,
+    item: t.item,
+    name: t.file.name,
+  }));
+  const activeCount = tasks.filter((t) =>
+    ['queued', 'uploading', 'processing'].includes(t.status),
+  ).length;
+  const value: UploadsContextValue = {
+    tasks,
+    addFiles,
+    retry,
+    retryFailed,
+    cancel,
+    clearFinished,
+    subscribe,
+    activeCount,
+  };
 
   return <UploadsContext.Provider value={value}>{children}</UploadsContext.Provider>;
 }
