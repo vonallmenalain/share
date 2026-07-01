@@ -314,6 +314,32 @@ button {
   box-shadow: var(--shadow-sm);
 }
 
+@media (max-width: 640px) {
+  .toolbar {
+    gap: 8px;
+  }
+  .segmented {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .segmented::-webkit-scrollbar {
+    display: none;
+  }
+  .segmented button {
+    padding: 7px 12px;
+    font-size: 12.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .toolbar .btn-sm {
+    padding: 6px 10px;
+    font-size: 12.5px;
+  }
+}
+
 /* ---- Gallery grid -------------------------------------------------------- */
 .group-heading {
   display: flex;
@@ -333,6 +359,28 @@ button {
   background: #eef0f3;
   padding: 2px 10px;
   border-radius: 999px;
+}
+.group-heading-btn {
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding: 6px 4px;
+  margin: 20px -4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.group-heading-btn:hover {
+  background: #eef0f3;
+}
+.group-heading-btn h2 {
+  transition: color 0.15s ease;
+}
+.group-heading-btn:hover h2 {
+  color: var(--brand);
 }
 .avatar {
   width: 30px;
