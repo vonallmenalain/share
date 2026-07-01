@@ -3,6 +3,7 @@ import Landing from './pages/Landing';
 import CreateSpace from './pages/CreateSpace';
 import Admin from './pages/Admin';
 import Space from './pages/Space';
+import UploadPage from './pages/Upload';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
       <Route path="/new" element={<CreateSpace />} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/s/:slug" element={<Space />} />
+      <Route path="/s/:slug/upload" element={<UploadPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

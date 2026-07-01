@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import CollageGrid from '../components/CollageGrid';
 import Lightbox from '../components/Lightbox';
-import UploadPanel from '../components/UploadPanel';
 import { api, ApiError, fileUrl, Item, Space as SpaceType } from '../api/client';
 import { useUploads } from '../context/Uploads';
 import { nameStore, tokenStore } from '../lib/storage';
@@ -14,7 +13,10 @@ type View = 'gallery' | 'people' | 'time';
 
 export default function Space() {
   const { slug = '' } = useParams();
+  const navigate = useNavigate();
   const uploads = useUploads();
+  const uploadHref = `/s/${slug}/upload`;
+  const goUpload = useCallback(() => navigate(uploadHref), [navigate, uploadHref]);
 
   const [phase, setPhase] = useState<'loading' | 'gate' | 'ready' | 'notfound'>('loading');
   const [space, setSpace] = useState<SpaceType | null>(null);
@@ -31,7 +33,6 @@ export default function Space() {
   const [gateError, setGateError] = useState('');
   const [gateBusy, setGateBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [uploadOpen, setUploadOpen] = useState(false);
 
   // "Vollbild"-Modus der Galerie: Beim Herunterscrollen verschwinden Nav-Leiste
   // und Buttons, damit nur die Fotos sichtbar sind. Beim Hochscrollen (oder ganz
@@ -173,8 +174,10 @@ export default function Space() {
     e.preventDefault();
     setDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setUploadOpen(true);
       startUpload(Array.from(e.dataTransfer.files));
+      // Auf die eigenständige Upload-Seite wechseln, wo der Fortschritt
+      // (Balken, Geschwindigkeit, verbleibende MB) sofort sichtbar ist.
+      navigate(uploadHref);
     }
   };
 
@@ -457,7 +460,7 @@ export default function Space() {
         </div>
 
         <div className={`toolbar${chromeHidden ? ' toolbar-hidden' : ''}`}>
-          <button className="btn btn-primary" onClick={() => setUploadOpen(true)}>
+          <button className="btn btn-primary" onClick={goUpload}>
             ↑ Hochladen
           </button>
 
@@ -535,7 +538,7 @@ export default function Space() {
           <div
             className={`dropzone${dragOver ? ' over' : ''}`}
             style={{ marginTop: 24 }}
-            onClick={() => setUploadOpen(true)}
+            onClick={goUpload}
           >
             <div style={{ fontSize: 40, marginBottom: 8 }}>📷</div>
             <strong>Noch keine Medien</strong>
@@ -609,7 +612,7 @@ export default function Space() {
         />
       )}
 
-      {dragOver && !uploadOpen && (
+      {dragOver && (
         <div className="drag-overlay">
           <div className="drag-overlay-inner">
             <div style={{ fontSize: 44 }}>⬆️</div>
@@ -618,16 +621,8 @@ export default function Space() {
         </div>
       )}
 
-      {space && uploadOpen && (
-        <UploadPanel
-          spaceId={space.id}
-          onFiles={startUpload}
-          onClose={() => setUploadOpen(false)}
-        />
-      )}
-
-      {space && !uploadOpen && activeUploads > 0 && (
-        <button className="upload-fab" onClick={() => setUploadOpen(true)}>
+      {space && activeUploads > 0 && (
+        <button className="upload-fab" onClick={goUpload}>
           <span className="spinner" />
           {activeUploads} Upload{activeUploads > 1 ? 's' : ''} läuft…
         </button>
