@@ -6,12 +6,30 @@ interface Props {
   items: Item[];
   index: number;
   token: string;
+  /** Anzeigename der aktuellen Person – bestimmt, ob gelöscht werden darf. */
+  currentName?: string;
   onClose: () => void;
   onNavigate: (index: number) => void;
   onDownload: (item: Item) => void;
+  onArchive?: (item: Item) => void;
+  onDelete?: (item: Item) => void;
 }
 
-export default function Lightbox({ items, index, token, onClose, onNavigate, onDownload }: Props) {
+function sameName(a: string, b: string): boolean {
+  return a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
+}
+
+export default function Lightbox({
+  items,
+  index,
+  token,
+  currentName,
+  onClose,
+  onNavigate,
+  onDownload,
+  onArchive,
+  onDelete,
+}: Props) {
   const item = items[index];
 
   const prev = useCallback(() => {
@@ -63,6 +81,24 @@ export default function Lightbox({ items, index, token, onClose, onNavigate, onD
         <button className="lb-btn" onClick={() => onDownload(item)}>
           ↓ Original
         </button>
+        {onArchive && (
+          <button
+            className="lb-btn"
+            onClick={() => onArchive(item)}
+            title="Aus der Galerie ausblenden (bleibt erhalten)"
+          >
+            Archivieren
+          </button>
+        )}
+        {onDelete && currentName && sameName(item.uploaderName, currentName) && (
+          <button
+            className="lb-btn lb-danger"
+            onClick={() => onDelete(item)}
+            title="Nur du (als Uploader:in) kannst dieses Medium löschen"
+          >
+            Löschen
+          </button>
+        )}
         <button className="lb-btn lb-icon" onClick={onClose} aria-label="Schliessen">
           ✕
         </button>

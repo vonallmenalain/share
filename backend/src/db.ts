@@ -30,6 +30,9 @@ export function initDb(): Database.Database {
       space_id          TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
       kind              TEXT NOT NULL,            -- 'photo' | 'video'
       status            TEXT NOT NULL,            -- 'processing' | 'ready' | 'failed'
+      state             TEXT NOT NULL DEFAULT 'active', -- 'active' | 'archived' | 'deleted'
+      state_by          TEXT,                     -- Name der Person, die zuletzt archiviert/gelöscht hat
+      state_at          TEXT,                     -- Zeitpunkt der letzten Zustandsänderung
       uploader_name     TEXT NOT NULL,
       original_filename TEXT NOT NULL,
       ext               TEXT NOT NULL,
@@ -44,6 +47,7 @@ export function initDb(): Database.Database {
       created_at        TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_items_space ON items(space_id);
+    CREATE INDEX IF NOT EXISTS idx_items_state ON items(space_id, state);
 
     CREATE TABLE IF NOT EXISTS uploads (
       id             TEXT PRIMARY KEY,
@@ -63,7 +67,26 @@ export function initDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_uploads_space ON uploads(space_id);
   `);
 
+  migrate(db);
+
   return db;
+}
+
+/**
+ * Fügt bei bestehenden Datenbanken fehlende Spalten hinzu (idempotent). So
+ * lassen sich neue Funktionen ausrollen, ohne die vorhandenen Metadaten zu
+ * verlieren.
+ */
+function migrate(database: Database.Database) {
+  const cols = database.prepare(`PRAGMA table_info(items)`).all() as Array<{ name: string }>;
+  const have = new Set(cols.map((c) => c.name));
+  const addColumn = (name: string, ddl: string) => {
+    if (!have.has(name)) database.exec(`ALTER TABLE items ADD COLUMN ${ddl}`);
+  };
+  addColumn('state', `state TEXT NOT NULL DEFAULT 'active'`);
+  addColumn('state_by', `state_by TEXT`);
+  addColumn('state_at', `state_at TEXT`);
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_items_state ON items(space_id, state)`);
 }
 
 export function getDb(): Database.Database {
@@ -84,6 +107,9 @@ export interface ItemRow {
   space_id: string;
   kind: 'photo' | 'video';
   status: 'processing' | 'ready' | 'failed';
+  state: 'active' | 'archived' | 'deleted';
+  state_by: string | null;
+  state_at: string | null;
   uploader_name: string;
   original_filename: string;
   ext: string;

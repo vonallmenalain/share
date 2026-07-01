@@ -18,6 +18,8 @@ interface RequestOptions {
   token?: string;
   /** Admin-Schlüssel (X-Admin-Key). */
   adminKey?: string;
+  /** Anzeigename der aktuellen Person (X-Uploader-Name) – z. B. für Löschrechte. */
+  uploaderName?: string;
   signal?: AbortSignal;
 }
 
@@ -25,6 +27,7 @@ export async function api<T = unknown>(path: string, opts: RequestOptions = {}):
   const headers: Record<string, string> = {};
   if (opts.token) headers['Authorization'] = `Bearer ${opts.token}`;
   if (opts.adminKey) headers['X-Admin-Key'] = opts.adminKey;
+  if (opts.uploaderName) headers['X-Uploader-Name'] = encodeURIComponent(opts.uploaderName);
 
   const init: RequestInit = {
     method: opts.method ?? 'GET',
@@ -63,12 +66,19 @@ export interface Space {
   hasPassword: boolean;
   createdAt: string;
   itemCount?: number;
+  archivedCount?: number;
+  deletedCount?: number;
 }
+
+export type ItemState = 'active' | 'archived' | 'deleted';
 
 export interface Item {
   id: string;
   kind: 'photo' | 'video';
   status: 'processing' | 'ready' | 'failed';
+  state: ItemState;
+  stateBy: string | null;
+  stateAt: string | null;
   uploaderName: string;
   filename: string;
   ext: string;
