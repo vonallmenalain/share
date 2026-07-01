@@ -44,6 +44,7 @@ export function initDb(): Database.Database {
       size_bytes        INTEGER NOT NULL,
       taken_at          TEXT,
       position          INTEGER NOT NULL DEFAULT 0,
+      favorite          INTEGER NOT NULL DEFAULT 0, -- 0 = normal, 1 = Favorit (Stern)
       created_at        TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_items_space ON items(space_id);
@@ -85,6 +86,8 @@ function migrate(database: Database.Database) {
   addColumn('state', `state TEXT NOT NULL DEFAULT 'active'`);
   addColumn('state_by', `state_by TEXT`);
   addColumn('state_at', `state_at TEXT`);
+  // Favoriten-Markierung ("Stern"): 0 = normal, 1 = Favorit.
+  addColumn('favorite', `favorite INTEGER NOT NULL DEFAULT 0`);
   // Der Index wird bewusst erst hier erstellt – nach dem Hinzufügen der Spalte.
   // Läge er im Schema-Block oben, würde er bei bestehenden Datenbanken (in denen
   // "items" bereits ohne "state" existiert) mit "no such column: state" fehlschlagen.
@@ -123,6 +126,7 @@ export interface ItemRow {
   size_bytes: number;
   taken_at: string | null;
   position: number;
+  favorite: number;
   created_at: string;
 }
 

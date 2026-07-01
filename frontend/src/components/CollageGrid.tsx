@@ -5,6 +5,8 @@ import Tile from './Tile';
 interface Props {
   items: Item[];
   token: string;
+  /** In der Standard-Galerie werden Favoriten grösser dargestellt. */
+  emphasizeFavorites?: boolean;
   selectMode?: boolean;
   selected?: Set<string>;
   onToggle?: (item: Item) => void;
@@ -47,11 +49,15 @@ function aspectOf(item: Item): number {
 // Bestimmt, wie viele Spalten/Zeilen eine Kachel belegt. Einzelne Fotos werden
 // gezielt grösser dargestellt, damit eine abwechslungsreiche Collage entsteht –
 // ohne die Fotos zu beschneiden oder zu verzerren.
-function spanFor(item: Item, index: number, m: Metrics) {
+function spanFor(item: Item, index: number, m: Metrics, emphasizeFavorites: boolean) {
   const ar = aspectOf(item);
   let colSpan = 1;
 
-  if (m.cols >= 4) {
+  if (emphasizeFavorites && item.favorite) {
+    // Favoriten prominent: mobil (2 Spalten) über die gesamte Breite, auf
+    // grösseren Bildschirmen doppelt so breit wie normale Fotos.
+    colSpan = m.cols <= 2 ? m.cols : 2;
+  } else if (m.cols >= 4) {
     const landscape = ar >= 1.25;
     const squarish = ar > 0.85 && ar < 1.25;
     // Breite Querformate gelegentlich über zwei Spalten ziehen …
@@ -73,6 +79,7 @@ function spanFor(item: Item, index: number, m: Metrics) {
 export default function CollageGrid({
   items,
   token,
+  emphasizeFavorites = false,
   selectMode,
   selected,
   onToggle,
@@ -103,7 +110,7 @@ export default function CollageGrid({
       }}
     >
       {items.map((item, index) => {
-        const { colSpan, rowSpan } = spanFor(item, index, m);
+        const { colSpan, rowSpan } = spanFor(item, index, m, emphasizeFavorites);
         return (
           <div
             key={item.id}

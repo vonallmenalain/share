@@ -29,6 +29,7 @@ export function publicItem(item: ItemRow) {
     sizeBytes: item.size_bytes,
     takenAt: item.taken_at,
     position: item.position,
+    favorite: item.favorite === 1,
     createdAt: item.created_at,
     hasPreview,
     hasPoster,
@@ -130,6 +131,21 @@ router.post(
       .prepare(`UPDATE items SET state='archived', state_by=?, state_at=? WHERE id=?`)
       .run(by, new Date().toISOString(), item.id);
     res.json({ ok: true });
+  }),
+);
+
+/**
+ * Medium als Favorit markieren oder die Markierung entfernen. Darf jede Person
+ * im Bereich. Body: { favorite: boolean }.
+ */
+router.post(
+  '/:id/favorite',
+  requireSpace,
+  asyncHandler(async (req, res) => {
+    const item = getOwnItem(req.params.id, req.spaceId!);
+    const value = req.body?.favorite === false ? 0 : 1;
+    getDb().prepare(`UPDATE items SET favorite=? WHERE id=?`).run(value, item.id);
+    res.json({ ok: true, favorite: value === 1 });
   }),
 );
 
