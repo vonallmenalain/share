@@ -516,7 +516,7 @@ export default function Space() {
               ★ Favoriten
             </button>
             <button className={view === 'people' ? 'active' : ''} onClick={() => setView('people')}>
-              Nach Person
+              Nach Uploader
             </button>
             <button className={view === 'time' ? 'active' : ''} onClick={() => setView('time')}>
               Chronologisch
