@@ -47,7 +47,6 @@ export function initDb(): Database.Database {
       created_at        TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_items_space ON items(space_id);
-    CREATE INDEX IF NOT EXISTS idx_items_state ON items(space_id, state);
 
     CREATE TABLE IF NOT EXISTS uploads (
       id             TEXT PRIMARY KEY,
@@ -86,6 +85,9 @@ function migrate(database: Database.Database) {
   addColumn('state', `state TEXT NOT NULL DEFAULT 'active'`);
   addColumn('state_by', `state_by TEXT`);
   addColumn('state_at', `state_at TEXT`);
+  // Der Index wird bewusst erst hier erstellt – nach dem Hinzufügen der Spalte.
+  // Läge er im Schema-Block oben, würde er bei bestehenden Datenbanken (in denen
+  // "items" bereits ohne "state" existiert) mit "no such column: state" fehlschlagen.
   database.exec(`CREATE INDEX IF NOT EXISTS idx_items_state ON items(space_id, state)`);
 }
 
