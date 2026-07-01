@@ -182,11 +182,18 @@ export default function Space() {
   };
 
   // ---- Auswahl / Download / Löschen ---------------------------------------
+  // Klickt man erneut auf das (einzige) ausgewählte Foto, wird es abgewählt –
+  // ist dann nichts mehr ausgewählt, verlassen wir den Mehrfachauswahl-Modus
+  // automatisch wieder.
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+        if (next.size === 0) setSelectMode(false);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };
