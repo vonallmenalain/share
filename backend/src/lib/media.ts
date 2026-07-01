@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import exifr from 'exifr';
 import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
@@ -52,7 +53,7 @@ export async function processImage(originalPath: string, storageKey: string): Pr
   const width = meta.width ?? 0;
   const height = meta.height ?? 0;
 
-  const takenAt = parseExifDate(meta);
+  const takenAt = await parseExifDate(buffer);
 
   const thumbDest = variantPath('thumb', storageKey);
   await ensureDir(thumbDest);
@@ -79,18 +80,22 @@ export async function processImage(originalPath: string, storageKey: string): Pr
   return { width, height, takenAt };
 }
 
-function parseExifDate(meta: sharp.Metadata): string | null {
-  // sharp exposes EXIF only as a raw buffer; rather than pulling in an EXIF
-  // parser we keep this best-effort: scan the buffer for a DateTimeOriginal-like
-  // string "YYYY:MM:DD HH:MM:SS". Falls back to null when not found.
+/**
+ * Ermittelt das Aufnahmedatum eines Fotos aus den EXIF-Metadaten. Wichtig:
+ * `DateTimeOriginal` (Aufnahmezeitpunkt) hat Vorrang vor `CreateDate` und
+ * `ModifyDate` – letzteres wird von vielen Apps/Diensten beim erneuten
+ * Speichern (Bearbeiten, Komprimieren, Hochladen) aktualisiert und würde die
+ * chronologische Sortierung sonst auf das Bearbeitungs- statt Aufnahmedatum
+ * ausrichten.
+ */
+async function parseExifDate(buffer: Buffer): Promise<string | null> {
   try {
-    const exif = meta.exif;
-    if (!exif) return null;
-    const text = exif.toString('latin1');
-    const m = text.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
-    if (!m) return null;
-    const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`;
-    const d = new Date(iso);
+    const tags = await exifr.parse(buffer, {
+      pick: ['DateTimeOriginal', 'CreateDate', 'ModifyDate'],
+    });
+    const raw = tags?.DateTimeOriginal ?? tags?.CreateDate ?? tags?.ModifyDate;
+    if (!raw) return null;
+    const d = raw instanceof Date ? raw : new Date(raw);
     if (Number.isNaN(d.getTime())) return null;
     return d.toISOString();
   } catch {
