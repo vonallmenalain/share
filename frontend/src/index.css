@@ -433,6 +433,24 @@ button {
   outline: 3px solid var(--brand);
   outline-offset: -3px;
 }
+.tile-fav {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.55);
+  color: #ffd23f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  box-shadow: var(--shadow-sm);
+}
 .tile .play {
   position: absolute;
   inset: 0;
@@ -890,6 +908,18 @@ button {
 }
 .lb-danger:hover {
   background: rgba(220, 38, 38, 0.4);
+}
+.lb-fav {
+  font-size: 18px;
+  line-height: 1;
+  padding: 9px 14px;
+}
+.lb-fav.on {
+  background: rgba(255, 210, 63, 0.22);
+  color: #ffd23f;
+}
+.lb-fav.on:hover {
+  background: rgba(255, 210, 63, 0.35);
 }
 
 /* ---- Misc ---------------------------------------------------------------- */

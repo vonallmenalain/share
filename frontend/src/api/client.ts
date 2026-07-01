@@ -89,6 +89,7 @@ export interface Item {
   sizeBytes: number;
   takenAt: string | null;
   position: number;
+  favorite: boolean;
   createdAt: string;
   hasPreview: boolean;
   hasPoster: boolean;

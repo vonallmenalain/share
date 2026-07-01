@@ -9,7 +9,7 @@ import { nameStore, tokenStore } from '../lib/storage';
 import { colorForName, initialsOf } from '../lib/avatar';
 import { dayKey, formatDayHeading } from '../lib/format';
 
-type View = 'gallery' | 'people' | 'time';
+type View = 'gallery' | 'favorites' | 'people' | 'time';
 
 export default function Space() {
   const { slug = '' } = useParams();
@@ -315,8 +315,32 @@ export default function Space() {
     setLightboxId(null);
   };
 
+  // Favorit setzen/entfernen. Darf jede Person im Bereich. Der neue Zustand wird
+  // sofort optimistisch angezeigt und bei einem Fehler wieder zurückgesetzt.
+  const toggleFavorite = useCallback(
+    async (item: Item) => {
+      const next = !item.favorite;
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, favorite: next } : i)));
+      try {
+        await api(`/api/items/${item.id}/favorite`, {
+          method: 'POST',
+          token,
+          body: { favorite: next },
+          uploaderName: name || undefined,
+        });
+      } catch {
+        setItems((prev) =>
+          prev.map((i) => (i.id === item.id ? { ...i, favorite: !next } : i)),
+        );
+      }
+    },
+    [token, name],
+  );
+
   // ---- Abgeleitete Daten ---------------------------------------------------
   const readyItems = useMemo(() => items, [items]);
+
+  const favoriteItems = useMemo(() => readyItems.filter((i) => i.favorite), [readyItems]);
 
   const peopleGroups = useMemo(() => {
     const map = new Map<string, Item[]>();
@@ -345,10 +369,11 @@ export default function Space() {
 
   // Flache Liste in aktueller Anzeige-Reihenfolge (für die Lightbox-Navigation).
   const flatOrder = useMemo(() => {
+    if (view === 'favorites') return favoriteItems;
     if (view === 'people') return peopleGroups.flatMap(([, arr]) => arr);
     if (view === 'time') return timeGroups.flatMap(([, arr]) => arr);
     return readyItems;
-  }, [view, peopleGroups, timeGroups, readyItems]);
+  }, [view, favoriteItems, peopleGroups, timeGroups, readyItems]);
 
   const lightboxIndex = lightboxId ? flatOrder.findIndex((i) => i.id === lightboxId) : -1;
 
@@ -423,7 +448,7 @@ export default function Space() {
 
   return (
     <>
-      <TopBar hidden={chromeHidden}>
+      <TopBar hidden={chromeHidden} brandTo={`/s/${slug}`}>
         <span className="muted" style={{ fontSize: 14 }}>
           als <strong>{name || 'Gast'}</strong>
         </span>
@@ -467,6 +492,9 @@ export default function Space() {
           <div className="segmented">
             <button className={view === 'gallery' ? 'active' : ''} onClick={() => setView('gallery')}>
               Galerie
+            </button>
+            <button className={view === 'favorites' ? 'active' : ''} onClick={() => setView('favorites')}>
+              ★ Favoriten
             </button>
             <button className={view === 'people' ? 'active' : ''} onClick={() => setView('people')}>
               Nach Person
@@ -550,12 +578,33 @@ export default function Space() {
           <CollageGrid
             items={readyItems}
             token={token}
+            emphasizeFavorites
             selectMode={selectMode}
             selected={selected}
             onToggle={(item) => toggleSelect(item.id)}
             onOpen={(item) => setLightboxId(item.id)}
             onLongPress={(item) => longPressSelect(item.id)}
           />
+        ) : view === 'favorites' ? (
+          favoriteItems.length === 0 ? (
+            <div className="dropzone" style={{ marginTop: 24, cursor: 'default' }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>★</div>
+              <strong>Noch keine Favoriten</strong>
+              <div className="hint" style={{ marginTop: 6 }}>
+                Öffne ein Foto und tippe oben rechts auf den Stern, um es als Favorit zu markieren.
+              </div>
+            </div>
+          ) : (
+            <CollageGrid
+              items={favoriteItems}
+              token={token}
+              selectMode={selectMode}
+              selected={selected}
+              onToggle={(item) => toggleSelect(item.id)}
+              onOpen={(item) => setLightboxId(item.id)}
+              onLongPress={(item) => longPressSelect(item.id)}
+            />
+          )
         ) : view === 'people' ? (
           peopleGroups.map(([person, arr]) => (
             <section key={person}>
@@ -609,6 +658,7 @@ export default function Space() {
           onDownload={downloadOriginal}
           onArchive={archiveOne}
           onDelete={deleteOne}
+          onToggleFavorite={toggleFavorite}
         />
       )}
 

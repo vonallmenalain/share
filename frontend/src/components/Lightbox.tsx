@@ -13,6 +13,7 @@ interface Props {
   onDownload: (item: Item) => void;
   onArchive?: (item: Item) => void;
   onDelete?: (item: Item) => void;
+  onToggleFavorite?: (item: Item) => void;
 }
 
 function sameName(a: string, b: string): boolean {
@@ -29,6 +30,7 @@ export default function Lightbox({
   onDownload,
   onArchive,
   onDelete,
+  onToggleFavorite,
 }: Props) {
   const item = items[index];
 
@@ -78,6 +80,16 @@ export default function Lightbox({
             {item.takenAt ? ` · ${formatDateTime(item.takenAt)}` : ''}
           </div>
         </div>
+        {onToggleFavorite && (
+          <button
+            className={`lb-btn lb-fav${item.favorite ? ' on' : ''}`}
+            onClick={() => onToggleFavorite(item)}
+            aria-pressed={item.favorite}
+            title={item.favorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
+          >
+            {item.favorite ? '★' : '☆'}
+          </button>
+        )}
         <button className="lb-btn" onClick={() => onDownload(item)}>
           ↓ Original
         </button>

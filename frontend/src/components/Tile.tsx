@@ -118,6 +118,12 @@ export default function Tile({
         </div>
       )}
 
+      {item.favorite && (
+        <span className="tile-fav" aria-label="Favorit" title="Favorit">
+          ★
+        </span>
+      )}
+
       {item.kind === 'video' && (
         <>
           <div className="play">
