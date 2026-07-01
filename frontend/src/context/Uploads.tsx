@@ -65,8 +65,9 @@ interface UploadsContextValue {
     ctx: { spaceId: string; token: string; uploaderName: string },
   ) => void;
   retry: (id: string) => void;
+  retryFailed: (spaceId: string) => void;
   cancel: (id: string) => void;
-  clearFinished: () => void;
+  clearFinished: (spaceId?: string) => void;
   subscribe: (cb: (item: Item) => void) => () => void;
   activeCount: number;
 }
@@ -277,6 +278,24 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
     [pump, sync],
   );
 
+  const retryFailed = useCallback(
+    (spaceId: string) => {
+      let changed = false;
+      for (const t of tasksRef.current) {
+        if (t.spaceId === spaceId && (t.status === 'error' || t.status === 'canceled')) {
+          t.status = 'queued';
+          t.error = undefined;
+          changed = true;
+        }
+      }
+      if (changed) {
+        sync();
+        pump();
+      }
+    },
+    [pump, sync],
+  );
+
   const cancel = useCallback(
     (id: string) => {
       const t = tasksRef.current.find((x) => x.id === id);
@@ -294,12 +313,16 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
     [sync],
   );
 
-  const clearFinished = useCallback(() => {
-    tasksRef.current = tasksRef.current.filter(
-      (t) => !['done', 'canceled', 'error'].includes(t.status),
-    );
-    sync();
-  }, [sync]);
+  const clearFinished = useCallback(
+    (spaceId?: string) => {
+      tasksRef.current = tasksRef.current.filter((t) => {
+        if (spaceId && t.spaceId !== spaceId) return true;
+        return !['done', 'canceled', 'error'].includes(t.status);
+      });
+      sync();
+    },
+    [sync],
+  );
 
   const subscribe = useCallback((cb: (item: Item) => void) => {
     subscribersRef.current.add(cb);
@@ -340,9 +363,9 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
     const activeCount = tasks.filter((t) =>
       ['queued', 'uploading', 'processing'].includes(t.status),
     ).length;
-    return { tasks, addFiles, retry, cancel, clearFinished, subscribe, activeCount };
+    return { tasks, addFiles, retry, retryFailed, cancel, clearFinished, subscribe, activeCount };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addFiles, retry, cancel, clearFinished, subscribe, force]);
+  }, [addFiles, retry, retryFailed, cancel, clearFinished, subscribe, force]);
 
   return <UploadsContext.Provider value={value}>{children}</UploadsContext.Provider>;
 }

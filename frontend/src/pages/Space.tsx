@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import CollageGrid from '../components/CollageGrid';
 import Lightbox from '../components/Lightbox';
-import UploadTray from '../components/UploadTray';
+import UploadPanel from '../components/UploadPanel';
 import { api, ApiError, fileUrl, Item, Space as SpaceType } from '../api/client';
 import { useUploads } from '../context/Uploads';
-import { nameStore, tokenStore, pendingStore } from '../lib/storage';
+import { nameStore, tokenStore } from '../lib/storage';
 import { colorForName, initialsOf } from '../lib/avatar';
 import { dayKey, formatDayHeading } from '../lib/format';
 
@@ -31,13 +31,12 @@ export default function Space() {
   const [gateError, setGateError] = useState('');
   const [gateBusy, setGateBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   // "Vollbild"-Modus der Galerie: Beim Herunterscrollen verschwinden Nav-Leiste
   // und Buttons, damit nur die Fotos sichtbar sind. Beim Hochscrollen (oder ganz
   // oben) erscheinen sie wieder.
   const [chromeHidden, setChromeHidden] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ---- Laden / Zugang ------------------------------------------------------
   const loadItems = useCallback(
@@ -170,15 +169,13 @@ export default function Space() {
     [space, token, name, uploads],
   );
 
-  const onFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) startUpload(Array.from(e.target.files));
-    e.target.value = '';
-  };
-
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files) startUpload(Array.from(e.dataTransfer.files));
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setUploadOpen(true);
+      startUpload(Array.from(e.dataTransfer.files));
+    }
   };
 
   // ---- Auswahl / Download / Löschen ---------------------------------------
@@ -352,12 +349,12 @@ export default function Space() {
 
   const lightboxIndex = lightboxId ? flatOrder.findIndex((i) => i.id === lightboxId) : -1;
 
-  // Unterbrochene Uploads (nach Browser-Neustart) – Hinweis.
-  const stalePending = space
-    ? pendingStore
-        .all(space.id)
-        .filter((p) => !uploads.tasks.some((t) => t.fingerprint === p.fingerprint))
-    : [];
+  // Laufende Uploads dieses Bereichs (für die Hintergrund-Anzeige, wenn der
+  // Hochlade-Bereich geschlossen ist).
+  const spaceTasks = space ? uploads.tasks.filter((t) => t.spaceId === space.id) : [];
+  const activeUploads = spaceTasks.filter((t) =>
+    ['queued', 'uploading', 'processing'].includes(t.status),
+  ).length;
 
   // ---- Render --------------------------------------------------------------
   if (phase === 'loading') {
@@ -459,17 +456,8 @@ export default function Space() {
           </div>
         </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,video/*"
-          multiple
-          style={{ display: 'none' }}
-          onChange={onFilePick}
-        />
-
         <div className={`toolbar${chromeHidden ? ' toolbar-hidden' : ''}`}>
-          <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
+          <button className="btn btn-primary" onClick={() => setUploadOpen(true)}>
             ↑ Hochladen
           </button>
 
@@ -543,28 +531,11 @@ export default function Space() {
           )}
         </div>
 
-        {stalePending.length > 0 && (
-          <div className="banner">
-            <strong>Unterbrochene Uploads gefunden.</strong> Wähle dieselben Dateien noch einmal
-            über „Hochladen“ aus – bereits übertragene Teile werden übersprungen, der Upload läuft
-            dann weiter: {stalePending.map((p) => p.filename).join(', ')}.{' '}
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={() => {
-                stalePending.forEach((p) => pendingStore.remove(space!.id, p.fingerprint));
-                setItems((x) => [...x]); // re-render
-              }}
-            >
-              Verwerfen
-            </button>
-          </div>
-        )}
-
         {readyItems.length === 0 ? (
           <div
             className={`dropzone${dragOver ? ' over' : ''}`}
             style={{ marginTop: 24 }}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setUploadOpen(true)}
           >
             <div style={{ fontSize: 40, marginBottom: 8 }}>📷</div>
             <strong>Noch keine Medien</strong>
@@ -638,7 +609,29 @@ export default function Space() {
         />
       )}
 
-      {space && <UploadTray spaceId={space.id} />}
+      {dragOver && !uploadOpen && (
+        <div className="drag-overlay">
+          <div className="drag-overlay-inner">
+            <div style={{ fontSize: 44 }}>⬆️</div>
+            <strong>Zum Hochladen hier ablegen</strong>
+          </div>
+        </div>
+      )}
+
+      {space && uploadOpen && (
+        <UploadPanel
+          spaceId={space.id}
+          onFiles={startUpload}
+          onClose={() => setUploadOpen(false)}
+        />
+      )}
+
+      {space && !uploadOpen && activeUploads > 0 && (
+        <button className="upload-fab" onClick={() => setUploadOpen(true)}>
+          <span className="spinner" />
+          {activeUploads} Upload{activeUploads > 1 ? 's' : ''} läuft…
+        </button>
+      )}
     </>
   );
 }
