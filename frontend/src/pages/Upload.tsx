@@ -190,7 +190,7 @@ export default function UploadPage() {
 
   return (
     <>
-      <TopBar>
+      <TopBar brandTo={`/s/${slug}`}>
         <Link className="btn btn-sm" to={`/s/${slug}`}>
           ← Zur Galerie
         </Link>
