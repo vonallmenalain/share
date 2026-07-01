@@ -74,9 +74,9 @@ export default function Lightbox({
     <div className="lightbox" onClick={onClose}>
       <div className="lb-top" onClick={(e) => e.stopPropagation()}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div className="name">{item.filename}</div>
-          <div className="tray-sub">
-            {item.uploaderName} · {formatBytes(item.sizeBytes)}
+          <div className="name">Upload von {item.uploaderName}</div>
+          <div className="lb-meta">
+            {formatBytes(item.sizeBytes)}
             {item.takenAt ? ` · ${formatDateTime(item.takenAt)}` : ''}
           </div>
         </div>
@@ -90,25 +90,27 @@ export default function Lightbox({
             {item.favorite ? '★' : '☆'}
           </button>
         )}
-        <button className="lb-btn" onClick={() => onDownload(item)}>
-          ↓ Original
+        <button className="lb-btn" onClick={() => onDownload(item)} title="Original herunterladen">
+          ↓ <span className="lb-btn-label">Original</span>
         </button>
         {onArchive && (
           <button
-            className="lb-btn"
+            className="lb-btn lb-icon"
             onClick={() => onArchive(item)}
-            title="Aus der Galerie ausblenden (bleibt erhalten)"
+            title="Archivieren (aus der Galerie ausblenden, bleibt erhalten)"
+            aria-label="Archivieren"
           >
-            Archivieren
+            🗄️
           </button>
         )}
         {onDelete && currentName && sameName(item.uploaderName, currentName) && (
           <button
-            className="lb-btn lb-danger"
+            className="lb-btn lb-icon lb-danger"
             onClick={() => onDelete(item)}
-            title="Nur du (als Uploader:in) kannst dieses Medium löschen"
+            title="Löschen (nur du als Uploader:in kannst dieses Medium löschen)"
+            aria-label="Löschen"
           >
-            Löschen
+            🗑️
           </button>
         )}
         <button className="lb-btn lb-icon" onClick={onClose} aria-label="Schliessen">

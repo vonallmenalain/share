@@ -28,6 +28,9 @@ export default function Space() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lightboxId, setLightboxId] = useState<string | null>(null);
+  // "Nach Person": standardmässig sind alle Gruppen eingeklappt, erst ein Klick
+  // auf den Namen zeigt die Fotos der jeweiligen Person an.
+  const [expandedPeople, setExpandedPeople] = useState<Set<string>>(new Set());
 
   const [gatePassword, setGatePassword] = useState('');
   const [gateError, setGateError] = useState('');
@@ -182,11 +185,27 @@ export default function Space() {
   };
 
   // ---- Auswahl / Download / Löschen ---------------------------------------
+  // Klickt man erneut auf das (einzige) ausgewählte Foto, wird es abgewählt –
+  // ist dann nichts mehr ausgewählt, verlassen wir den Mehrfachauswahl-Modus
+  // automatisch wieder.
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+        if (next.size === 0) setSelectMode(false);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const togglePersonExpanded = (person: string) => {
+    setExpandedPeople((prev) => {
+      const next = new Set(prev);
+      if (next.has(person)) next.delete(person);
+      else next.add(person);
       return next;
     });
   };
@@ -606,26 +625,39 @@ export default function Space() {
             />
           )
         ) : view === 'people' ? (
-          peopleGroups.map(([person, arr]) => (
-            <section key={person}>
-              <div className="group-heading">
-                <span className="avatar" style={{ background: colorForName(person) }}>
-                  {initialsOf(person)}
-                </span>
-                <h2>{person}</h2>
-                <span className="count">{arr.length}</span>
-              </div>
-              <CollageGrid
-                items={arr}
-                token={token}
-                selectMode={selectMode}
-                selected={selected}
-                onToggle={(item) => toggleSelect(item.id)}
-                onOpen={(item) => setLightboxId(item.id)}
-                onLongPress={(item) => longPressSelect(item.id)}
-              />
-            </section>
-          ))
+          peopleGroups.map(([person, arr]) => {
+            const open = expandedPeople.has(person);
+            return (
+              <section key={person}>
+                <button
+                  type="button"
+                  className="group-heading group-heading-btn"
+                  onClick={() => togglePersonExpanded(person)}
+                  aria-expanded={open}
+                >
+                  <span className="avatar" style={{ background: colorForName(person) }}>
+                    {initialsOf(person)}
+                  </span>
+                  <h2>{person}</h2>
+                  <span className="count">{arr.length}</span>
+                  <span className={`chevron${open ? ' open' : ''}`} style={{ marginLeft: 'auto' }}>
+                    ▸
+                  </span>
+                </button>
+                {open && (
+                  <CollageGrid
+                    items={arr}
+                    token={token}
+                    selectMode={selectMode}
+                    selected={selected}
+                    onToggle={(item) => toggleSelect(item.id)}
+                    onOpen={(item) => setLightboxId(item.id)}
+                    onLongPress={(item) => longPressSelect(item.id)}
+                  />
+                )}
+              </section>
+            );
+          })
         ) : (
           timeGroups.map(([key, arr]) => (
             <section key={key}>
