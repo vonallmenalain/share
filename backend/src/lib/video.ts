@@ -54,7 +54,13 @@ async function probe(input: string): Promise<{
     ]);
     if (r.code !== 0) return { width: null, height: null, duration: null, takenAt: null };
     const data = JSON.parse(r.stdout) as {
-      streams?: Array<{ codec_type?: string; width?: number; height?: number }>;
+      streams?: Array<{
+        codec_type?: string;
+        width?: number;
+        height?: number;
+        tags?: Record<string, string>;
+        side_data_list?: Array<{ rotation?: number }>;
+      }>;
       format?: { duration?: string; tags?: Record<string, string> };
     };
     const v = data.streams?.find((s) => s.codec_type === 'video');
@@ -65,15 +71,49 @@ async function probe(input: string): Promise<{
       const d = new Date(creation);
       if (!Number.isNaN(d.getTime())) takenAt = d.toISOString();
     }
+
+    // Rotation berücksichtigen: Smartphones speichern Hochformat-Videos häufig
+    // als Querformat-Stream mit einem Rotations-Flag (rotate-Tag oder Display-
+    // Matrix in side_data_list). ffmpeg richtet Poster/Vorschau automatisch
+    // korrekt aus – wir müssen daher auch die gemeldeten Masse drehen, damit die
+    // Galerie das richtige Seitenverhältnis (Hochformat) anzeigt.
+    let width = v?.width ?? null;
+    let height = v?.height ?? null;
+    const rotation = videoRotation(v);
+    if ((rotation === 90 || rotation === 270) && width != null && height != null) {
+      [width, height] = [height, width];
+    }
+
     return {
-      width: v?.width ?? null,
-      height: v?.height ?? null,
+      width,
+      height,
       duration: Number.isFinite(duration as number) ? (duration as number) : null,
       takenAt,
     };
   } catch {
     return { width: null, height: null, duration: null, takenAt: null };
   }
+}
+
+/** Ermittelt die effektive Rotation (0/90/180/270) eines Video-Streams. */
+function videoRotation(stream?: {
+  tags?: Record<string, string>;
+  side_data_list?: Array<{ rotation?: number }>;
+}): number {
+  if (!stream) return 0;
+  let deg = 0;
+  const tag = stream.tags?.rotate;
+  if (tag != null && tag !== '') {
+    const n = parseInt(tag, 10);
+    if (Number.isFinite(n)) deg = n;
+  }
+  const side = stream.side_data_list?.find((s) => typeof s.rotation === 'number');
+  if (side && typeof side.rotation === 'number') {
+    // Die Display-Matrix meldet die Rotation üblicherweise negativ.
+    deg = -side.rotation;
+  }
+  deg = ((deg % 360) + 360) % 360;
+  return deg;
 }
 
 /**

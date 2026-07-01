@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { getDb, SpaceRow } from '../db';
+import { getDb, ItemRow, SpaceRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireAdmin, requireSpace } from '../middleware/auth';
 import { newId, newSlug, slugifyName } from '../lib/ids';
 import { signAccessToken } from '../lib/auth';
-import { deleteSpaceStorage } from '../lib/media';
+import { deleteAllVariants, deleteSpaceStorage } from '../lib/media';
+import { publicItem } from './items';
 
 const router = Router();
 
@@ -61,11 +62,21 @@ router.get(
   asyncHandler(async (_req, res) => {
     const db = getDb();
     const rows = db.prepare('SELECT * FROM spaces ORDER BY created_at DESC').all() as SpaceRow[];
+    const countBy = db.prepare(
+      `SELECT
+         COALESCE(SUM(state = 'active'), 0)   AS active,
+         COALESCE(SUM(state = 'archived'), 0) AS archived,
+         COALESCE(SUM(state = 'deleted'), 0)  AS deleted
+       FROM items WHERE space_id = ?`,
+    );
     const result = rows.map((s) => {
-      const count = db.prepare('SELECT COUNT(*) AS n FROM items WHERE space_id = ?').get(s.id) as {
-        n: number;
+      const c = countBy.get(s.id) as { active: number; archived: number; deleted: number };
+      return {
+        ...publicSpace(s),
+        itemCount: c.active,
+        archivedCount: c.archived,
+        deletedCount: c.deleted,
       };
-      return { ...publicSpace(s), itemCount: count.n };
     });
     res.json({ spaces: result });
   }),
@@ -83,6 +94,72 @@ router.delete(
     if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
     db.prepare('DELETE FROM spaces WHERE id = ?').run(space.id);
     await deleteSpaceStorage(space.id);
+    res.json({ ok: true });
+  }),
+);
+
+/**
+ * Admin: alle Medien eines Bereichs auflisten – inklusive archivierter und
+ * (weich) gelöschter. Liefert zusätzlich einen kurzlebigen Zugriffs-Token für
+ * denselben Bereich, damit die Admin-Oberfläche die Vorschaubilder anzeigen
+ * kann (die Datei-Endpunkte verlangen einen gültigen Space-Token).
+ */
+router.get(
+  '/:id/items',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.params.id) as
+      | SpaceRow
+      | undefined;
+    if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
+    const rows = db
+      .prepare('SELECT * FROM items WHERE space_id = ? ORDER BY position ASC, created_at ASC')
+      .all(space.id) as ItemRow[];
+    res.json({
+      space: publicSpace(space),
+      token: signAccessToken(space.id),
+      items: rows.map(publicItem),
+    });
+  }),
+);
+
+/** Admin: Zustand eines Mediums setzen (wiederherstellen/archivieren). */
+router.patch(
+  '/:id/items/:itemId/state',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const state = String(req.body?.state ?? '');
+    if (!['active', 'archived', 'deleted'].includes(state)) {
+      throw new ApiError(400, 'Ungültiger Zustand.');
+    }
+    const db = getDb();
+    const item = db
+      .prepare('SELECT * FROM items WHERE id = ? AND space_id = ?')
+      .get(req.params.itemId, req.params.id) as ItemRow | undefined;
+    if (!item) throw new ApiError(404, 'Medium nicht gefunden.');
+    db.prepare(`UPDATE items SET state=?, state_by='Admin', state_at=? WHERE id=?`).run(
+      state,
+      new Date().toISOString(),
+      item.id,
+    );
+    const updated = db.prepare('SELECT * FROM items WHERE id = ?').get(item.id) as ItemRow;
+    res.json({ item: publicItem(updated) });
+  }),
+);
+
+/** Admin: Medium endgültig löschen (Datenbankeintrag + alle Dateien). */
+router.delete(
+  '/:id/items/:itemId',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const item = db
+      .prepare('SELECT * FROM items WHERE id = ? AND space_id = ?')
+      .get(req.params.itemId, req.params.id) as ItemRow | undefined;
+    if (!item) throw new ApiError(404, 'Medium nicht gefunden.');
+    db.prepare('DELETE FROM items WHERE id = ?').run(item.id);
+    await deleteAllVariants(item.storage_key, item.ext);
     res.json({ ok: true });
   }),
 );

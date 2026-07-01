@@ -37,12 +37,26 @@ Die Dateien liegen **lokal auf deinem QNAP** – kein Cloud-Speicher Dritter.
 - **Grosse Dateien / Videos**: Uploads werden in Teile (Chunks) zerlegt und sind
   **fortsetzbar** – ein abgebrochener Upload kann weiterlaufen (siehe
   [docs/05-uploads-und-videos.md](docs/05-uploads-und-videos.md)).
+- **Upload-Fortschritt** wird während des Hochladens angezeigt – ein
+  Gesamtbalken (nach Bytes) plus ein Balken pro Datei und eine Aufschlüsselung
+  nach Fotos/Videos, damit man auch bei vielen Fotos oder grossen Videos sieht,
+  wie weit es ist.
 - **Schöne Galerie** mit drei Ansichten: *Galerie* (Foto-Collage mit
   unterschiedlich grossen Kacheln), *Nach Person* und *Chronologisch*
-  (nach Aufnahmedatum).
+  (nach Aufnahmedatum). Beim Herunterscrollen blenden sich Navigationsleiste und
+  Buttons aus („Vollbild-Modus“, nur die Fotos sind sichtbar) und erscheinen beim
+  Hochscrollen wieder.
 - **Video-Wiedergabe in der App** über eine kleinere, gut streambare Vorschau;
-  **Download** liefert immer das **Original**.
+  **Download** liefert immer das **Original**. Hochformat-Videos werden mit dem
+  richtigen Seitenverhältnis (Hochformat) angezeigt.
+- **Archivieren & Löschen**: Jede Person kann Medien *archivieren* (sie
+  verschwinden aus der Galerie, bleiben aber erhalten). *Löschen* darf nur, wer
+  ein Medium selbst hochgeladen hat – auch hier wird es nur ausgeblendet.
+  **Endgültig löschen** kann ausschliesslich der Administrator.
 - **Download** einzeln oder als **ZIP** (mehrere/alle Originale auf einmal).
+- **Adminbereich**: aufklappbare Bereiche mit allen Medien aller Personen,
+  inklusive der archivierten und gelöschten – mit der Möglichkeit,
+  wiederherzustellen oder Fotos/Videos endgültig zu löschen.
 - **Lokale Speicherung** auf dem QNAP, Metadaten in einer einzelnen SQLite-Datei.
 
 ## Technik

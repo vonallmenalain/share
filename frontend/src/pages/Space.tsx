@@ -32,6 +32,11 @@ export default function Space() {
   const [gateBusy, setGateBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
+  // "Vollbild"-Modus der Galerie: Beim Herunterscrollen verschwinden Nav-Leiste
+  // und Buttons, damit nur die Fotos sichtbar sind. Beim Hochscrollen (oder ganz
+  // oben) erscheinen sie wieder.
+  const [chromeHidden, setChromeHidden] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ---- Laden / Zugang ------------------------------------------------------
@@ -86,6 +91,30 @@ export default function Space() {
     const id = setInterval(() => void loadItems(token), 20000);
     return () => clearInterval(id);
   }, [phase, token, loadItems]);
+
+  // Scroll-Richtung erkennen → Nav-Leiste & Buttons ein-/ausblenden.
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    let lastY = window.scrollY;
+    let ticking = false;
+    const apply = () => {
+      const y = window.scrollY;
+      const delta = y - lastY;
+      if (y < 90) setChromeHidden(false);
+      else if (delta > 8) setChromeHidden(true);
+      else if (delta < -8) setChromeHidden(false);
+      lastY = y;
+      ticking = false;
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        window.requestAnimationFrame(apply);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [phase]);
 
   // Eigene Uploads sofort in die Galerie übernehmen.
   useEffect(() => {
@@ -191,20 +220,99 @@ export default function Space() {
     a.remove();
   };
 
+  // Archivieren darf jede Person; die Medien verschwinden nur aus der Galerie.
+  const archiveItems = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
+      const ok: string[] = [];
+      for (const id of ids) {
+        try {
+          await api(`/api/items/${id}/archive`, {
+            method: 'POST',
+            token,
+            uploaderName: name || undefined,
+          });
+          ok.push(id);
+        } catch {
+          /* ignore */
+        }
+      }
+      setItems((prev) => prev.filter((i) => !ok.includes(i.id)));
+    },
+    [token, name],
+  );
+
+  // (Weiches) Löschen darf nur, wer das Medium hochgeladen hat.
+  const softDeleteItems = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
+      const ok: string[] = [];
+      let forbidden = 0;
+      for (const id of ids) {
+        try {
+          await api(`/api/items/${id}/delete`, {
+            method: 'POST',
+            token,
+            uploaderName: name || undefined,
+          });
+          ok.push(id);
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 403) forbidden++;
+        }
+      }
+      setItems((prev) => prev.filter((i) => !ok.includes(i.id)));
+      if (forbidden > 0) {
+        alert(
+          `${forbidden} ${
+            forbidden === 1 ? 'Medium wurde' : 'Medien wurden'
+          } nicht gelöscht – löschen kann nur, wer sie hochgeladen hat. Du kannst sie stattdessen archivieren.`,
+        );
+      }
+    },
+    [token, name],
+  );
+
+  const archiveSelected = async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    if (
+      !confirm(
+        `${ids.length} ${
+          ids.length === 1 ? 'Medium' : 'Medien'
+        } archivieren? Sie verschwinden aus der Galerie, bleiben aber erhalten.`,
+      )
+    )
+      return;
+    await archiveItems(ids);
+    setSelected(new Set());
+    setSelectMode(false);
+  };
+
   const deleteSelected = async () => {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
-    if (!confirm(`${ids.length} Medien wirklich löschen?`)) return;
-    for (const id of ids) {
-      try {
-        await api(`/api/items/${id}`, { method: 'DELETE', token });
-      } catch {
-        /* ignore */
-      }
-    }
-    setItems((prev) => prev.filter((i) => !selected.has(i.id)));
+    if (
+      !confirm(
+        `${ids.length} ${
+          ids.length === 1 ? 'Medium' : 'Medien'
+        } löschen? Nur eigene Uploads werden gelöscht.`,
+      )
+    )
+      return;
+    await softDeleteItems(ids);
     setSelected(new Set());
     setSelectMode(false);
+  };
+
+  const archiveOne = async (item: Item) => {
+    await archiveItems([item.id]);
+    setLightboxId(null);
+  };
+
+  const deleteOne = async (item: Item) => {
+    if (!confirm('Dieses Medium löschen? Es verschwindet aus der Galerie.')) return;
+    await softDeleteItems([item.id]);
+    setLightboxId(null);
   };
 
   // ---- Abgeleitete Daten ---------------------------------------------------
@@ -315,7 +423,7 @@ export default function Space() {
 
   return (
     <>
-      <TopBar>
+      <TopBar hidden={chromeHidden}>
         <span className="muted" style={{ fontSize: 14 }}>
           als <strong>{name || 'Gast'}</strong>
         </span>
@@ -360,7 +468,7 @@ export default function Space() {
           onChange={onFilePick}
         />
 
-        <div className="toolbar">
+        <div className={`toolbar${chromeHidden ? ' toolbar-hidden' : ''}`}>
           <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
             ↑ Hochladen
           </button>
@@ -390,6 +498,13 @@ export default function Space() {
                 onClick={() => downloadZip(Array.from(selected))}
               >
                 ↓ ZIP
+              </button>
+              <button
+                className="btn btn-sm"
+                disabled={selected.size === 0}
+                onClick={archiveSelected}
+              >
+                Archivieren
               </button>
               <button
                 className="btn btn-sm btn-danger"
@@ -514,9 +629,12 @@ export default function Space() {
           items={flatOrder}
           index={lightboxIndex}
           token={token}
+          currentName={name}
           onClose={() => setLightboxId(null)}
           onNavigate={(i) => setLightboxId(flatOrder[i]?.id ?? null)}
           onDownload={downloadOriginal}
+          onArchive={archiveOne}
+          onDelete={deleteOne}
         />
       )}
 
