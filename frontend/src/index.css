@@ -677,6 +677,81 @@ button {
   text-overflow: ellipsis;
 }
 
+/* ---- Eigenständige Upload-Seite ----------------------------------------- */
+.upload-page {
+  padding-bottom: 80px;
+  min-height: 100vh;
+}
+.dropzone-xl {
+  padding: 44px 28px;
+  margin-top: 8px;
+}
+.upload-summary-card {
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+.upload-pct {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--brand);
+  letter-spacing: -0.02em;
+}
+.bar-xl {
+  height: 14px;
+  margin-top: 4px;
+}
+.upload-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.upload-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fafbfc;
+}
+.upload-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.upload-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.upload-summary-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.upload-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.upload-file-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
 /* Schwebende Anzeige laufender Uploads (wenn der Bereich geschlossen ist). */
 .upload-fab {
   position: fixed;

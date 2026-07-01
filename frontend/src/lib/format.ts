@@ -10,6 +10,25 @@ export function formatBytes(bytes: number): string {
   return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+/** Übertragungsrate als „12.3 MB/s“ (bzw. KB/s bei kleinen Werten). */
+export function formatSpeed(bytesPerSecond: number): string {
+  if (!bytesPerSecond || bytesPerSecond <= 0) return '–';
+  return `${formatBytes(bytesPerSecond)}/s`;
+}
+
+/** Grobe Restdauer als „~2 Min. 30 Sek.“ / „~45 Sek.“. */
+export function formatEta(seconds: number | null): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return '–';
+  const s = Math.round(seconds);
+  if (s < 60) return `~${s} Sek.`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m < 60) return rem ? `~${m} Min. ${rem} Sek.` : `~${m} Min.`;
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return remM ? `~${h} Std. ${remM} Min.` : `~${h} Std.`;
+}
+
 export function formatDuration(seconds: number | null): string {
   if (!seconds || seconds <= 0) return '';
   const s = Math.round(seconds);
