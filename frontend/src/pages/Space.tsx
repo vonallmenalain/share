@@ -566,13 +566,6 @@ export default function Space() {
               <button
                 className="btn btn-sm"
                 disabled={readyItems.length === 0}
-                onClick={() => downloadZip()}
-              >
-                ↓ Alle
-              </button>
-              <button
-                className="btn btn-sm"
-                disabled={readyItems.length === 0}
                 onClick={() => setSelectMode(true)}
               >
                 Auswählen
