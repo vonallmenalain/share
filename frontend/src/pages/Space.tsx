@@ -201,6 +201,29 @@ export default function Space() {
     });
   };
 
+  // Wählt eine ganze Gruppe (z. B. alle Fotos einer Person oder eines Tages)
+  // auf einmal aus. Ein erneuter Klick hebt die Auswahl dieser Gruppe wieder
+  // auf. So lassen sich z. B. schnell alle Fotos von zwei Uploadern oder
+  // mehreren Tagen kombinieren, ohne jede Kachel einzeln antippen zu müssen.
+  const isGroupSelected = useCallback(
+    (arr: Item[]) => arr.length > 0 && arr.every((i) => selected.has(i.id)),
+    [selected],
+  );
+
+  const toggleGroupSelect = (arr: Item[]) => {
+    if (arr.length === 0) return;
+    setSelectMode(true);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allSelected = arr.every((i) => next.has(i.id));
+      for (const i of arr) {
+        if (allSelected) next.delete(i.id);
+        else next.add(i.id);
+      }
+      return next;
+    });
+  };
+
   const togglePersonExpanded = (person: string) => {
     setExpandedPeople((prev) => {
       const next = new Set(prev);
@@ -396,6 +419,12 @@ export default function Space() {
 
   const lightboxIndex = lightboxId ? flatOrder.findIndex((i) => i.id === lightboxId) : -1;
 
+  // Wählt (oder entwählt) alle Medien der aktuell sichtbaren Ansicht auf einmal.
+  const allVisibleSelected = flatOrder.length > 0 && flatOrder.every((i) => selected.has(i.id));
+  const toggleSelectAllVisible = () => {
+    setSelected(allVisibleSelected ? new Set() : new Set(flatOrder.map((i) => i.id)));
+  };
+
   // Laufende Uploads dieses Bereichs (für die Hintergrund-Anzeige, wenn der
   // Hochlade-Bereich geschlossen ist).
   const spaceTasks = space ? uploads.tasks.filter((t) => t.spaceId === space.id) : [];
@@ -532,6 +561,13 @@ export default function Space() {
               </span>
               <button
                 className="btn btn-sm"
+                disabled={flatOrder.length === 0}
+                onClick={toggleSelectAllVisible}
+              >
+                {allVisibleSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
+              </button>
+              <button
+                className="btn btn-sm"
                 disabled={selected.size === 0}
                 onClick={() => downloadZip(Array.from(selected))}
               >
@@ -620,23 +656,32 @@ export default function Space() {
         ) : view === 'people' ? (
           peopleGroups.map(([person, arr]) => {
             const open = expandedPeople.has(person);
+            const groupSelected = isGroupSelected(arr);
             return (
               <section key={person}>
-                <button
-                  type="button"
-                  className="group-heading group-heading-btn"
-                  onClick={() => togglePersonExpanded(person)}
-                  aria-expanded={open}
-                >
-                  <span className="avatar" style={{ background: colorForName(person) }}>
-                    {initialsOf(person)}
-                  </span>
-                  <h2>{person}</h2>
-                  <span className="count">{arr.length}</span>
-                  <span className={`chevron${open ? ' open' : ''}`} style={{ marginLeft: 'auto' }}>
-                    ▸
-                  </span>
-                </button>
+                <div className="group-heading">
+                  <button
+                    type="button"
+                    className="group-heading-btn"
+                    onClick={() => togglePersonExpanded(person)}
+                    aria-expanded={open}
+                  >
+                    <span className="avatar" style={{ background: colorForName(person) }}>
+                      {initialsOf(person)}
+                    </span>
+                    <h2>{person}</h2>
+                    <span className="count">{arr.length}</span>
+                    <span className={`chevron${open ? ' open' : ''}`}>▸</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm group-select-btn${groupSelected ? ' active' : ''}`}
+                    onClick={() => toggleGroupSelect(arr)}
+                    title={`Alle Fotos von ${person} auswählen`}
+                  >
+                    {groupSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
+                  </button>
+                </div>
                 {open && (
                   <CollageGrid
                     items={arr}
@@ -652,23 +697,35 @@ export default function Space() {
             );
           })
         ) : (
-          timeGroups.map(([key, arr]) => (
-            <section key={key}>
-              <div className="group-heading">
-                <h2>{formatDayHeading(key)}</h2>
-                <span className="count">{arr.length}</span>
-              </div>
-              <CollageGrid
-                items={arr}
-                token={token}
-                selectMode={selectMode}
-                selected={selected}
-                onToggle={(item) => toggleSelect(item.id)}
-                onOpen={(item) => setLightboxId(item.id)}
-                onLongPress={(item) => longPressSelect(item.id)}
-              />
-            </section>
-          ))
+          timeGroups.map(([key, arr]) => {
+            const groupSelected = isGroupSelected(arr);
+            return (
+              <section key={key}>
+                <div className="group-heading">
+                  <h2>{formatDayHeading(key)}</h2>
+                  <span className="count">{arr.length}</span>
+                  <button
+                    type="button"
+                    className={`btn btn-sm group-select-btn${groupSelected ? ' active' : ''}`}
+                    style={{ marginLeft: 'auto' }}
+                    onClick={() => toggleGroupSelect(arr)}
+                    title={`Alle Fotos vom ${formatDayHeading(key)} auswählen`}
+                  >
+                    {groupSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
+                  </button>
+                </div>
+                <CollageGrid
+                  items={arr}
+                  token={token}
+                  selectMode={selectMode}
+                  selected={selected}
+                  onToggle={(item) => toggleSelect(item.id)}
+                  onOpen={(item) => setLightboxId(item.id)}
+                  onLongPress={(item) => longPressSelect(item.id)}
+                />
+              </section>
+            );
+          })
         )}
       </div>
 
