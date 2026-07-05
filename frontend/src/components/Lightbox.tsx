@@ -134,7 +134,21 @@ export default function Lightbox({
           </button>
         )}
 
-        {item.kind === 'video' ? (
+        {item.status === 'failed' ? (
+          // Verarbeitung fehlgeschlagen (z. B. nicht unterstütztes Format):
+          // keine Vorschau möglich – Original bleibt aber herunterladbar.
+          <div className="lb-fallback" onClick={(e) => e.stopPropagation()}>
+            <div className="lb-fallback-icon">{item.kind === 'video' ? '🎬' : '🖼️'}</div>
+            <div className="lb-fallback-title">Vorschau nicht verfügbar</div>
+            <div className="lb-fallback-sub">
+              Dieses Medium konnte nicht als Vorschau aufbereitet werden. Das Original ist
+              unverändert gespeichert und kann heruntergeladen werden.
+            </div>
+            <button className="lb-btn" onClick={() => onDownload(item)}>
+              ↓ Original herunterladen
+            </button>
+          </div>
+        ) : item.kind === 'video' ? (
           item.hasPreview ? (
             <video
               key={item.id}

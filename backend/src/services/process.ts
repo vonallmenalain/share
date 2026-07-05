@@ -1,3 +1,4 @@
+import { config } from '../config';
 import { getDb, ItemRow } from '../db';
 import { processImage, variantPath } from '../lib/media';
 import { processVideo } from '../lib/video';
@@ -55,4 +56,56 @@ export function extFromFilename(filename: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '')
     .slice(0, 8);
+}
+
+// ---- Verarbeitungs-Warteschlange -------------------------------------------
+// Begrenzt die Anzahl gleichzeitig laufender processItem()-Jobs (sharp/ffmpeg
+// sind CPU-/RAM-intensiv). Eingehende Uploads werden weiter sofort gespeichert;
+// nur die nachgelagerte Verarbeitung wird gedrosselt, damit eine Upload-Spitze
+// den Server nicht überlastet.
+
+const pending: string[] = [];
+const inFlight = new Set<string>();
+let active = 0;
+
+function drainQueue(): void {
+  while (active < config.processing.concurrency && pending.length > 0) {
+    const itemId = pending.shift()!;
+    inFlight.delete(itemId);
+    active++;
+    void processItem(itemId)
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[process] job failed for item', itemId, err);
+      })
+      .finally(() => {
+        active--;
+        drainQueue();
+      });
+  }
+}
+
+/**
+ * Reiht ein Item zur (nebenläufig begrenzten) Verarbeitung ein. Doppelte
+ * Einträge desselben, noch nicht gestarteten Items werden ignoriert.
+ */
+export function enqueueProcessing(itemId: string): void {
+  if (inFlight.has(itemId)) return;
+  inFlight.add(itemId);
+  pending.push(itemId);
+  drainQueue();
+}
+
+/**
+ * Reiht beim Start alle Items neu ein, die noch als "processing" markiert sind
+ * (z. B. weil der Server während der Verarbeitung neu gestartet wurde). So
+ * bleiben keine Medien dauerhaft im Verarbeitungs-Zustand hängen.
+ */
+export function requeueUnfinished(): number {
+  const db = getDb();
+  const rows = db
+    .prepare(`SELECT id FROM items WHERE status = 'processing'`)
+    .all() as Array<{ id: string }>;
+  for (const r of rows) enqueueProcessing(r.id);
+  return rows.length;
 }

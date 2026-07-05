@@ -8,7 +8,7 @@ import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireSpace } from '../middleware/auth';
 import { newId } from '../lib/ids';
 import { variantPath } from '../lib/media';
-import { detectKind, extFromFilename, processItem } from '../services/process';
+import { detectKind, enqueueProcessing, extFromFilename } from '../services/process';
 import { publicItem } from './items';
 
 const router = Router();
@@ -262,11 +262,9 @@ router.post(
     // Temporäre Chunks aufräumen.
     fsp.rm(uploadDir(upload.id), { recursive: true, force: true }).catch(() => undefined);
 
-    // Verarbeitung (Varianten/Transcode) im Hintergrund anstossen.
-    processItem(itemId).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('[upload] background processing failed', err);
-    });
+    // Verarbeitung (Varianten/Transcode) einreihen – die Warteschlange begrenzt
+    // die gleichzeitige Last (siehe services/process.ts).
+    enqueueProcessing(itemId);
 
     const item = db.prepare('SELECT * FROM items WHERE id = ?').get(itemId) as ItemRow;
     res.status(201).json({ item: publicItem(item) });

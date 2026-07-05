@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { getDb, ItemRow, SpaceRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireAdmin, requireSpace } from '../middleware/auth';
+import { accessLimiter, adminLimiter } from '../middleware/rateLimit';
 import { newId, newSlug, slugifyName } from '../lib/ids';
 import { signAccessToken } from '../lib/auth';
 import { deleteAllVariants, deleteSpaceStorage } from '../lib/media';
@@ -23,6 +24,7 @@ function publicSpace(space: SpaceRow) {
 /** Admin: neuen Bereich anlegen. */
 router.post(
   '/',
+  adminLimiter,
   requireAdmin,
   asyncHandler(async (req, res) => {
     const name = String(req.body?.name ?? '').trim();
@@ -58,6 +60,7 @@ router.post(
 /** Admin: alle Bereiche auflisten (Übersicht). */
 router.get(
   '/',
+  adminLimiter,
   requireAdmin,
   asyncHandler(async (_req, res) => {
     const db = getDb();
@@ -85,6 +88,7 @@ router.get(
 /** Admin: Bereich (inkl. aller Medien) löschen. */
 router.delete(
   '/:id',
+  adminLimiter,
   requireAdmin,
   asyncHandler(async (req, res) => {
     const db = getDb();
@@ -106,6 +110,7 @@ router.delete(
  */
 router.get(
   '/:id/items',
+  adminLimiter,
   requireAdmin,
   asyncHandler(async (req, res) => {
     const db = getDb();
@@ -127,6 +132,7 @@ router.get(
 /** Admin: Zustand eines Mediums setzen (wiederherstellen/archivieren). */
 router.patch(
   '/:id/items/:itemId/state',
+  adminLimiter,
   requireAdmin,
   asyncHandler(async (req, res) => {
     const state = String(req.body?.state ?? '');
@@ -151,6 +157,7 @@ router.patch(
 /** Admin: Medium endgültig löschen (Datenbankeintrag + alle Dateien). */
 router.delete(
   '/:id/items/:itemId',
+  adminLimiter,
   requireAdmin,
   asyncHandler(async (req, res) => {
     const db = getDb();
@@ -180,6 +187,7 @@ router.get(
 /** Öffentlich: Bereich betreten (Passwort prüfen) und Access-Token erhalten. */
 router.post(
   '/by-slug/:slug/access',
+  accessLimiter,
   asyncHandler(async (req, res) => {
     const db = getDb();
     const space = db.prepare('SELECT * FROM spaces WHERE slug = ?').get(req.params.slug) as

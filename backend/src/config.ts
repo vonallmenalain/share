@@ -77,6 +77,17 @@ export const config = {
     sessionTtlHours: int('UPLOAD_SESSION_TTL_HOURS', 48),
   },
 
+  // Medienverarbeitung (Erzeugen von Varianten / Transcoding). Begrenzt, wie
+  // viele Fotos/Videos gleichzeitig verarbeitet werden. sharp und vor allem
+  // ffmpeg sind CPU-/RAM-intensiv; ohne Begrenzung kann eine Upload-Spitze
+  // (z. B. eine ganze Gruppe lädt gleichzeitig hoch) den Server (QNAP)
+  // überlasten und die API träge machen. Uploads laufen davon unabhängig
+  // weiter – nur die nachgelagerte Verarbeitung wird in einer Warteschlange
+  // gedrosselt.
+  processing: {
+    concurrency: Math.max(1, int('PROCESS_CONCURRENCY', 2)),
+  },
+
   // Bildvarianten (sharp).
   images: {
     thumbMax: int('IMG_THUMB_MAX', 600),
