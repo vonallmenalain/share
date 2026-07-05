@@ -107,7 +107,11 @@ export default function Lightbox({
           <div className="name">Upload von {item.uploaderName}</div>
           <div className="lb-meta">
             {formatBytes(item.sizeBytes)}
-            {item.takenAt ? ` · ${formatDateTime(item.takenAt)}` : ''}
+            {/* Foto-Aufnahmezeiten (EXIF) sind zeitzonenlose Wanduhrzeiten und
+                werden unverändert angezeigt; Video-Zeiten sind echte Zeitpunkte. */}
+            {item.takenAt
+              ? ` · ${formatDateTime(item.takenAt, { floating: item.kind !== 'video' })}`
+              : ''}
           </div>
         </div>
         {onToggleFavorite && (

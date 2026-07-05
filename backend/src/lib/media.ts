@@ -97,7 +97,22 @@ async function parseExifDate(buffer: Buffer): Promise<string | null> {
     if (!raw) return null;
     const d = raw instanceof Date ? raw : new Date(raw);
     if (Number.isNaN(d.getTime())) return null;
-    return d.toISOString();
+    // EXIF-Zeitstempel sind lokale Wanduhrzeiten OHNE Zeitzoneninfo (z. B. „08:00“).
+    // exifr baut daraus ein Date in der Zeitzone des Servers. Damit die gespeicherte
+    // Zeit unabhängig von der Server-Zeitzone stets die reine Wanduhrzeit
+    // widerspiegelt (08:00 bleibt 08:00), lesen wir die Komponenten ab und kodieren
+    // sie als UTC. Das Frontend zeigt Foto-Zeiten entsprechend ohne Zeitzonen-
+    // Umrechnung an – sonst würde die Uhrzeit je nach Betrachter-Zeitzone verrutschen.
+    return new Date(
+      Date.UTC(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        d.getHours(),
+        d.getMinutes(),
+        d.getSeconds(),
+      ),
+    ).toISOString();
   } catch {
     return null;
   }
