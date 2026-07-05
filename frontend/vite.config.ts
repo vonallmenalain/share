@@ -20,7 +20,7 @@ export default defineConfig({
         name: 'share · Fotos & Videos teilen',
         short_name: 'share',
         description:
-          'Fotos & Videos einfach in einer privaten Gruppe teilen – Originale hoch- und runterladen, schöne Galerie.',
+          'Fotos & Videos einfach in einer privaten Gruppe teilen – Originale hoch- und runterladen.',
         lang: 'de',
         id: '/',
         start_url: '/',
