@@ -44,7 +44,16 @@ export function formatDate(iso: string | null): string {
   return d.toLocaleDateString('de-CH', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export function formatDateTime(iso: string | null): string {
+/**
+ * Formatiert einen ISO-Zeitstempel als Datum + Uhrzeit.
+ *
+ * `floating`: Foto-Aufnahmezeiten stammen aus EXIF und sind reine Wanduhrzeiten
+ * ohne Zeitzone. Sie werden im Backend als UTC kodiert und müssen hier ohne
+ * Zeitzonen-Umrechnung (also in UTC) angezeigt werden – sonst wäre die Uhrzeit
+ * je nach Betrachter-Zeitzone verschoben (z. B. 08:00 → 10:00). Echte Zeitpunkte
+ * (z. B. Upload-Zeit) werden weiterhin in der lokalen Zeitzone dargestellt.
+ */
+export function formatDateTime(iso: string | null, opts?: { floating?: boolean }): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -54,6 +63,7 @@ export function formatDateTime(iso: string | null): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    ...(opts?.floating ? { timeZone: 'UTC' } : {}),
   });
 }
 
