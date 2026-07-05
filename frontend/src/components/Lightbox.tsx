@@ -41,6 +41,36 @@ export default function Lightbox({
     onNavigate((index + 1) % items.length);
   }, [index, items.length, onNavigate]);
 
+  // Wischgesten (Touch): links/rechts blättert durch die Medien. Wir merken uns
+  // den Startpunkt der Berührung und werten beim Loslassen aus, ob es sich um
+  // eine klare horizontale Wischbewegung handelt.
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length !== 1) {
+      touchStart.current = null;
+      return;
+    }
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  }, []);
+  const onTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const start = touchStart.current;
+      touchStart.current = null;
+      if (!start || items.length <= 1) return;
+      const t = e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - start.x;
+      const dy = t.clientY - start.y;
+      // Nur als Wisch werten, wenn die Bewegung deutlich horizontal ist.
+      const THRESHOLD = 50;
+      if (Math.abs(dx) < THRESHOLD || Math.abs(dx) <= Math.abs(dy)) return;
+      if (dx < 0) next();
+      else prev();
+    },
+    [items.length, next, prev],
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -120,7 +150,12 @@ export default function Lightbox({
 
       {/* Klick auf die freie Fläche neben dem Foto/Video schliesst ebenfalls.
           Das Medium selbst und die Navigationspfeile stoppen den Klick. */}
-      <div className="lb-stage" onClick={onClose}>
+      <div
+        className="lb-stage"
+        onClick={onClose}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         {items.length > 1 && (
           <button
             className="lb-nav lb-prev"
