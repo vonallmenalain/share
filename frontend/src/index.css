@@ -558,6 +558,34 @@ button {
   justify-content: center;
 }
 
+/* Platzhalter für Medien, deren Vorschau nicht erstellt werden konnte. */
+.tile-failed {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px;
+  text-align: center;
+  background: linear-gradient(135deg, #eef0f3, #e3e6eb);
+  color: var(--ink-soft);
+}
+.tile-failed-icon {
+  font-size: 30px;
+  opacity: 0.8;
+}
+.tile-failed-text {
+  font-size: 12px;
+  font-weight: 600;
+}
+.tile-failed-hint {
+  font-size: 11px;
+  color: var(--brand);
+  font-weight: 600;
+}
+
 .empty {
   text-align: center;
   padding: 80px 20px;
@@ -925,6 +953,30 @@ button {
   position: relative;
   min-height: 0;
   padding: 0 8px 12px;
+}
+.lb-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: 440px;
+  padding: 24px;
+  text-align: center;
+  color: #fff;
+}
+.lb-fallback-icon {
+  font-size: 56px;
+  line-height: 1;
+}
+.lb-fallback-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+.lb-fallback-sub {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
 }
 .lb-stage img,
 .lb-stage video {

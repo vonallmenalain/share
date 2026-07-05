@@ -83,6 +83,11 @@ export default function Tile({
     );
   }
 
+  // Bei fehlgeschlagener Verarbeitung (z. B. ein nicht unterstütztes Format)
+  // gibt es kein Vorschaubild. Statt eines kaputten Bild-Symbols zeigen wir
+  // einen Platzhalter; das Original lässt sich in der Lightbox herunterladen.
+  const failed = item.status === 'failed';
+
   const thumbSrc =
     item.kind === 'video'
       ? item.hasPoster
@@ -110,7 +115,13 @@ export default function Tile({
       onTouchCancel={clearTimer}
       title={`${item.filename} · ${item.uploaderName}`}
     >
-      {thumbSrc ? (
+      {failed ? (
+        <div className="tile-failed">
+          <span className="tile-failed-icon">{item.kind === 'video' ? '🎬' : '🖼️'}</span>
+          <span className="tile-failed-text">Vorschau nicht verfügbar</span>
+          <span className="tile-failed-hint">Original herunterladen</span>
+        </div>
+      ) : thumbSrc ? (
         <img src={thumbSrc} alt={item.filename} loading="lazy" draggable={false} />
       ) : (
         <div className="tile processing">
@@ -124,7 +135,7 @@ export default function Tile({
         </span>
       )}
 
-      {item.kind === 'video' && (
+      {item.kind === 'video' && !failed && (
         <>
           <div className="play">
             <span>▶</span>
