@@ -8,6 +8,7 @@ import { config, paths } from './config';
 import { initDb, getDb, UploadRow } from './db';
 import { errorHandler, notFound } from './middleware/errors';
 import { checkFfmpeg } from './lib/video';
+import { requeueUnfinished } from './services/process';
 import spacesRoutes from './routes/spaces';
 import itemsRoutes from './routes/items';
 import uploadsRoutes from './routes/uploads';
@@ -93,6 +94,14 @@ async function main() {
 
   await cleanupStaleUploads();
   setInterval(() => void cleanupStaleUploads(), 6 * 60 * 60 * 1000).unref();
+
+  // Items, die beim letzten Lauf mitten in der Verarbeitung waren (z. B. wegen
+  // eines Neustarts), erneut in die Verarbeitungs-Warteschlange einreihen.
+  const requeued = requeueUnfinished();
+  if (requeued > 0) {
+    // eslint-disable-next-line no-console
+    console.log(`[process] re-queued ${requeued} unfinished item(s)`);
+  }
 
   const ffmpegOk = await checkFfmpeg();
 
