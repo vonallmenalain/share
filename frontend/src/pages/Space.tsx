@@ -31,6 +31,9 @@ export default function Space() {
   // "Nach Person": standardmässig sind alle Gruppen eingeklappt, erst ein Klick
   // auf den Namen zeigt die Fotos der jeweiligen Person an.
   const [expandedPeople, setExpandedPeople] = useState<Set<string>>(new Set());
+  // "Chronologisch": standardmässig sind alle Tage ausgeklappt. Ein Klick auf das
+  // Datum klappt die Fotos dieses Tages ein (und wieder aus).
+  const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
 
   const [gatePassword, setGatePassword] = useState('');
   const [gateError, setGateError] = useState('');
@@ -233,6 +236,15 @@ export default function Space() {
     });
   };
 
+  const toggleDayCollapsed = (key: string) => {
+    setCollapsedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   // Langes Drücken auf einer Kachel (mobil) → Auswahl-Modus starten und das
   // betreffende Medium direkt markieren.
   const longPressSelect = useCallback((id: string) => {
@@ -413,9 +425,10 @@ export default function Space() {
   const flatOrder = useMemo(() => {
     if (view === 'favorites') return favoriteItems;
     if (view === 'people') return peopleGroups.flatMap(([, arr]) => arr);
-    if (view === 'time') return timeGroups.flatMap(([, arr]) => arr);
+    if (view === 'time')
+      return timeGroups.flatMap(([key, arr]) => (collapsedDays.has(key) ? [] : arr));
     return readyItems;
-  }, [view, favoriteItems, peopleGroups, timeGroups, readyItems]);
+  }, [view, favoriteItems, peopleGroups, timeGroups, readyItems, collapsedDays]);
 
   const lightboxIndex = lightboxId ? flatOrder.findIndex((i) => i.id === lightboxId) : -1;
 
@@ -699,30 +712,41 @@ export default function Space() {
         ) : (
           timeGroups.map(([key, arr]) => {
             const groupSelected = isGroupSelected(arr);
+            const open = !collapsedDays.has(key);
             return (
               <section key={key}>
                 <div className="group-heading">
-                  <h2>{formatDayHeading(key)}</h2>
-                  <span className="count">{arr.length}</span>
+                  <button
+                    type="button"
+                    className="group-heading-btn"
+                    onClick={() => toggleDayCollapsed(key)}
+                    aria-expanded={open}
+                    title={open ? 'Fotos dieses Tages einklappen' : 'Fotos dieses Tages ausklappen'}
+                  >
+                    <h2>{formatDayHeading(key)}</h2>
+                    <span className="count">{arr.length}</span>
+                    <span className={`chevron${open ? ' open' : ''}`}>▸</span>
+                  </button>
                   <button
                     type="button"
                     className={`btn btn-sm group-select-btn${groupSelected ? ' active' : ''}`}
-                    style={{ marginLeft: 'auto' }}
                     onClick={() => toggleGroupSelect(arr)}
                     title={`Alle Fotos vom ${formatDayHeading(key)} auswählen`}
                   >
                     {groupSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
                   </button>
                 </div>
-                <CollageGrid
-                  items={arr}
-                  token={token}
-                  selectMode={selectMode}
-                  selected={selected}
-                  onToggle={(item) => toggleSelect(item.id)}
-                  onOpen={(item) => setLightboxId(item.id)}
-                  onLongPress={(item) => longPressSelect(item.id)}
-                />
+                {open && (
+                  <CollageGrid
+                    items={arr}
+                    token={token}
+                    selectMode={selectMode}
+                    selected={selected}
+                    onToggle={(item) => toggleSelect(item.id)}
+                    onOpen={(item) => setLightboxId(item.id)}
+                    onLongPress={(item) => longPressSelect(item.id)}
+                  />
+                )}
               </section>
             );
           })
