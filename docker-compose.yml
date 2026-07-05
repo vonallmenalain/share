@@ -20,6 +20,20 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/vonallmenalain/share-backend:latest}
     container_name: share-backend
     restart: unless-stopped
+    # Prüft regelmässig den /health-Endpunkt. Bei Fehlern markiert Docker den
+    # Container als "unhealthy" – zusammen mit "restart: unless-stopped" wird er
+    # so bei Hängern automatisch neu gestartet. `node`/`fetch` sind im Image
+    # (Node 22) vorhanden, daher braucht es kein zusätzliches curl/wget.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     labels:
       com.centurylinklabs.watchtower.enable: "true"
     env_file:
