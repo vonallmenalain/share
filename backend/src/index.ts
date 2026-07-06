@@ -8,7 +8,7 @@ import { config, paths } from './config';
 import { initDb, getDb, UploadRow } from './db';
 import { errorHandler, notFound } from './middleware/errors';
 import { checkFfmpeg } from './lib/video';
-import { requeueUnfinished } from './services/process';
+import { requeueUnfinished, backfillOrientedDims } from './services/process';
 import spacesRoutes from './routes/spaces';
 import itemsRoutes from './routes/items';
 import uploadsRoutes from './routes/uploads';
@@ -104,6 +104,13 @@ async function main() {
   }
 
   const ffmpegOk = await checkFfmpeg();
+
+  // Einmalige Korrektur falsch gespeicherter Foto-Masse (EXIF-Orientierung) im
+  // Hintergrund – blockiert den Serverstart nicht.
+  void backfillOrientedDims().catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('[migrate] oriented dims backfill failed', err);
+  });
 
   const app = buildApp();
   app.listen(config.port, () => {
