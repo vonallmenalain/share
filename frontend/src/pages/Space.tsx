@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import CollageGrid from '../components/CollageGrid';
 import Lightbox from '../components/Lightbox';
+import InstallButton from '../components/InstallButton';
+import { setSpaceManifest, resetManifest } from '../lib/pwaManifest';
 import { api, ApiError, fileUrl, Item, Space as SpaceType } from '../api/client';
 import { useUploads } from '../context/Uploads';
 import { nameStore, tokenStore } from '../lib/storage';
@@ -97,6 +99,14 @@ export default function Space() {
     const id = setInterval(() => void loadItems(token), 20000);
     return () => clearInterval(id);
   }, [phase, token, loadItems]);
+
+  // Dynamisches Manifest: solange dieser Bereich offen ist, zeigt die PWA-
+  // Installation auf genau diesen Bereich (statt auf die Startseite).
+  useEffect(() => {
+    if (!slug || !space) return;
+    setSpaceManifest(slug, space.name);
+    return () => resetManifest();
+  }, [slug, space]);
 
   // Scroll-Richtung erkennen → Nav-Leiste & Buttons ein-/ausblenden.
   useEffect(() => {
@@ -391,6 +401,11 @@ export default function Space() {
     [token, name],
   );
 
+  // Aktualisiertes Item (z. B. nach Anpassen des Vorschaubilds) übernehmen.
+  const handleThumbUpdated = useCallback((updated: Item) => {
+    setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+  }, []);
+
   // ---- Abgeleitete Daten ---------------------------------------------------
   const readyItems = useMemo(() => items, [items]);
 
@@ -543,6 +558,7 @@ export default function Space() {
             {readyItems.length} {readyItems.length === 1 ? 'Medium' : 'Medien'}
             {space?.hasPassword ? ' · 🔒 passwortgeschützt' : ''}
           </div>
+          <InstallButton spaceName={space?.name} />
         </div>
 
         <div className={`toolbar${chromeHidden ? ' toolbar-hidden' : ''}`}>
@@ -765,6 +781,7 @@ export default function Space() {
           onArchive={archiveOne}
           onDelete={deleteOne}
           onToggleFavorite={toggleFavorite}
+          onThumbUpdated={handleThumbUpdated}
         />
       )}
 

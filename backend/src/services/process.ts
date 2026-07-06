@@ -1,5 +1,6 @@
+import sharp from 'sharp';
 import { config } from '../config';
-import { getDb, ItemRow } from '../db';
+import { getDb, getMeta, setMeta, ItemRow } from '../db';
 import { processImage, variantPath } from '../lib/media';
 import { processVideo } from '../lib/video';
 
@@ -108,4 +109,54 @@ export function requeueUnfinished(): number {
     .all() as Array<{ id: string }>;
   for (const r of rows) enqueueProcessing(r.id);
   return rows.length;
+}
+
+const ORIENT_BACKFILL_KEY = 'oriented_dims_backfill_v1';
+
+/**
+ * Einmalige Korrektur bestehender Fotos: Früher wurden Breite/Höhe aus den rohen
+ * Pixelmassen gespeichert, ohne die EXIF-Orientierung anzuwenden. Dadurch wurden
+ * Hochformat-Fotos (Orientation 5–8) in der Galerie fälschlich als Querformat
+ * dargestellt. Diese Funktion liest die Orientierung der Originale und tauscht
+ * bei Bedarf Breite/Höhe. Läuft nur einmal (per app_meta-Flag) und im Hintergrund,
+ * damit der Serverstart nicht blockiert wird.
+ */
+export async function backfillOrientedDims(): Promise<void> {
+  if (getMeta(ORIENT_BACKFILL_KEY) === 'done') return;
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT id, storage_key, ext, width, height FROM items WHERE kind = 'photo' AND status = 'ready'`,
+    )
+    .all() as Array<{
+    id: string;
+    storage_key: string;
+    ext: string;
+    width: number | null;
+    height: number | null;
+  }>;
+  const update = db.prepare('UPDATE items SET width = ?, height = ? WHERE id = ?');
+  let fixed = 0;
+  for (const r of rows) {
+    try {
+      const meta = await sharp(variantPath('original', r.storage_key, r.ext), {
+        failOn: 'none',
+      }).metadata();
+      const orientation = meta.orientation ?? 1;
+      let w = meta.width ?? 0;
+      let h = meta.height ?? 0;
+      if (orientation >= 5 && orientation <= 8) [w, h] = [h, w];
+      if (w && h && (w !== r.width || h !== r.height)) {
+        update.run(w, h, r.id);
+        fixed++;
+      }
+    } catch {
+      /* ignore einzelne, nicht lesbare Dateien */
+    }
+  }
+  setMeta(ORIENT_BACKFILL_KEY, 'done');
+  if (fixed > 0) {
+    // eslint-disable-next-line no-console
+    console.log(`[migrate] oriented dimensions corrected for ${fixed} photo(s)`);
+  }
 }

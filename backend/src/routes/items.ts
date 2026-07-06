@@ -1,8 +1,13 @@
-import { Router } from 'express';
+import { Router, raw } from 'express';
 import { getDb, ItemRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireSpace } from '../middleware/auth';
-import { fileExists, variantPath } from '../lib/media';
+import {
+  fileExists,
+  variantPath,
+  writeCustomThumb,
+  resetThumbFromOriginal,
+} from '../lib/media';
 
 const router = Router();
 
@@ -30,6 +35,9 @@ export function publicItem(item: ItemRow) {
     takenAt: item.taken_at,
     position: item.position,
     favorite: item.favorite === 1,
+    thumbVersion: item.thumb_version ?? 0,
+    thumbW: item.thumb_w,
+    thumbH: item.thumb_h,
     createdAt: item.created_at,
     hasPreview,
     hasPoster,
@@ -146,6 +154,68 @@ router.post(
     const value = req.body?.favorite === false ? 0 : 1;
     getDb().prepare(`UPDATE items SET favorite=? WHERE id=?`).run(value, item.id);
     res.json({ ok: true, favorite: value === 1 });
+  }),
+);
+
+/**
+ * Angepasstes Vorschaubild (Thumbnail) setzen. Body = rohe Bild-Bytes (JPEG/PNG)
+ * des vom Client bereits zugeschnittenen/gezoomten/rotierten Ausschnitts. Darf
+ * jede Person im Bereich (wie das Setzen eines Favoriten). Nur für Fotos.
+ */
+router.post(
+  '/:id/thumb',
+  requireSpace,
+  raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: 20 * 1024 * 1024 }),
+  asyncHandler(async (req, res) => {
+    const item = getOwnItem(req.params.id, req.spaceId!);
+    if (item.kind !== 'photo') {
+      throw new ApiError(400, 'Nur für Fotos kann ein Vorschaubild angepasst werden.');
+    }
+    const body = req.body as Buffer;
+    if (!Buffer.isBuffer(body) || body.length === 0) {
+      throw new ApiError(400, 'Kein Bild empfangen.');
+    }
+    let dims: { width: number; height: number };
+    try {
+      dims = await writeCustomThumb(body, item.storage_key);
+    } catch {
+      throw new ApiError(400, 'Das Vorschaubild konnte nicht verarbeitet werden.');
+    }
+    getDb()
+      .prepare(
+        `UPDATE items SET thumb_w=?, thumb_h=?, thumb_version=thumb_version+1 WHERE id=?`,
+      )
+      .run(dims.width, dims.height, item.id);
+    const updated = getDb().prepare('SELECT * FROM items WHERE id = ?').get(item.id) as ItemRow;
+    res.json({ item: publicItem(updated) });
+  }),
+);
+
+/**
+ * Angepasstes Vorschaubild zurücksetzen: Das Standard-Thumbnail (ganzes Foto)
+ * wird aus dem Original neu erzeugt und die Anpassung entfernt.
+ */
+router.delete(
+  '/:id/thumb',
+  requireSpace,
+  asyncHandler(async (req, res) => {
+    const item = getOwnItem(req.params.id, req.spaceId!);
+    if (item.kind !== 'photo') {
+      throw new ApiError(400, 'Nur für Fotos kann ein Vorschaubild angepasst werden.');
+    }
+    try {
+      await resetThumbFromOriginal(
+        variantPath('original', item.storage_key, item.ext),
+        item.storage_key,
+      );
+    } catch {
+      throw new ApiError(400, 'Das Vorschaubild konnte nicht zurückgesetzt werden.');
+    }
+    getDb()
+      .prepare(`UPDATE items SET thumb_w=NULL, thumb_h=NULL, thumb_version=thumb_version+1 WHERE id=?`)
+      .run(item.id);
+    const updated = getDb().prepare('SELECT * FROM items WHERE id = ?').get(item.id) as ItemRow;
+    res.json({ item: publicItem(updated) });
   }),
 );
 

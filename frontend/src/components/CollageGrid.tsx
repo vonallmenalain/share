@@ -38,8 +38,12 @@ function measure(width: number): Metrics {
 }
 
 function aspectOf(item: Item): number {
-  if (item.width && item.height) {
-    const ar = item.width / item.height;
+  // Wurde das Vorschaubild angepasst (zugeschnitten/gezoomt/rotiert), bestimmt
+  // dessen Seitenverhältnis die Kachel – sonst das (EXIF-orientierte) Original.
+  const w = item.thumbW ?? item.width;
+  const h = item.thumbH ?? item.height;
+  if (w && h) {
+    const ar = w / h;
     // Extreme Panoramen/Hochformate begrenzen, damit keine Kachel das Raster sprengt.
     return Math.min(2.2, Math.max(0.55, ar));
   }

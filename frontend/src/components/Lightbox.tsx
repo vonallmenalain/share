@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Item, fileUrl } from '../api/client';
 import { formatBytes, formatDateTime } from '../lib/format';
+import ThumbEditor from './ThumbEditor';
 
 interface Props {
   items: Item[];
@@ -14,6 +15,8 @@ interface Props {
   onArchive?: (item: Item) => void;
   onDelete?: (item: Item) => void;
   onToggleFavorite?: (item: Item) => void;
+  /** Wird nach dem Anpassen/Zurücksetzen des Vorschaubilds aufgerufen. */
+  onThumbUpdated?: (item: Item) => void;
 }
 
 function sameName(a: string, b: string): boolean {
@@ -31,8 +34,10 @@ export default function Lightbox({
   onArchive,
   onDelete,
   onToggleFavorite,
+  onThumbUpdated,
 }: Props) {
   const item = items[index];
+  const [editingThumb, setEditingThumb] = useState(false);
 
   const prev = useCallback(() => {
     onNavigate((index - 1 + items.length) % items.length);
@@ -122,6 +127,16 @@ export default function Lightbox({
             title={item.favorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
           >
             {item.favorite ? '★' : '☆'}
+          </button>
+        )}
+        {onThumbUpdated && item.kind === 'photo' && item.status === 'ready' && (
+          <button
+            className="lb-btn lb-fav lb-crop"
+            onClick={() => setEditingThumb(true)}
+            title="Vorschaubild anpassen (Ausschnitt, Zoom, Drehung)"
+            aria-label="Vorschaubild anpassen"
+          >
+            ⛶
           </button>
         )}
         <button className="lb-btn" onClick={() => onDownload(item)} title="Original herunterladen">
@@ -238,6 +253,21 @@ export default function Lightbox({
           </button>
         )}
       </div>
+
+      {editingThumb && onThumbUpdated && (
+        <div className="te-overlay" onClick={(e) => e.stopPropagation()}>
+          <ThumbEditor
+            item={item}
+            token={token}
+            uploaderName={currentName}
+            onClose={() => setEditingThumb(false)}
+            onSaved={(updated) => {
+              onThumbUpdated(updated);
+              setEditingThumb(false);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

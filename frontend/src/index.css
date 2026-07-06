@@ -272,6 +272,20 @@ button {
   font-size: 14px;
   margin-top: 6px;
 }
+.install-wrap {
+  margin-top: 12px;
+}
+.install-hint {
+  margin-top: 8px;
+  max-width: 420px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  background: var(--brand-soft);
+  border: 1px solid #dfe3ff;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
 
 .toolbar {
   display: flex;
@@ -1049,6 +1063,107 @@ button {
 }
 .lb-fav.on:hover {
   background: rgba(255, 210, 63, 0.35);
+}
+.lb-crop {
+  font-size: 19px;
+  line-height: 1;
+}
+
+/* ---- Vorschaubild-Editor (Ausschnitt/Zoom/Drehung) ---------------------- */
+.te-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(8, 10, 20, 0.98);
+}
+.thumb-editor {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+}
+.te-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+}
+.te-title {
+  flex: 1;
+  font-weight: 700;
+  font-size: 16px;
+}
+.te-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: #000;
+}
+.te-msg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+}
+.te-controls {
+  padding: 14px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(8, 10, 20, 0.9);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.te-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.te-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 44px;
+}
+.te-slider {
+  flex: 1;
+  accent-color: var(--brand);
+  min-width: 0;
+}
+.te-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.te-chip {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.te-chip.active {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.te-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.te-foot .btn-ghost {
+  color: #fff;
+}
+@media (max-width: 640px) {
+  .te-foot .btn-sm {
+    padding: 8px 12px;
+  }
 }
 
 @media (max-width: 640px) {

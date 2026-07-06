@@ -45,7 +45,17 @@ Die Dateien liegen **lokal auf deinem QNAP** – kein Cloud-Speicher Dritter.
   unterschiedlich grossen Kacheln), *Nach Person* und *Chronologisch*
   (nach Aufnahmedatum). Beim Herunterscrollen blenden sich Navigationsleiste und
   Buttons aus („Vollbild-Modus“, nur die Fotos sind sichtbar) und erscheinen beim
-  Hochscrollen wieder.
+  Hochscrollen wieder. Fotos werden standardmässig im Originalformat (an der
+  EXIF-Orientierung ausgerichtet) angezeigt – Hochformat bleibt Hochformat.
+- **Vorschaubild anpassen**: In der Foto-Ansicht lässt sich neben dem Stern der
+  Ausschnitt des Vorschaubilds anpassen – Ausschnitt wählen, hinein-/herauszoomen
+  und die Ansicht drehen. Das angepasste Vorschaubild erscheint in der Galerie und
+  allen Ansichten; das Original bleibt unverändert und kann jederzeit
+  wiederhergestellt werden.
+- **Als App installieren (PWA)** – auch für einen einzelnen Bereich: Öffnet man
+  einen Bereich (z. B. `share.alae.app/s/ferien-tessin-…`) und fügt ihn zum
+  Startbildschirm hinzu, öffnet die installierte Verknüpfung direkt diesen Bereich
+  statt der Startseite.
 - **Video-Wiedergabe in der App** über eine kleinere, gut streambare Vorschau;
   **Download** liefert immer das **Original**. Hochformat-Videos werden mit dem
   richtigen Seitenverhältnis (Hochformat) angezeigt.

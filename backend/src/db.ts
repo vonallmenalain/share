@@ -65,11 +65,34 @@ export function initDb(): Database.Database {
       updated_at     TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_uploads_space ON uploads(space_id);
+
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT
+    );
   `);
 
   migrate(db);
 
   return db;
+}
+
+/** Liest einen einfachen Schlüssel/Wert-Eintrag aus app_meta. */
+export function getMeta(key: string): string | null {
+  const row = getDb().prepare('SELECT value FROM app_meta WHERE key = ?').get(key) as
+    | { value: string | null }
+    | undefined;
+  return row?.value ?? null;
+}
+
+/** Setzt einen einfachen Schlüssel/Wert-Eintrag in app_meta. */
+export function setMeta(key: string, value: string): void {
+  getDb()
+    .prepare(
+      `INSERT INTO app_meta (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    )
+    .run(key, value);
 }
 
 /**
@@ -88,6 +111,13 @@ function migrate(database: Database.Database) {
   addColumn('state_at', `state_at TEXT`);
   // Favoriten-Markierung ("Stern"): 0 = normal, 1 = Favorit.
   addColumn('favorite', `favorite INTEGER NOT NULL DEFAULT 0`);
+  // Angepasstes Vorschaubild (Thumbnail): Version zum Cache-Busting sowie die
+  // tatsächlichen Masse des (ggf. zugeschnittenen) Thumbnails. Sind thumb_w/
+  // thumb_h gesetzt, bestimmt sich das Seitenverhältnis der Galerie-Kachel aus
+  // diesen Werten statt aus den Originalmassen.
+  addColumn('thumb_version', `thumb_version INTEGER NOT NULL DEFAULT 0`);
+  addColumn('thumb_w', `thumb_w INTEGER`);
+  addColumn('thumb_h', `thumb_h INTEGER`);
   // Der Index wird bewusst erst hier erstellt – nach dem Hinzufügen der Spalte.
   // Läge er im Schema-Block oben, würde er bei bestehenden Datenbanken (in denen
   // "items" bereits ohne "state" existiert) mit "no such column: state" fehlschlagen.
@@ -127,6 +157,9 @@ export interface ItemRow {
   taken_at: string | null;
   position: number;
   favorite: number;
+  thumb_version: number;
+  thumb_w: number | null;
+  thumb_h: number | null;
   created_at: string;
 }
 

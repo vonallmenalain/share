@@ -42,29 +42,36 @@ export interface ImageResult {
 }
 
 /**
+ * Liefert die sichtbaren (an der EXIF-Orientierung ausgerichteten) Masse eines
+ * Bildes. `sharp(...).metadata()` gibt die rohen Pixelmasse zurück, OHNE die
+ * EXIF-Orientierung anzuwenden. Bei Hochformat-Fotos, die als Querformat-Pixel
+ * mit einem Rotations-Flag gespeichert sind (Orientation 5–8), müssen Breite
+ * und Höhe getauscht werden – sonst zeigt die Galerie ein Hochformat-Foto
+ * fälschlich als Querformat-Kachel (mit einem schmalen Ausschnitt) an.
+ */
+function orientedSize(meta: sharp.Metadata): { width: number; height: number } {
+  let width = meta.width ?? 0;
+  let height = meta.height ?? 0;
+  const orientation = meta.orientation ?? 1;
+  if (orientation >= 5 && orientation <= 8) {
+    [width, height] = [height, width];
+  }
+  return { width, height };
+}
+
+/**
  * Erzeugt aus dem (bereits gespeicherten) Original ein Galerie-Thumbnail und
  * eine grössere Vorschau. EXIF-Orientierung wird berücksichtigt; das Original
  * bleibt unverändert.
  */
 export async function processImage(originalPath: string, storageKey: string): Promise<ImageResult> {
   const buffer = await fsp.readFile(originalPath);
-  const image = sharp(buffer, { failOn: 'none' }).rotate();
-  const meta = await image.metadata();
-  const width = meta.width ?? 0;
-  const height = meta.height ?? 0;
+  const meta = await sharp(buffer, { failOn: 'none' }).metadata();
+  const { width, height } = orientedSize(meta);
 
   const takenAt = await parseExifDate(buffer);
 
-  const thumbDest = variantPath('thumb', storageKey);
-  await ensureDir(thumbDest);
-  await sharp(buffer, { failOn: 'none' })
-    .rotate()
-    .resize(config.images.thumbMax, config.images.thumbMax, {
-      fit: 'inside',
-      withoutEnlargement: true,
-    })
-    .jpeg({ quality: config.images.thumbQuality, mozjpeg: true })
-    .toFile(thumbDest);
+  await generateDefaultThumb(buffer, storageKey);
 
   const previewDest = variantPath('preview', storageKey);
   await ensureDir(previewDest);
@@ -78,6 +85,74 @@ export async function processImage(originalPath: string, storageKey: string): Pr
     .toFile(previewDest);
 
   return { width, height, takenAt };
+}
+
+/**
+ * Erzeugt das Standard-Thumbnail (ganzes Foto, EXIF-orientiert, „fit: inside").
+ * Wird sowohl beim Upload als auch beim Zurücksetzen eines angepassten
+ * Vorschaubilds verwendet. Gibt die tatsächlichen Masse des Thumbnails zurück.
+ */
+export async function generateDefaultThumb(
+  buffer: Buffer,
+  storageKey: string,
+): Promise<{ width: number; height: number }> {
+  const thumbDest = variantPath('thumb', storageKey);
+  await ensureDir(thumbDest);
+  const info = await sharp(buffer, { failOn: 'none' })
+    .rotate()
+    .resize(config.images.thumbMax, config.images.thumbMax, {
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .jpeg({ quality: config.images.thumbQuality, mozjpeg: true })
+    .toFile(thumbDest);
+  return { width: info.width, height: info.height };
+}
+
+/** Stellt das Standard-Thumbnail eines Fotos aus dessen Original wieder her. */
+export async function resetThumbFromOriginal(
+  originalPath: string,
+  storageKey: string,
+): Promise<{ width: number; height: number }> {
+  const buffer = await fsp.readFile(originalPath);
+  return generateDefaultThumb(buffer, storageKey);
+}
+
+/**
+ * Schreibt ein vom Client bereits zugeschnittenes/rotiertes Vorschaubild als
+ * neues Thumbnail. Der übergebene Puffer wird zur Sicherheit erneut durch sharp
+ * geführt (Validierung + einheitliches JPEG) und auf die Thumbnail-Maximalgrösse
+ * begrenzt. Gibt die tatsächlichen Masse des gespeicherten Thumbnails zurück.
+ */
+export async function writeCustomThumb(
+  buffer: Buffer,
+  storageKey: string,
+): Promise<{ width: number; height: number }> {
+  const thumbDest = variantPath('thumb', storageKey);
+  await ensureDir(thumbDest);
+  const info = await sharp(buffer, { failOn: 'none' })
+    .rotate()
+    .resize(config.images.thumbMax, config.images.thumbMax, {
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .jpeg({ quality: config.images.previewQuality, mozjpeg: true })
+    .toFile(thumbDest);
+  return { width: info.width, height: info.height };
+}
+
+/** Liest die (orientierten) Masse einer Bilddatei; null, wenn nicht lesbar. */
+export async function readImageSize(
+  filePath: string,
+): Promise<{ width: number; height: number } | null> {
+  try {
+    const meta = await sharp(filePath, { failOn: 'none' }).metadata();
+    const { width, height } = orientedSize(meta);
+    if (!width || !height) return null;
+    return { width, height };
+  } catch {
+    return null;
+  }
 }
 
 /**
