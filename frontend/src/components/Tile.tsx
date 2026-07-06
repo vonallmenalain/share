@@ -93,7 +93,7 @@ export default function Tile({
       ? item.hasPoster
         ? fileUrl(`/files/poster/${item.id}`, token)
         : undefined
-      : fileUrl(`/files/thumb/${item.id}`, token);
+      : fileUrl(`/files/thumb/${item.id}?v=${item.thumbVersion}`, token);
 
   return (
     <div

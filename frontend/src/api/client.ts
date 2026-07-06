@@ -57,6 +57,32 @@ export function fileUrl(path: string, token: string): string {
   return `${API_BASE}${path}${sep}token=${encodeURIComponent(token)}`;
 }
 
+/**
+ * Lädt ein angepasstes Vorschaubild (bereits zugeschnitten/rotiert) als rohe
+ * Bild-Bytes hoch und gibt das aktualisierte Item zurück.
+ */
+export async function uploadThumb(
+  itemId: string,
+  blob: Blob,
+  opts: { token: string; uploaderName?: string },
+): Promise<Item> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${opts.token}`,
+    'Content-Type': blob.type || 'image/jpeg',
+  };
+  if (opts.uploaderName) headers['X-Uploader-Name'] = encodeURIComponent(opts.uploaderName);
+  const res = await fetch(`${API_BASE}/api/items/${itemId}/thumb`, {
+    method: 'POST',
+    headers,
+    body: blob,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiError(res.status, (data as { error?: string }).error || 'Upload fehlgeschlagen.');
+  }
+  return (data as { item: Item }).item;
+}
+
 // ---- Typen -----------------------------------------------------------------
 
 export interface Space {
@@ -90,6 +116,11 @@ export interface Item {
   takenAt: string | null;
   position: number;
   favorite: boolean;
+  /** Zähler zum Cache-Busting, wenn das Vorschaubild angepasst wurde. */
+  thumbVersion: number;
+  /** Masse des (ggf. angepassten) Thumbnails – bestimmen das Kachel-Seitenverhältnis. */
+  thumbW: number | null;
+  thumbH: number | null;
   createdAt: string;
   hasPreview: boolean;
   hasPoster: boolean;
