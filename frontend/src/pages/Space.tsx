@@ -67,7 +67,10 @@ export default function Space() {
       const stored = tokenStore.get(slug);
       if (stored) {
         try {
-          const res = await api<{ space: SpaceType }>('/api/spaces/current', { token: stored });
+          const res = await api<{ space: SpaceType }>('/api/spaces/current', {
+            token: stored,
+            uploaderName: nameStore.get() || undefined,
+          });
           if (cancelled) return;
           setSpace(res.space);
           setToken(stored);
@@ -155,7 +158,10 @@ export default function Space() {
     try {
       const res = await api<{ space: SpaceType; accessToken: string }>(
         `/api/spaces/by-slug/${encodeURIComponent(slug)}/access`,
-        { method: 'POST', body: { password: gatePassword || undefined } },
+        {
+          method: 'POST',
+          body: { password: gatePassword || undefined, name: name.trim() || undefined },
+        },
       );
       tokenStore.set(slug, res.accessToken);
       if (name.trim()) nameStore.set(name.trim());

@@ -1438,3 +1438,137 @@ button {
   flex: 1;
   min-width: 0;
 }
+
+/* ---- Admin: Zugriffsstatistik (nur Admin) ------------------------------- */
+.access-panel {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fafbfc;
+  overflow: hidden;
+}
+.access-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-align: left;
+}
+.access-toggle:hover {
+  background: #f2f4f7;
+}
+.access-toggle .grow {
+  flex: 1;
+}
+.access-body {
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--line);
+}
+.access-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.access-stat {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.access-stat .n {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.access-stat .l {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+.segmented.sm {
+  padding: 3px;
+  flex-wrap: wrap;
+}
+.segmented.sm button {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.access-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.access-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.access-table th,
+.access-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.access-table th {
+  position: sticky;
+  top: 0;
+  background: #f2f4f7;
+  cursor: pointer;
+  font-weight: 700;
+  user-select: none;
+}
+.access-table th:hover {
+  background: #e9edf2;
+}
+.access-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.access-table tbody tr:hover {
+  background: #f7f9fb;
+}
+.access-table td.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.access-groups {
+  display: grid;
+  gap: 6px;
+}
+.access-group-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) 3fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.access-group-row .lbl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.access-group-row .bar-wrap {
+  background: #eef0f3;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+.access-group-row .bar {
+  height: 100%;
+  background: var(--brand);
+  border-radius: 999px;
+  min-width: 2px;
+}
+.access-group-row .cnt {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

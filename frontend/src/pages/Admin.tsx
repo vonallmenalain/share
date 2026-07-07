@@ -1,9 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
-import { api, fileUrl, Item, ItemState, Space } from '../api/client';
+import { AccessLog, AccessLogsResponse, api, fileUrl, Item, ItemState, Space } from '../api/client';
 import { adminKeyStore } from '../lib/storage';
-import { formatBytes, formatDate, formatDuration } from '../lib/format';
+import {
+  formatBytes,
+  formatDate,
+  formatDateTime,
+  formatDayHeading,
+  formatDuration,
+} from '../lib/format';
 
 interface SpaceDetail {
   status: 'loading' | 'ready' | 'error';
@@ -266,6 +272,11 @@ export default function Admin() {
                     {(s.deletedCount ?? 0) > 0 && (
                       <span className="tag tag-danger">{s.deletedCount} gelöscht</span>
                     )}
+                    {(s.accessCount ?? 0) > 0 && (
+                      <span className="tag" title="Protokollierte Zugriffe">
+                        👁 {s.accessCount} Zugriffe
+                      </span>
+                    )}
                     {s.hasPassword && <span className="tag">🔒</span>}
                   </button>
 
@@ -286,6 +297,8 @@ export default function Admin() {
                           Bereich löschen
                         </button>
                       </div>
+
+                      <AccessLogPanel spaceId={s.id} adminKey={adminKey} />
 
                       {!detail || detail.status === 'loading' ? (
                         <div className="row" style={{ padding: '20px 0' }}>
@@ -578,6 +591,358 @@ function AdminTile({
           >
             Endgültig löschen
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Zugriffsstatistik (nur Admin) ----------------------------------------
+
+type LogView = 'list' | 'day' | 'location' | 'ip' | 'visitor' | 'device';
+type SortKey = 'at' | 'visitor' | 'location' | 'ip' | 'device';
+
+const LOG_VIEWS: { id: LogView; label: string }[] = [
+  { id: 'list', label: 'Alle Zugriffe' },
+  { id: 'day', label: 'Pro Tag' },
+  { id: 'location', label: 'Pro Standort' },
+  { id: 'ip', label: 'Pro IP' },
+  { id: 'visitor', label: 'Pro Person' },
+  { id: 'device', label: 'Pro Gerät' },
+];
+
+/** Kurzer, lesbarer Standort aus den (optionalen) Cloudflare-Geodaten. */
+function locationLabel(l: AccessLog): string {
+  const parts = [l.city, l.region, l.country].filter(Boolean);
+  return parts.length ? parts.join(', ') : 'Unbekannt';
+}
+
+/** Vereinfacht den User-Agent zu „Browser · Betriebssystem". */
+function shortDevice(ua: string | null): string {
+  if (!ua) return 'Unbekannt';
+  let os = '';
+  if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
+  else if (/android/i.test(ua)) os = 'Android';
+  else if (/windows/i.test(ua)) os = 'Windows';
+  else if (/mac os x|macintosh/i.test(ua)) os = 'macOS';
+  else if (/linux/i.test(ua)) os = 'Linux';
+  let br = '';
+  if (/edg\//i.test(ua)) br = 'Edge';
+  else if (/crios|chrome/i.test(ua)) br = 'Chrome';
+  else if (/fxios|firefox/i.test(ua)) br = 'Firefox';
+  else if (/safari/i.test(ua)) br = 'Safari';
+  const parts = [br, os].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Unbekannt';
+}
+
+function AccessLogPanel({ spaceId, adminKey }: { spaceId: string; adminKey: string }) {
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [data, setData] = useState<AccessLogsResponse | null>(null);
+  const [error, setError] = useState('');
+  const [view, setView] = useState<LogView>('list');
+  const [sortKey, setSortKey] = useState<SortKey>('at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const load = async () => {
+    setStatus('loading');
+    setError('');
+    try {
+      const res = await api<AccessLogsResponse>(`/api/spaces/${spaceId}/access-logs`, { adminKey });
+      setData(res);
+      setStatus('ready');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Laden fehlgeschlagen.');
+      setStatus('error');
+    }
+  };
+
+  const toggle = () => {
+    setOpen((o) => {
+      const next = !o;
+      if (next && status === 'idle') void load();
+      return next;
+    });
+  };
+
+  const clearLogs = async () => {
+    if (!confirm('Das komplette Zugriffsprotokoll dieses Bereichs löschen?')) return;
+    try {
+      await api(`/api/spaces/${spaceId}/access-logs`, { method: 'DELETE', adminKey });
+      await load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Löschen fehlgeschlagen.');
+    }
+  };
+
+  const logs = useMemo(() => data?.logs ?? [], [data]);
+
+  const sortedLogs = useMemo(() => {
+    const value = (l: AccessLog): string => {
+      switch (sortKey) {
+        case 'visitor':
+          return (l.visitor || '').toLowerCase();
+        case 'location':
+          return locationLabel(l).toLowerCase();
+        case 'ip':
+          return l.ip || '';
+        case 'device':
+          return shortDevice(l.userAgent).toLowerCase();
+        default:
+          return l.at;
+      }
+    };
+    const arr = [...logs];
+    arr.sort((a, b) => {
+      const va = value(a);
+      const vb = value(b);
+      const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [logs, sortKey, sortDir]);
+
+  const groups = useMemo(() => {
+    const by = (fn: (l: AccessLog) => string) => {
+      const map = new Map<string, { key: string; count: number; last: string }>();
+      for (const l of logs) {
+        const key = fn(l) || 'Unbekannt';
+        const cur = map.get(key);
+        if (cur) {
+          cur.count++;
+          if (l.at > cur.last) cur.last = l.at;
+        } else {
+          map.set(key, { key, count: 1, last: l.at });
+        }
+      }
+      return Array.from(map.values()).sort(
+        (a, b) => b.count - a.count || (a.last < b.last ? 1 : -1),
+      );
+    };
+    return {
+      day: by((l) => l.at.slice(0, 10)),
+      location: by((l) => locationLabel(l)),
+      ip: by((l) => l.ip || 'Unbekannt'),
+      visitor: by((l) => l.visitor || 'Unbekannt'),
+      device: by((l) => shortDevice(l.userAgent)),
+    };
+  }, [logs]);
+
+  const setSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'at' ? 'desc' : 'asc');
+    }
+  };
+
+  const sortArrow = (key: SortKey) => (key === sortKey ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+
+  const exportCsv = () => {
+    const esc = (v: string | null) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = [
+      'Zeitpunkt',
+      'Art',
+      'Person',
+      'IP',
+      'Stadt',
+      'Region',
+      'Land',
+      'PLZ',
+      'Breitengrad',
+      'Längengrad',
+      'Zeitzone',
+      'Gerät',
+      'User-Agent',
+    ].join(',');
+    const rows = sortedLogs.map((l) =>
+      [
+        l.at,
+        l.kind === 'enter' ? 'Betreten' : 'Geöffnet',
+        l.visitor,
+        l.ip,
+        l.city,
+        l.region,
+        l.country,
+        l.postal,
+        l.latitude,
+        l.longitude,
+        l.timezone,
+        shortDevice(l.userAgent),
+        l.userAgent,
+      ]
+        .map(esc)
+        .join(','),
+    );
+    const csv = [header, ...rows].join('\r\n');
+    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zugriffe-${spaceId}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const groupRows =
+    view === 'day'
+      ? groups.day
+      : view === 'location'
+        ? groups.location
+        : view === 'ip'
+          ? groups.ip
+          : view === 'visitor'
+            ? groups.visitor
+            : groups.device;
+  const maxCount = groupRows.reduce((m, g) => Math.max(m, g.count), 0);
+
+  return (
+    <div className="access-panel">
+      <button className={`access-toggle${open ? ' open' : ''}`} onClick={toggle}>
+        <span className={`chevron${open ? ' open' : ''}`}>▸</span>
+        <span className="grow">Zugriffe &amp; Standorte</span>
+        {data ? <span className="tag">{data.total}</span> : null}
+      </button>
+
+      {open && (
+        <div className="access-body">
+          {status === 'loading' ? (
+            <div className="row" style={{ padding: '14px 0' }}>
+              <span className="spinner" /> <span className="muted">Lade Zugriffe…</span>
+            </div>
+          ) : status === 'error' ? (
+            <div className="error-box">{error}</div>
+          ) : data ? (
+            <>
+              <div className="access-summary">
+                <div className="access-stat">
+                  <div className="n">{data.total}</div>
+                  <div className="l">Zugriffe gesamt</div>
+                </div>
+                <div className="access-stat">
+                  <div className="n">{data.uniqueVisitors}</div>
+                  <div className="l">Personen</div>
+                </div>
+                <div className="access-stat">
+                  <div className="n">{data.uniqueIps}</div>
+                  <div className="l">verschiedene IPs</div>
+                </div>
+                <div className="access-stat">
+                  <div className="n">{logs[0] ? formatDate(logs[0].at) : '–'}</div>
+                  <div className="l">letzter Zugriff</div>
+                </div>
+              </div>
+
+              <div className="row wrap" style={{ gap: 6, margin: '10px 0' }}>
+                <div className="segmented sm">
+                  {LOG_VIEWS.map((v) => (
+                    <button
+                      key={v.id}
+                      className={view === v.id ? 'active' : ''}
+                      onClick={() => setView(v.id)}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="spacer" />
+                <button className="btn btn-sm btn-ghost" onClick={() => void load()}>
+                  Aktualisieren
+                </button>
+                <button
+                  className="btn btn-sm"
+                  disabled={logs.length === 0}
+                  onClick={exportCsv}
+                >
+                  ↓ CSV
+                </button>
+                <button
+                  className="btn btn-sm btn-danger"
+                  disabled={logs.length === 0}
+                  onClick={() => void clearLogs()}
+                >
+                  Protokoll leeren
+                </button>
+              </div>
+
+              {data.returned < data.total && (
+                <div className="faint" style={{ fontSize: 12, marginBottom: 8 }}>
+                  Angezeigt werden die neuesten {data.returned} von {data.total} Zugriffen.
+                </div>
+              )}
+
+              {logs.length === 0 ? (
+                <div className="faint" style={{ fontSize: 13, padding: '8px 0' }}>
+                  Noch keine Zugriffe protokolliert.
+                </div>
+              ) : view === 'list' ? (
+                <div className="access-scroll">
+                  <table className="access-table">
+                    <thead>
+                      <tr>
+                        <th onClick={() => setSort('at')}>Zeitpunkt{sortArrow('at')}</th>
+                        <th onClick={() => setSort('visitor')}>Person{sortArrow('visitor')}</th>
+                        <th onClick={() => setSort('location')}>Standort{sortArrow('location')}</th>
+                        <th onClick={() => setSort('ip')}>IP{sortArrow('ip')}</th>
+                        <th onClick={() => setSort('device')}>Gerät{sortArrow('device')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedLogs.map((l) => (
+                        <tr key={l.id}>
+                          <td title={l.kind === 'enter' ? 'Bereich betreten' : 'App geöffnet'}>
+                            {formatDateTime(l.at)}
+                          </td>
+                          <td>{l.visitor || <span className="faint">–</span>}</td>
+                          <td>
+                            {l.latitude && l.longitude ? (
+                              <a
+                                href={`https://www.openstreetmap.org/?mlat=${l.latitude}&mlon=${l.longitude}#map=11/${l.latitude}/${l.longitude}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="Auf Karte anzeigen"
+                              >
+                                {locationLabel(l)}
+                              </a>
+                            ) : (
+                              locationLabel(l)
+                            )}
+                          </td>
+                          <td className="mono">{l.ip || <span className="faint">–</span>}</td>
+                          <td title={l.userAgent ?? ''}>{shortDevice(l.userAgent)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="access-groups">
+                  {groupRows.map((g) => (
+                    <div className="access-group-row" key={g.key}>
+                      <div className="lbl">
+                        {view === 'day' ? formatDayHeading(g.key) : g.key}
+                      </div>
+                      <div className="bar-wrap">
+                        <div
+                          className="bar"
+                          style={{ width: `${maxCount ? (g.count / maxCount) * 100 : 0}%` }}
+                        />
+                      </div>
+                      <div className="cnt">{g.count}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="faint" style={{ fontSize: 12, marginTop: 10 }}>
+                Standortangaben stammen aus den Geodaten des Cloudflare-Netzwerks und sind nur so
+                genau wie diese. Dieses Protokoll ist ausschliesslich hier im Adminbereich sichtbar.
+              </div>
+            </>
+          ) : null}
         </div>
       )}
     </div>

@@ -55,7 +55,8 @@ Die Dateien liegen **lokal auf deinem QNAP** – kein Cloud-Speicher Dritter.
 - **Als App installieren (PWA)** – auch für einen einzelnen Bereich: Öffnet man
   einen Bereich (z. B. `share.alae.app/s/ferien-tessin-…`) und fügt ihn zum
   Startbildschirm hinzu, öffnet die installierte Verknüpfung direkt diesen Bereich
-  statt der Startseite.
+  statt der Startseite. Die installierte App heisst dabei **genau wie der Bereich**
+  (z. B. „Ferien Tessin“) – der Name wird nicht mehr abgeschnitten.
 - **Video-Wiedergabe in der App** über eine kleinere, gut streambare Vorschau;
   **Download** liefert immer das **Original**. Hochformat-Videos werden mit dem
   richtigen Seitenverhältnis (Hochformat) angezeigt.
@@ -67,6 +68,15 @@ Die Dateien liegen **lokal auf deinem QNAP** – kein Cloud-Speicher Dritter.
 - **Adminbereich**: aufklappbare Bereiche mit allen Medien aller Personen,
   inklusive der archivierten und gelöschten – mit der Möglichkeit,
   wiederherzustellen oder Fotos/Videos endgültig zu löschen.
+- **Zugriffsstatistik (nur Admin)**: Pro Bereich lässt sich nach dem Ausklappen
+  ein Protokoll aller Zugriffe einsehen – mit Zeitpunkt, Person, IP und
+  **Standort** (Stadt/Region/Land, wo verfügbar). Die Liste ist sortierbar und
+  lässt sich pro **Tag**, **Standort**, **IP**, **Person** oder **Gerät**
+  auswerten sowie als **CSV** exportieren. Alles bleibt in der lokalen SQLite-DB
+  – **keine externe Datenbank (z. B. Firebase) nötig**. Die Standortdaten kommen
+  gratis aus den Cloudflare-Geo-Headern (siehe
+  [docs/02-cloudflare-tunnel.md](docs/02-cloudflare-tunnel.md#26-standort-header-für-die-zugriffsstatistik-optional-empfohlen)).
+  Für normale Nutzer:innen ist davon **nichts** sichtbar.
 - **Lokale Speicherung** auf dem QNAP, Metadaten in einer einzelnen SQLite-Datei.
 
 ## Technik

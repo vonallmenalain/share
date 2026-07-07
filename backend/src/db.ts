@@ -70,6 +70,29 @@ export function initDb(): Database.Database {
       key   TEXT PRIMARY KEY,
       value TEXT
     );
+
+    -- Zugriffsprotokoll: nur für den Administrator sichtbar. Hier wird jeder
+    -- Zugriff auf einen Bereich festgehalten (wer, wann, von wo). Es liegt in
+    -- derselben lokalen SQLite-Datei – es braucht KEINE externe Datenbank
+    -- (kein Firebase o. Ä.). Die Standortangaben stammen aus den (optionalen)
+    -- Cloudflare-Geo-Headern und sind daher nur so genau wie diese.
+    CREATE TABLE IF NOT EXISTS access_logs (
+      id          TEXT PRIMARY KEY,
+      space_id    TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      at          TEXT NOT NULL,            -- Zeitpunkt (ISO 8601)
+      kind        TEXT NOT NULL,            -- 'enter' (Bereich betreten) | 'open' (App/Seite geöffnet)
+      visitor     TEXT,                     -- angezeigter Name der Person (falls bekannt)
+      ip          TEXT,                     -- Client-IP (echte IP hinter Cloudflare/Proxy)
+      user_agent  TEXT,                     -- Browser/Gerät
+      country     TEXT,
+      region      TEXT,
+      city        TEXT,
+      postal      TEXT,
+      latitude    TEXT,
+      longitude   TEXT,
+      timezone    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_access_space ON access_logs(space_id, at);
   `);
 
   migrate(db);
@@ -161,6 +184,23 @@ export interface ItemRow {
   thumb_w: number | null;
   thumb_h: number | null;
   created_at: string;
+}
+
+export interface AccessLogRow {
+  id: string;
+  space_id: string;
+  at: string;
+  kind: 'enter' | 'open';
+  visitor: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  postal: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  timezone: string | null;
 }
 
 export interface UploadRow {

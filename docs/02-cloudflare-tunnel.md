@@ -82,7 +82,25 @@ Problem. Du musst hier normalerweise nichts ändern.
 > Hinweis: Stelle die Chunk-Grösse (`UPLOAD_CHUNK_SIZE_BYTES`) nicht über ~90 MB,
 > sonst kann eine einzelne Chunk-Anfrage das Cloudflare-Limit reissen.
 
-## 2.6 Testen
+## 2.6 Standort-Header für die Zugriffsstatistik (optional, empfohlen)
+
+Der **Adminbereich** kann pro Bereich alle Zugriffe protokollieren – inkl. Datum,
+Person, IP und **Standort** (Stadt/Region/Land). Diese Statistik ist **nur für den
+Admin** sichtbar und braucht **keine** externe Datenbank: alles landet in derselben
+lokalen SQLite-Datei auf dem QNAP.
+
+Den Standort kann das Backend aus der IP allein nicht bestimmen. Cloudflare liefert
+die Geodaten aber **kostenlos** als HTTP-Header mit – dazu einmalig einschalten:
+
+1. Cloudflare-Dashboard → deine Domain **`alae.app`** wählen.
+2. **Rules → Transform Rules → Managed Transforms**.
+3. **„Add visitor location headers"** aktivieren (fügt u. a. `cf-ipcity`,
+   `cf-ipcountry`, `cf-iplatitude`, `cf-iplongitude`, `cf-region` hinzu).
+
+Ohne diese Header funktioniert die Statistik trotzdem – es werden dann nur IP und
+(sofern vorhanden) das Land aus `cf-ipcountry` gespeichert, ohne Stadt/Koordinaten.
+
+## 2.7 Testen
 
 Ersetze `api.alae.app` durch deinen tatsächlich gewählten Hostnamen (siehe
 Hinweis in 2.4), falls abweichend:
@@ -92,7 +110,7 @@ curl https://api.alae.app/health
 # {"ok":true,"time":"..."}
 ```
 
-## 2.7 Diese URL brauchst du weiter
+## 2.8 Diese URL brauchst du weiter
 
 - In **Netlify** als `VITE_API_BASE_URL=https://api.alae.app` – bzw. dein
   tatsächlich gewählter Hostname (siehe [3. Netlify](03-netlify.md)).

@@ -94,6 +94,33 @@ export interface Space {
   itemCount?: number;
   archivedCount?: number;
   deletedCount?: number;
+  accessCount?: number;
+  lastAccessAt?: string | null;
+}
+
+/** Einzelner protokollierter Zugriff (nur für den Admin sichtbar). */
+export interface AccessLog {
+  id: string;
+  at: string;
+  kind: 'enter' | 'open';
+  visitor: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  postal: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  timezone: string | null;
+}
+
+export interface AccessLogsResponse {
+  total: number;
+  uniqueIps: number;
+  uniqueVisitors: number;
+  returned: number;
+  logs: AccessLog[];
 }
 
 export type ItemState = 'active' | 'archived' | 'deleted';
