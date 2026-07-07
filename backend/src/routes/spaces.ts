@@ -1,15 +1,46 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { getDb, ItemRow, SpaceRow } from '../db';
+import { AccessLogRow, getDb, ItemRow, SpaceRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireAdmin, requireSpace } from '../middleware/auth';
 import { accessLimiter, adminLimiter } from '../middleware/rateLimit';
 import { newId, newSlug, slugifyName } from '../lib/ids';
 import { signAccessToken } from '../lib/auth';
 import { deleteAllVariants, deleteSpaceStorage } from '../lib/media';
+import { logAccess } from '../lib/access';
 import { publicItem } from './items';
 
 const router = Router();
+
+/** Liest den (frei wählbaren) Anzeigenamen der aktuellen Person aus dem Header. */
+function visitorNameOf(req: import('express').Request): string {
+  const header = req.headers['x-uploader-name'];
+  const raw = Array.isArray(header) ? header[0] : header;
+  const value = String(raw ?? '');
+  try {
+    return decodeURIComponent(value).trim();
+  } catch {
+    return value.trim();
+  }
+}
+
+function publicAccessLog(row: AccessLogRow) {
+  return {
+    id: row.id,
+    at: row.at,
+    kind: row.kind,
+    visitor: row.visitor,
+    ip: row.ip,
+    userAgent: row.user_agent,
+    country: row.country,
+    region: row.region,
+    city: row.city,
+    postal: row.postal,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    timezone: row.timezone,
+  };
+}
 
 function publicSpace(space: SpaceRow) {
   return {
@@ -72,13 +103,19 @@ router.get(
          COALESCE(SUM(state = 'deleted'), 0)  AS deleted
        FROM items WHERE space_id = ?`,
     );
+    const accessBy = db.prepare(
+      `SELECT COUNT(*) AS total, MAX(at) AS last FROM access_logs WHERE space_id = ?`,
+    );
     const result = rows.map((s) => {
       const c = countBy.get(s.id) as { active: number; archived: number; deleted: number };
+      const a = accessBy.get(s.id) as { total: number; last: string | null };
       return {
         ...publicSpace(s),
         itemCount: c.active,
         archivedCount: c.archived,
         deletedCount: c.deleted,
+        accessCount: a.total,
+        lastAccessAt: a.last,
       };
     });
     res.json({ spaces: result });
@@ -126,6 +163,79 @@ router.get(
       token: signAccessToken(space.id),
       items: rows.map(publicItem),
     });
+  }),
+);
+
+/**
+ * Admin: Zugriffsprotokoll eines Bereichs abrufen. NUR für den Administrator –
+ * normale Nutzer:innen haben keinen Zugang zu diesem Endpunkt. Liefert die
+ * einzelnen Zugriffe (neueste zuerst) sowie einige vorberechnete Kennzahlen.
+ * Die Auswertung/Sortierung (pro Tag, Standort, IP, Person) übernimmt die
+ * Admin-Oberfläche auf Basis dieser Liste.
+ */
+router.get(
+  '/:id/access-logs',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.params.id) as
+      | SpaceRow
+      | undefined;
+    if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
+
+    const limitRaw = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 20000) : 5000;
+
+    const total = (
+      db.prepare('SELECT COUNT(*) AS n FROM access_logs WHERE space_id = ?').get(space.id) as {
+        n: number;
+      }
+    ).n;
+    const uniqueIps = (
+      db
+        .prepare(
+          'SELECT COUNT(DISTINCT ip) AS n FROM access_logs WHERE space_id = ? AND ip IS NOT NULL',
+        )
+        .get(space.id) as { n: number }
+    ).n;
+    const uniqueVisitors = (
+      db
+        .prepare(
+          `SELECT COUNT(DISTINCT visitor) AS n FROM access_logs
+             WHERE space_id = ? AND visitor IS NOT NULL AND visitor <> ''`,
+        )
+        .get(space.id) as { n: number }
+    ).n;
+
+    const rows = db
+      .prepare('SELECT * FROM access_logs WHERE space_id = ? ORDER BY at DESC LIMIT ?')
+      .all(space.id, limit) as AccessLogRow[];
+
+    res.json({
+      space: publicSpace(space),
+      total,
+      uniqueIps,
+      uniqueVisitors,
+      returned: rows.length,
+      logs: rows.map(publicAccessLog),
+    });
+  }),
+);
+
+/** Admin: Zugriffsprotokoll eines Bereichs leeren. */
+router.delete(
+  '/:id/access-logs',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const space = db.prepare('SELECT id FROM spaces WHERE id = ?').get(req.params.id) as
+      | { id: string }
+      | undefined;
+    if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
+    const info = db.prepare('DELETE FROM access_logs WHERE space_id = ?').run(space.id);
+    res.json({ ok: true, removed: info.changes });
   }),
 );
 
@@ -201,6 +311,9 @@ router.post(
         throw new ApiError(401, 'Falsches Passwort.');
       }
     }
+    // Zugriff (Betreten des Bereichs) für die Admin-Statistik protokollieren.
+    const visitor = String(req.body?.name ?? '').trim() || visitorNameOf(req);
+    logAccess(req, space.id, 'enter', visitor);
     res.json({ space: publicSpace(space), accessToken: signAccessToken(space.id) });
   }),
 );
@@ -215,6 +328,8 @@ router.get(
       | SpaceRow
       | undefined;
     if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
+    // Öffnen des Bereichs (mit bereits gespeichertem Token) protokollieren.
+    logAccess(req, space.id, 'open', visitorNameOf(req));
     res.json({ space: publicSpace(space) });
   }),
 );

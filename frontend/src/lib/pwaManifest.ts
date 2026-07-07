@@ -40,8 +40,11 @@ export function setSpaceManifest(slug: string, name: string): void {
 
   const title = (name || '').trim() || 'share';
   const manifest = {
-    name: `${title} · share`,
-    short_name: title.slice(0, 12) || 'share',
+    // Sowohl der vollständige Name als auch der Kurzname entsprechen exakt dem
+    // Bereichsnamen, damit die installierte PWA genauso heisst wie der Bereich
+    // (z. B. „Ferien Tessin") und nicht abgeschnitten wird.
+    name: title,
+    short_name: title,
     description: 'Fotos & Videos einfach in einer privaten Gruppe teilen.',
     lang: 'de',
     id: `/s/${slug}`,
