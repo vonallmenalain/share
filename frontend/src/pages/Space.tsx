@@ -5,6 +5,8 @@ import CollageGrid from '../components/CollageGrid';
 import Lightbox from '../components/Lightbox';
 import InstallButton from '../components/InstallButton';
 import ShareIcon from '../components/ShareIcon';
+import UserIcon from '../components/UserIcon';
+import Dropdown from '../components/Dropdown';
 import { setSpaceManifest, resetManifest } from '../lib/pwaManifest';
 import { shareItems } from '../lib/share';
 import { api, ApiError, fileUrl, Item, Space as SpaceType } from '../api/client';
@@ -14,6 +16,13 @@ import { colorForName, initialsOf } from '../lib/avatar';
 import { dayKey, formatDayHeading } from '../lib/format';
 
 type View = 'gallery' | 'favorites' | 'people' | 'time';
+
+const VIEW_OPTIONS: { key: View; label: string }[] = [
+  { key: 'gallery', label: 'Galerie' },
+  { key: 'favorites', label: '★ Favoriten' },
+  { key: 'people', label: 'Nach Uploader' },
+  { key: 'time', label: 'Chronologisch' },
+];
 
 export default function Space() {
   const { slug = '' } = useParams();
@@ -322,6 +331,37 @@ export default function Space() {
     await shareItemsWithFallback(list);
   };
 
+  // Teilt den Link zu diesem Bereich (Einladung), damit weitere Personen
+  // beitreten und Fotos ansehen/hochladen können. Bevorzugt das native
+  // Teilen-Menü; sonst wird der Link in die Zwischenablage kopiert.
+  const shareSpaceLink = async () => {
+    const url = `${window.location.origin}/s/${slug}`;
+    const title = space?.name || 'Fotos teilen';
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title, text: `Schau dir „${title}" an:`, url });
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        /* sonst: Fallback unten */
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      alert('Link kopiert – jetzt kannst du ihn teilen.');
+    } catch {
+      window.prompt('Link zum Teilen:', url);
+    }
+  };
+
+  const changeName = () => {
+    const n = (window.prompt('Dein Name:', name) || '').trim();
+    if (n) {
+      setName(n);
+      nameStore.set(n);
+    }
+  };
+
   // (Weiches) Löschen darf nur, wer das Medium hochgeladen hat.
   const softDeleteItems = useCallback(
     async (ids: string[]) => {
@@ -520,21 +560,47 @@ export default function Space() {
   return (
     <>
       <TopBar hidden={chromeHidden} brandTo={`/s/${slug}`}>
-        <span className="muted" style={{ fontSize: 14 }}>
-          als <strong>{name || 'Gast'}</strong>
-        </span>
-        <button
-          className="btn btn-sm"
-          onClick={() => {
-            const n = (window.prompt('Dein Name:', name) || '').trim();
-            if (n) {
-              setName(n);
-              nameStore.set(n);
-            }
-          }}
-        >
-          Name ändern
-        </button>
+        <div className="topbar-actions">
+          <button
+            className="btn btn-sm btn-share"
+            onClick={() => void shareSpaceLink()}
+            title="Link zu diesem Bereich teilen"
+          >
+            <ShareIcon size={15} />
+            <span className="btn-label">Teilen</span>
+          </button>
+
+          <Dropdown
+            align="end"
+            ariaLabel="Name & Konto"
+            title={`Als ${name || 'Gast'}`}
+            triggerClassName="btn icon-btn"
+            label={<UserIcon size={19} />}
+          >
+            {(close) => (
+              <>
+                <div className="dropdown-label">Angemeldet als</div>
+                <div className="dropdown-name">
+                  <span className="avatar sm" style={{ background: colorForName(name || 'Gast') }}>
+                    {initialsOf(name || 'Gast')}
+                  </span>
+                  <strong>{name || 'Gast'}</strong>
+                </div>
+                <div className="dropdown-divider" />
+                <button
+                  type="button"
+                  className="dropdown-item"
+                  onClick={() => {
+                    close();
+                    changeName();
+                  }}
+                >
+                  Name ändern
+                </button>
+              </>
+            )}
+          </Dropdown>
+        </div>
       </TopBar>
 
       <div
@@ -548,10 +614,12 @@ export default function Space() {
         onDrop={onDrop}
       >
         <div className="space-head">
-          <h1 className="space-title">{space?.name}</h1>
-          <div className="space-meta">
-            {readyItems.length} {readyItems.length === 1 ? 'Medium' : 'Medien'}
-            {space?.hasPassword ? ' · 🔒 passwortgeschützt' : ''}
+          <div className="space-head-line">
+            <h1 className="space-title">{space?.name}</h1>
+            <span className="space-count">
+              {readyItems.length} {readyItems.length === 1 ? 'Medium' : 'Medien'}
+              {space?.hasPassword ? ' · 🔒' : ''}
+            </span>
           </div>
           <InstallButton spaceName={space?.name} />
         </div>
@@ -561,20 +629,41 @@ export default function Space() {
             ↑ Hochladen
           </button>
 
-          <div className="segmented">
-            <button className={view === 'gallery' ? 'active' : ''} onClick={() => setView('gallery')}>
-              Galerie
-            </button>
-            <button className={view === 'favorites' ? 'active' : ''} onClick={() => setView('favorites')}>
-              ★ Favoriten
-            </button>
-            <button className={view === 'people' ? 'active' : ''} onClick={() => setView('people')}>
-              Nach Uploader
-            </button>
-            <button className={view === 'time' ? 'active' : ''} onClick={() => setView('time')}>
-              Chronologisch
-            </button>
-          </div>
+          <Dropdown
+            align="start"
+            ariaLabel="Ansicht wählen"
+            triggerClassName="btn view-trigger"
+            label={
+              <>
+                <span className="view-trigger-label">
+                  {VIEW_OPTIONS.find((o) => o.key === view)?.label}
+                </span>
+                <span className="chevron" aria-hidden="true">
+                  ▾
+                </span>
+              </>
+            }
+          >
+            {(close) => (
+              <>
+                {VIEW_OPTIONS.map((o) => (
+                  <button
+                    key={o.key}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={view === o.key}
+                    className={`dropdown-item${view === o.key ? ' active' : ''}`}
+                    onClick={() => {
+                      setView(o.key);
+                      close();
+                    }}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </>
+            )}
+          </Dropdown>
 
           <div className="spacer" />
 
