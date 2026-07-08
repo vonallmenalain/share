@@ -15,7 +15,6 @@ interface Props {
   onDownload: (item: Item) => void;
   /** Teilt das aktuelle Medium über das native Teilen-Menü des Geräts. */
   onShare?: (item: Item) => void | Promise<void>;
-  onArchive?: (item: Item) => void;
   onDelete?: (item: Item) => void;
   onToggleFavorite?: (item: Item) => void;
   /** Wird nach dem Anpassen/Zurücksetzen des Vorschaubilds aufgerufen. */
@@ -35,7 +34,6 @@ export default function Lightbox({
   onNavigate,
   onDownload,
   onShare,
-  onArchive,
   onDelete,
   onToggleFavorite,
   onThumbUpdated,
@@ -166,16 +164,6 @@ export default function Lightbox({
         <button className="lb-btn" onClick={() => onDownload(item)} title="Original herunterladen">
           ↓ <span className="lb-btn-label">Original</span>
         </button>
-        {onArchive && (
-          <button
-            className="lb-btn lb-icon"
-            onClick={() => onArchive(item)}
-            title="Archivieren (aus der Galerie ausblenden, bleibt erhalten)"
-            aria-label="Archivieren"
-          >
-            🗄️
-          </button>
-        )}
         {onDelete && currentName && sameName(item.uploaderName, currentName) && (
           <button
             className="lb-btn lb-icon lb-danger"

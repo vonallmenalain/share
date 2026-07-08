@@ -60,14 +60,14 @@ Die Dateien liegen **lokal auf deinem QNAP** – kein Cloud-Speicher Dritter.
 - **Video-Wiedergabe in der App** über eine kleinere, gut streambare Vorschau;
   **Download** liefert immer das **Original**. Hochformat-Videos werden mit dem
   richtigen Seitenverhältnis (Hochformat) angezeigt.
-- **Archivieren & Löschen**: Jede Person kann Medien *archivieren* (sie
-  verschwinden aus der Galerie, bleiben aber erhalten). *Löschen* darf nur, wer
-  ein Medium selbst hochgeladen hat – auch hier wird es nur ausgeblendet.
-  **Endgültig löschen** kann ausschliesslich der Administrator.
+- **Löschen**: *Löschen* darf nur, wer ein Medium selbst hochgeladen hat (anhand
+  des angegebenen Namens). Das Medium verschwindet danach aus allen Galerien,
+  wird aber nur ausgeblendet. **Endgültig löschen** kann ausschliesslich der
+  Administrator.
 - **Download** einzeln oder als **ZIP** (mehrere/alle Originale auf einmal).
 - **Adminbereich**: aufklappbare Bereiche mit allen Medien aller Personen,
-  inklusive der archivierten und gelöschten – mit der Möglichkeit,
-  wiederherzustellen oder Fotos/Videos endgültig zu löschen.
+  inklusive der gelöschten – mit der Möglichkeit, wiederherzustellen oder
+  Fotos/Videos endgültig zu löschen.
 - **Zugriffsstatistik (nur Admin)**: Pro Bereich lässt sich nach dem Ausklappen
   ein Protokoll aller Zugriffe einsehen – mit Zeitpunkt, Person, IP und
   **Standort** (Stadt/Region/Land, wo verfügbar). Die Liste ist sortierbar und
