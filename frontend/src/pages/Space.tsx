@@ -362,12 +362,16 @@ export default function Space() {
     }
   };
 
-  // (Weiches) Löschen darf nur, wer das Medium hochgeladen hat.
+  // (Weiches) Löschen darf jede Person mit Zugriff auf den Link – unabhängig
+  // davon, wer das Medium hochgeladen hat. Das Medium verschwindet sofort aus
+  // der Galerie; die Datei bleibt auf dem QNAP und ist nur noch für den Admin
+  // (unter „Gelöscht“) sichtbar, der sie wiederherstellen oder endgültig
+  // löschen kann.
   const softDeleteItems = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0) return;
       const ok: string[] = [];
-      let forbidden = 0;
+      let failed = 0;
       for (const id of ids) {
         try {
           await api(`/api/items/${id}/delete`, {
@@ -376,16 +380,16 @@ export default function Space() {
             uploaderName: name || undefined,
           });
           ok.push(id);
-        } catch (err) {
-          if (err instanceof ApiError && err.status === 403) forbidden++;
+        } catch {
+          failed++;
         }
       }
       setItems((prev) => prev.filter((i) => !ok.includes(i.id)));
-      if (forbidden > 0) {
+      if (failed > 0) {
         alert(
-          `${forbidden} ${
-            forbidden === 1 ? 'Medium wurde' : 'Medien wurden'
-          } nicht gelöscht – löschen kann nur, wer sie hochgeladen hat.`,
+          `${failed} ${
+            failed === 1 ? 'Medium konnte' : 'Medien konnten'
+          } nicht gelöscht werden. Bitte versuche es noch einmal.`,
         );
       }
     },
@@ -399,7 +403,7 @@ export default function Space() {
       !confirm(
         `${ids.length} ${
           ids.length === 1 ? 'Medium' : 'Medien'
-        } löschen? Nur eigene Uploads werden gelöscht.`,
+        } löschen? Die Auswahl verschwindet aus der Galerie.`,
       )
     )
       return;

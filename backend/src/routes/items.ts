@@ -56,10 +56,6 @@ function uploaderNameOf(req: import('express').Request): string {
   }
 }
 
-function sameUploader(a: string, b: string): boolean {
-  return a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
-}
-
 function getOwnItem(id: string, spaceId: string): ItemRow {
   const item = getDb()
     .prepare('SELECT * FROM items WHERE id = ? AND space_id = ?')
@@ -202,20 +198,21 @@ router.delete(
 );
 
 /**
- * Medium (weich) löschen. Nur die Person, die es hochgeladen hat, darf das.
- * Das Medium verschwindet aus der Galerie, wird aber nicht physisch entfernt –
- * nur der Administrator kann Medien endgültig löschen.
+ * Medium (weich) löschen. Jede Person mit Zugriff auf den Bereich (Link) darf
+ * jedes Medium löschen – unabhängig davon, wer es hochgeladen hat. Das Medium
+ * verschwindet danach sofort aus allen Galerien, wird aber nur ausgeblendet und
+ * nicht physisch entfernt. Nur der Administrator sieht die gelöschten Medien
+ * weiterhin und kann sie wiederherstellen oder endgültig (inkl. Dateien vom
+ * QNAP) löschen.
  */
 router.post(
   '/:id/delete',
   requireSpace,
   asyncHandler(async (req, res) => {
     const item = getOwnItem(req.params.id, req.spaceId!);
-    const by = uploaderNameOf(req);
-    if (!by) throw new ApiError(400, 'Bitte zuerst deinen Namen angeben.');
-    if (!sameUploader(by, item.uploader_name)) {
-      throw new ApiError(403, 'Nur wer ein Medium hochgeladen hat, darf es löschen.');
-    }
+    // Wer gelöscht hat, wird – sofern ein Name bekannt ist – festgehalten. Ein
+    // Name ist aber keine Voraussetzung mehr, damit jeder Gast löschen kann.
+    const by = uploaderNameOf(req) || 'Unbekannt';
     getDb()
       .prepare(`UPDATE items SET state='deleted', state_by=?, state_at=? WHERE id=?`)
       .run(by, new Date().toISOString(), item.id);
