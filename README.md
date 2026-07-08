@@ -60,10 +60,13 @@ Die Dateien liegen **lokal auf deinem QNAP** – kein Cloud-Speicher Dritter.
 - **Video-Wiedergabe in der App** über eine kleinere, gut streambare Vorschau;
   **Download** liefert immer das **Original**. Hochformat-Videos werden mit dem
   richtigen Seitenverhältnis (Hochformat) angezeigt.
-- **Löschen**: *Löschen* darf nur, wer ein Medium selbst hochgeladen hat (anhand
-  des angegebenen Namens). Das Medium verschwindet danach aus allen Galerien,
-  wird aber nur ausgeblendet. **Endgültig löschen** kann ausschliesslich der
-  Administrator.
+- **Löschen**: *Löschen* darf **jede Person mit Zugriff auf den Link** – egal,
+  wer ein Medium hochgeladen hat. Das Medium verschwindet danach sofort aus
+  allen Galerien und ist für die Nutzer:innen nirgends mehr sichtbar, wird aber
+  nur ausgeblendet (die Datei bleibt auf dem QNAP). Nur der **Administrator**
+  sieht gelöschte Medien weiterhin unter **Gelöscht** und kann sie dort
+  **wiederherstellen** (dann erscheinen sie wieder in der Galerie) oder
+  **endgültig löschen** – erst dabei wird die Datei auch vom QNAP entfernt.
 - **Download** einzeln oder als **ZIP** (mehrere/alle Originale auf einmal).
 - **Adminbereich**: aufklappbare Bereiche mit allen Medien aller Personen,
   inklusive der gelöschten – mit der Möglichkeit, wiederherzustellen oder

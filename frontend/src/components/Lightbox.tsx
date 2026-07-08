@@ -8,7 +8,7 @@ interface Props {
   items: Item[];
   index: number;
   token: string;
-  /** Anzeigename der aktuellen Person – bestimmt, ob gelöscht werden darf. */
+  /** Anzeigename der aktuellen Person – z. B. für das Anpassen des Vorschaubilds. */
   currentName?: string;
   onClose: () => void;
   onNavigate: (index: number) => void;
@@ -19,10 +19,6 @@ interface Props {
   onToggleFavorite?: (item: Item) => void;
   /** Wird nach dem Anpassen/Zurücksetzen des Vorschaubilds aufgerufen. */
   onThumbUpdated?: (item: Item) => void;
-}
-
-function sameName(a: string, b: string): boolean {
-  return a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
 }
 
 export default function Lightbox({
@@ -164,11 +160,11 @@ export default function Lightbox({
         <button className="lb-btn" onClick={() => onDownload(item)} title="Original herunterladen">
           ↓ <span className="lb-btn-label">Original</span>
         </button>
-        {onDelete && currentName && sameName(item.uploaderName, currentName) && (
+        {onDelete && (
           <button
             className="lb-btn lb-icon lb-danger"
             onClick={() => onDelete(item)}
-            title="Löschen (nur du als Uploader:in kannst dieses Medium löschen)"
+            title="Löschen – verschwindet aus der Galerie"
             aria-label="Löschen"
           >
             🗑️
