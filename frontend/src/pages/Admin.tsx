@@ -22,7 +22,6 @@ interface SpaceDetail {
 
 const STATE_LABEL: Record<ItemState, string> = {
   active: 'Aktiv',
-  archived: 'Archiviert',
   deleted: 'Gelöscht',
 };
 
@@ -161,7 +160,7 @@ export default function Admin() {
     }
   };
 
-  // Sammelaktion: Zustand mehrerer Medien setzen (wiederherstellen/archivieren).
+  // Sammelaktion: Zustand mehrerer Medien setzen (wiederherstellen/löschen).
   const bulkSetState = async (spaceId: string, ids: string[], state: ItemState) => {
     if (ids.length === 0) return;
     const updated: Item[] = [];
@@ -293,9 +292,6 @@ export default function Admin() {
                       </div>
                     </div>
                     <span className="tag">{s.itemCount ?? 0} aktiv</span>
-                    {(s.archivedCount ?? 0) > 0 && (
-                      <span className="tag">{s.archivedCount} archiviert</span>
-                    )}
                     {(s.deletedCount ?? 0) > 0 && (
                       <span className="tag tag-danger">{s.deletedCount} gelöscht</span>
                     )}
@@ -373,7 +369,7 @@ function AdminSpaceItems({
   onBulkSetState: (spaceId: string, ids: string[], state: ItemState) => void | Promise<void>;
   onBulkPermanentDelete: (spaceId: string, ids: string[]) => void | Promise<void>;
 }) {
-  const groups: ItemState[] = ['active', 'archived', 'deleted'];
+  const groups: ItemState[] = ['active', 'deleted'];
   return (
     <>
       {groups.map((state) => (
@@ -495,15 +491,6 @@ function AdminGroup({
                   onClick={() => void runBulkState('active')}
                 >
                   Wiederherstellen
-                </button>
-              )}
-              {state !== 'archived' && (
-                <button
-                  className="btn btn-sm"
-                  disabled={selectedIds.length === 0}
-                  onClick={() => void runBulkState('archived')}
-                >
-                  Archivieren
                 </button>
               )}
               <button
@@ -647,11 +634,6 @@ function AdminTile({
               title="In die Galerie zurückholen"
             >
               Wiederherstellen
-            </button>
-          )}
-          {item.state === 'active' && (
-            <button className="btn btn-sm" onClick={() => onSetState(spaceId, item, 'archived')}>
-              Archivieren
             </button>
           )}
           <button

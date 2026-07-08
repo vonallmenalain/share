@@ -30,8 +30,8 @@ export function initDb(): Database.Database {
       space_id          TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
       kind              TEXT NOT NULL,            -- 'photo' | 'video'
       status            TEXT NOT NULL,            -- 'processing' | 'ready' | 'failed'
-      state             TEXT NOT NULL DEFAULT 'active', -- 'active' | 'archived' | 'deleted'
-      state_by          TEXT,                     -- Name der Person, die zuletzt archiviert/gelöscht hat
+      state             TEXT NOT NULL DEFAULT 'active', -- 'active' | 'deleted'
+      state_by          TEXT,                     -- Name der Person, die zuletzt gelöscht hat
       state_at          TEXT,                     -- Zeitpunkt der letzten Zustandsänderung
       uploader_name     TEXT NOT NULL,
       original_filename TEXT NOT NULL,
@@ -145,6 +145,11 @@ function migrate(database: Database.Database) {
   // Läge er im Schema-Block oben, würde er bei bestehenden Datenbanken (in denen
   // "items" bereits ohne "state" existiert) mit "no such column: state" fehlschlagen.
   database.exec(`CREATE INDEX IF NOT EXISTS idx_items_state ON items(space_id, state)`);
+  // Die frühere "Archivieren"-Funktion wurde entfernt. Es gibt nur noch "aktiv"
+  // und "gelöscht". Bereits archivierte Medien werden als (weich) gelöscht
+  // behandelt – der Administrator kann sie weiterhin wiederherstellen oder
+  // endgültig entfernen.
+  database.exec(`UPDATE items SET state = 'deleted' WHERE state = 'archived'`);
 }
 
 export function getDb(): Database.Database {
@@ -165,7 +170,7 @@ export interface ItemRow {
   space_id: string;
   kind: 'photo' | 'video';
   status: 'processing' | 'ready' | 'failed';
-  state: 'active' | 'archived' | 'deleted';
+  state: 'active' | 'deleted';
   state_by: string | null;
   state_at: string | null;
   uploader_name: string;

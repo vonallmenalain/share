@@ -99,7 +99,6 @@ router.get(
     const countBy = db.prepare(
       `SELECT
          COALESCE(SUM(state = 'active'), 0)   AS active,
-         COALESCE(SUM(state = 'archived'), 0) AS archived,
          COALESCE(SUM(state = 'deleted'), 0)  AS deleted
        FROM items WHERE space_id = ?`,
     );
@@ -107,12 +106,11 @@ router.get(
       `SELECT COUNT(*) AS total, MAX(at) AS last FROM access_logs WHERE space_id = ?`,
     );
     const result = rows.map((s) => {
-      const c = countBy.get(s.id) as { active: number; archived: number; deleted: number };
+      const c = countBy.get(s.id) as { active: number; deleted: number };
       const a = accessBy.get(s.id) as { total: number; last: string | null };
       return {
         ...publicSpace(s),
         itemCount: c.active,
-        archivedCount: c.archived,
         deletedCount: c.deleted,
         accessCount: a.total,
         lastAccessAt: a.last,
@@ -140,8 +138,8 @@ router.delete(
 );
 
 /**
- * Admin: alle Medien eines Bereichs auflisten – inklusive archivierter und
- * (weich) gelöschter. Liefert zusätzlich einen kurzlebigen Zugriffs-Token für
+ * Admin: alle Medien eines Bereichs auflisten – inklusive der (weich)
+ * gelöschten. Liefert zusätzlich einen kurzlebigen Zugriffs-Token für
  * denselben Bereich, damit die Admin-Oberfläche die Vorschaubilder anzeigen
  * kann (die Datei-Endpunkte verlangen einen gültigen Space-Token).
  */
@@ -239,14 +237,14 @@ router.delete(
   }),
 );
 
-/** Admin: Zustand eines Mediums setzen (wiederherstellen/archivieren). */
+/** Admin: Zustand eines Mediums setzen (wiederherstellen/löschen). */
 router.patch(
   '/:id/items/:itemId/state',
   adminLimiter,
   requireAdmin,
   asyncHandler(async (req, res) => {
     const state = String(req.body?.state ?? '');
-    if (!['active', 'archived', 'deleted'].includes(state)) {
+    if (!['active', 'deleted'].includes(state)) {
       throw new ApiError(400, 'Ungültiger Zustand.');
     }
     const db = getDb();

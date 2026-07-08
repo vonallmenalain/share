@@ -322,28 +322,6 @@ export default function Space() {
     await shareItemsWithFallback(list);
   };
 
-  // Archivieren darf jede Person; die Medien verschwinden nur aus der Galerie.
-  const archiveItems = useCallback(
-    async (ids: string[]) => {
-      if (ids.length === 0) return;
-      const ok: string[] = [];
-      for (const id of ids) {
-        try {
-          await api(`/api/items/${id}/archive`, {
-            method: 'POST',
-            token,
-            uploaderName: name || undefined,
-          });
-          ok.push(id);
-        } catch {
-          /* ignore */
-        }
-      }
-      setItems((prev) => prev.filter((i) => !ok.includes(i.id)));
-    },
-    [token, name],
-  );
-
   // (Weiches) Löschen darf nur, wer das Medium hochgeladen hat.
   const softDeleteItems = useCallback(
     async (ids: string[]) => {
@@ -367,28 +345,12 @@ export default function Space() {
         alert(
           `${forbidden} ${
             forbidden === 1 ? 'Medium wurde' : 'Medien wurden'
-          } nicht gelöscht – löschen kann nur, wer sie hochgeladen hat. Du kannst sie stattdessen archivieren.`,
+          } nicht gelöscht – löschen kann nur, wer sie hochgeladen hat.`,
         );
       }
     },
     [token, name],
   );
-
-  const archiveSelected = async () => {
-    const ids = Array.from(selected);
-    if (ids.length === 0) return;
-    if (
-      !confirm(
-        `${ids.length} ${
-          ids.length === 1 ? 'Medium' : 'Medien'
-        } archivieren? Sie verschwinden aus der Galerie, bleiben aber erhalten.`,
-      )
-    )
-      return;
-    await archiveItems(ids);
-    setSelected(new Set());
-    setSelectMode(false);
-  };
 
   const deleteSelected = async () => {
     const ids = Array.from(selected);
@@ -404,11 +366,6 @@ export default function Space() {
     await softDeleteItems(ids);
     setSelected(new Set());
     setSelectMode(false);
-  };
-
-  const archiveOne = async (item: Item) => {
-    await archiveItems([item.id]);
-    setLightboxId(null);
   };
 
   const deleteOne = async (item: Item) => {
@@ -650,13 +607,6 @@ export default function Space() {
                 ↓ ZIP
               </button>
               <button
-                className="btn btn-sm"
-                disabled={selected.size === 0}
-                onClick={archiveSelected}
-              >
-                Archivieren
-              </button>
-              <button
                 className="btn btn-sm btn-danger"
                 disabled={selected.size === 0}
                 onClick={deleteSelected}
@@ -826,7 +776,6 @@ export default function Space() {
           onNavigate={(i) => setLightboxId(flatOrder[i]?.id ?? null)}
           onDownload={downloadOriginal}
           onShare={(item) => shareItemsWithFallback([item])}
-          onArchive={archiveOne}
           onDelete={deleteOne}
           onToggleFavorite={toggleFavorite}
           onThumbUpdated={handleThumbUpdated}

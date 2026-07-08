@@ -125,24 +125,6 @@ router.patch(
 );
 
 /**
- * Medium archivieren. Darf jede Person im Bereich. Das Medium verschwindet
- * aus der Galerie, bleibt aber (inkl. aller Dateien) erhalten und kann vom
- * Administrator wiederhergestellt oder endgültig gelöscht werden.
- */
-router.post(
-  '/:id/archive',
-  requireSpace,
-  asyncHandler(async (req, res) => {
-    const item = getOwnItem(req.params.id, req.spaceId!);
-    const by = uploaderNameOf(req) || 'Unbekannt';
-    getDb()
-      .prepare(`UPDATE items SET state='archived', state_by=?, state_at=? WHERE id=?`)
-      .run(by, new Date().toISOString(), item.id);
-    res.json({ ok: true });
-  }),
-);
-
-/**
  * Medium als Favorit markieren oder die Markierung entfernen. Darf jede Person
  * im Bereich. Body: { favorite: boolean }.
  */

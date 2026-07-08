@@ -92,7 +92,6 @@ export interface Space {
   hasPassword: boolean;
   createdAt: string;
   itemCount?: number;
-  archivedCount?: number;
   deletedCount?: number;
   accessCount?: number;
   lastAccessAt?: string | null;
@@ -123,7 +122,7 @@ export interface AccessLogsResponse {
   logs: AccessLog[];
 }
 
-export type ItemState = 'active' | 'archived' | 'deleted';
+export type ItemState = 'active' | 'deleted';
 
 export interface Item {
   id: string;
