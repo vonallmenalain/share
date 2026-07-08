@@ -99,6 +99,18 @@ button {
   padding: 0;
   border-radius: 999px;
 }
+.btn-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-share svg {
+  display: block;
+}
+.btn-share .spinner {
+  width: 14px;
+  height: 14px;
+}
 
 /* ---- Inputs -------------------------------------------------------------- */
 .input {

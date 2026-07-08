@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
+import ShareIcon from '../components/ShareIcon';
 import { AccessLog, AccessLogsResponse, api, fileUrl, Item, ItemState, Space } from '../api/client';
+import { shareItems } from '../lib/share';
 import { adminKeyStore } from '../lib/storage';
 import {
   formatBytes,
@@ -23,6 +25,31 @@ const STATE_LABEL: Record<ItemState, string> = {
   archived: 'Archiviert',
   deleted: 'Gelöscht',
 };
+
+function downloadOriginal(item: Item, token: string) {
+  const a = document.createElement('a');
+  a.href = fileUrl(`/files/original/${item.id}`, token);
+  a.download = item.filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Teilt Medien über das native Teilen-Menü. Klappt das nicht (z. B. Desktop
+// ohne Datei-Teilen), werden die Originale als Ausweichlösung heruntergeladen.
+async function shareWithFallback(list: Item[], token: string): Promise<void> {
+  if (list.length === 0) return;
+  const outcome = await shareItems(list, token);
+  if (outcome === 'unsupported') {
+    for (const it of list) downloadOriginal(it, token);
+    alert(
+      'Direktes Teilen wird von diesem Gerät bzw. Browser nicht unterstützt. ' +
+        'Die Datei(en) werden stattdessen heruntergeladen.',
+    );
+  } else if (outcome === 'error') {
+    alert('Teilen fehlgeschlagen. Bitte versuche es noch einmal.');
+  }
+}
 
 export default function Admin() {
   const [adminKey, setAdminKey] = useState(adminKeyStore.get());
@@ -387,11 +414,24 @@ function AdminGroup({
 }) {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sharing, setSharing] = useState(false);
 
   // Auswahl auf tatsächlich (noch) vorhandene Medien dieser Gruppe beschränken.
   const validIds = new Set(items.map((i) => i.id));
   const selectedIds = Array.from(selected).filter((id) => validIds.has(id));
   const allSelected = items.length > 0 && selectedIds.length === items.length;
+
+  const share = async (list: Item[]) => {
+    if (list.length === 0 || sharing) return;
+    setSharing(true);
+    try {
+      await shareWithFallback(list, token);
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const runShare = () => share(items.filter((i) => selectedIds.includes(i.id)));
 
   const exitSelect = () => {
     setSelectMode(false);
@@ -438,6 +478,15 @@ function AdminGroup({
               </span>
               <button className="btn btn-sm" onClick={toggleAll}>
                 {allSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
+              </button>
+              <button
+                className="btn btn-sm btn-share"
+                disabled={selectedIds.length === 0 || sharing}
+                onClick={() => void runShare()}
+                title="Ausgewählte Medien teilen"
+              >
+                {sharing ? <span className="spinner" /> : <ShareIcon size={15} />}
+                Teilen
               </button>
               {state !== 'active' && (
                 <button
@@ -491,6 +540,7 @@ function AdminGroup({
               onToggleSelect={toggle}
               onSetState={onSetState}
               onPermanentDelete={onPermanentDelete}
+              onShare={(it) => share([it])}
             />
           ))}
         </div>
@@ -508,6 +558,7 @@ function AdminTile({
   onToggleSelect,
   onSetState,
   onPermanentDelete,
+  onShare,
 }: {
   spaceId: string;
   token: string;
@@ -517,7 +568,9 @@ function AdminTile({
   onToggleSelect: (id: string) => void;
   onSetState: (spaceId: string, item: Item, state: ItemState) => void;
   onPermanentDelete: (spaceId: string, item: Item) => void;
+  onShare: (item: Item) => void | Promise<void>;
 }) {
+  const [sharing, setSharing] = useState(false);
   const thumb =
     item.kind === 'video'
       ? item.hasPoster
@@ -570,6 +623,23 @@ function AdminTile({
       </div>
       {!selectMode && (
         <div className="admin-tile-actions">
+          <button
+            className="btn btn-sm btn-share"
+            disabled={sharing}
+            onClick={async () => {
+              if (sharing) return;
+              setSharing(true);
+              try {
+                await onShare(item);
+              } finally {
+                setSharing(false);
+              }
+            }}
+            title="Teilen"
+          >
+            {sharing ? <span className="spinner" /> : <ShareIcon size={15} />}
+            Teilen
+          </button>
           {item.state !== 'active' && (
             <button
               className="btn btn-sm"

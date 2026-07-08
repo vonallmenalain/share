@@ -4,7 +4,9 @@ import TopBar from '../components/TopBar';
 import CollageGrid from '../components/CollageGrid';
 import Lightbox from '../components/Lightbox';
 import InstallButton from '../components/InstallButton';
+import ShareIcon from '../components/ShareIcon';
 import { setSpaceManifest, resetManifest } from '../lib/pwaManifest';
+import { shareItems } from '../lib/share';
 import { api, ApiError, fileUrl, Item, Space as SpaceType } from '../api/client';
 import { useUploads } from '../context/Uploads';
 import { nameStore, tokenStore } from '../lib/storage';
@@ -41,6 +43,8 @@ export default function Space() {
   const [gateError, setGateError] = useState('');
   const [gateBusy, setGateBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  // Läuft gerade ein Teilen-Vorgang (Dateien werden geladen / Teilen-Menü offen)?
+  const [sharing, setSharing] = useState(false);
 
   // "Vollbild"-Modus der Galerie: Beim Herunterscrollen verschwinden Nav-Leiste
   // und Buttons, damit nur die Fotos sichtbar sind. Beim Hochscrollen (oder ganz
@@ -288,6 +292,34 @@ export default function Space() {
     document.body.appendChild(a);
     a.click();
     a.remove();
+  };
+
+  // Teilt die übergebenen Medien über das native Teilen-Menü des Geräts. Klappt
+  // das nicht (z. B. Desktop-Browser ohne Datei-Teilen), wird als Ausweichlösung
+  // heruntergeladen (einzeln als Original, mehrere als ZIP).
+  const shareItemsWithFallback = async (list: Item[]) => {
+    if (list.length === 0 || sharing) return;
+    setSharing(true);
+    try {
+      const outcome = await shareItems(list, token);
+      if (outcome === 'unsupported') {
+        if (list.length === 1) downloadOriginal(list[0]);
+        else downloadZip(list.map((i) => i.id));
+        alert(
+          'Direktes Teilen wird von diesem Gerät bzw. Browser nicht unterstützt. ' +
+            'Die Datei(en) werden stattdessen heruntergeladen – du kannst sie dann von Hand teilen.',
+        );
+      } else if (outcome === 'error') {
+        alert('Teilen fehlgeschlagen. Bitte versuche es noch einmal.');
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const shareSelected = async () => {
+    const list = readyItems.filter((i) => selected.has(i.id));
+    await shareItemsWithFallback(list);
   };
 
   // Archivieren darf jede Person; die Medien verschwinden nur aus der Galerie.
@@ -602,6 +634,15 @@ export default function Space() {
                 {allVisibleSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
               </button>
               <button
+                className="btn btn-sm btn-share"
+                disabled={selected.size === 0 || sharing}
+                onClick={() => void shareSelected()}
+                title="Ausgewählte Fotos/Videos teilen"
+              >
+                {sharing ? <span className="spinner" /> : <ShareIcon size={15} />}
+                Teilen
+              </button>
+              <button
                 className="btn btn-sm"
                 disabled={selected.size === 0}
                 onClick={() => downloadZip(Array.from(selected))}
@@ -784,6 +825,7 @@ export default function Space() {
           onClose={() => setLightboxId(null)}
           onNavigate={(i) => setLightboxId(flatOrder[i]?.id ?? null)}
           onDownload={downloadOriginal}
+          onShare={(item) => shareItemsWithFallback([item])}
           onArchive={archiveOne}
           onDelete={deleteOne}
           onToggleFavorite={toggleFavorite}

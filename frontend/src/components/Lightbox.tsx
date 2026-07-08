@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Item, fileUrl } from '../api/client';
 import { formatBytes, formatDateTime } from '../lib/format';
 import ThumbEditor from './ThumbEditor';
+import ShareIcon from './ShareIcon';
 
 interface Props {
   items: Item[];
@@ -12,6 +13,8 @@ interface Props {
   onClose: () => void;
   onNavigate: (index: number) => void;
   onDownload: (item: Item) => void;
+  /** Teilt das aktuelle Medium über das native Teilen-Menü des Geräts. */
+  onShare?: (item: Item) => void | Promise<void>;
   onArchive?: (item: Item) => void;
   onDelete?: (item: Item) => void;
   onToggleFavorite?: (item: Item) => void;
@@ -31,6 +34,7 @@ export default function Lightbox({
   onClose,
   onNavigate,
   onDownload,
+  onShare,
   onArchive,
   onDelete,
   onToggleFavorite,
@@ -38,6 +42,7 @@ export default function Lightbox({
 }: Props) {
   const item = items[index];
   const [editingThumb, setEditingThumb] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const prev = useCallback(() => {
     onNavigate((index - 1 + items.length) % items.length);
@@ -137,6 +142,25 @@ export default function Lightbox({
             aria-label="Vorschaubild anpassen"
           >
             ⛶
+          </button>
+        )}
+        {onShare && (
+          <button
+            className="lb-btn lb-icon"
+            disabled={sharing}
+            onClick={async () => {
+              if (sharing) return;
+              setSharing(true);
+              try {
+                await onShare(item);
+              } finally {
+                setSharing(false);
+              }
+            }}
+            title="Teilen"
+            aria-label="Teilen"
+          >
+            {sharing ? <span className="spinner white" /> : <ShareIcon size={18} />}
           </button>
         )}
         <button className="lb-btn" onClick={() => onDownload(item)} title="Original herunterladen">
