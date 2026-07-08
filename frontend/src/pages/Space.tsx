@@ -561,25 +561,16 @@ export default function Space() {
     <>
       <TopBar hidden={chromeHidden} brandTo={`/s/${slug}`}>
         <div className="topbar-actions">
-          <button
-            className="btn btn-sm btn-share"
-            onClick={() => void shareSpaceLink()}
-            title="Link zu diesem Bereich teilen"
-          >
-            <ShareIcon size={15} />
-            <span className="btn-label">Teilen</span>
-          </button>
-
           <Dropdown
             align="end"
             ariaLabel="Name & Konto"
-            title={`Als ${name || 'Gast'}`}
+            title={name || 'Gast'}
             triggerClassName="btn icon-btn"
             label={<UserIcon size={19} />}
           >
             {(close) => (
               <>
-                <div className="dropdown-label">Angemeldet als</div>
+                <div className="dropdown-label">Name Uploader</div>
                 <div className="dropdown-name">
                   <span className="avatar sm" style={{ background: colorForName(name || 'Gast') }}>
                     {initialsOf(name || 'Gast')}
@@ -596,6 +587,17 @@ export default function Space() {
                   }}
                 >
                   Name ändern
+                </button>
+                <button
+                  type="button"
+                  className="dropdown-item"
+                  onClick={() => {
+                    close();
+                    void shareSpaceLink();
+                  }}
+                >
+                  <ShareIcon size={16} />
+                  Galerie teilen
                 </button>
               </>
             )}
@@ -715,7 +717,7 @@ export default function Space() {
           ) : (
             <>
               <button
-                className="btn btn-sm"
+                className="btn btn-sm select-enter-btn"
                 disabled={readyItems.length === 0}
                 onClick={() => setSelectMode(true)}
               >
