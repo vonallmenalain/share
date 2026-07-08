@@ -376,6 +376,13 @@ button {
 .view-trigger {
   gap: 6px;
 }
+/* „Hochladen"-Button und „Galerie"-Dropdown exakt gleich gross halten. Beide
+ * sind `.btn` (identische Höhe) und bekommen hier dieselbe feste Breite. */
+.toolbar .btn-primary,
+.toolbar .view-trigger {
+  width: 150px;
+  flex: 0 0 auto;
+}
 .view-trigger .chevron {
   color: var(--ink-faint);
   font-size: 12px;
@@ -486,11 +493,18 @@ button {
     padding: 5px 10px;
     font-size: 12px;
   }
-  /* Hochladen + Ansichtswahl bleiben nebeneinander auf einer Zeile. */
+  /* Hochladen + Ansichtswahl bleiben nebeneinander auf einer Zeile und exakt
+   * gleich gross (etwas schmaler, damit sie auf kleinen Displays passen). */
   .toolbar .btn-primary,
-  .view-trigger {
+  .toolbar .view-trigger {
+    width: 132px;
     padding: 8px 12px;
     font-size: 13px;
+  }
+  /* Auf dem Handy braucht es keinen „Auswählen"-Knopf: Ein langer Fingerdruck
+   * auf ein Bild startet den Auswahl-Modus. */
+  .select-enter-btn {
+    display: none;
   }
   .dropdown-menu {
     min-width: 200px;
