@@ -26,7 +26,11 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        orientation: 'portrait',
+        // 'any' statt 'portrait': So darf die installierte PWA dem Gerät
+        // ins Querformat folgen (z. B. für quer aufgenommene Videos im
+        // Vollbild). Bei 'portrait' bleibt eine installierte App am Home-
+        // Bildschirm aufs Hochformat gesperrt, obwohl der Browser dreht.
+        orientation: 'any',
         background_color: '#f6f7f9',
         theme_color: '#4f46e5',
         icons: [
