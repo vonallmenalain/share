@@ -7,6 +7,7 @@ const TOKEN_PREFIX = 'share.token.'; // + slug
 const NAME_KEY = 'share.uploaderName';
 const ADMIN_KEY = 'share.adminKey';
 const PENDING_PREFIX = 'share.pending.'; // + spaceId
+const VISITED_KEY = 'share.visitedSpaces';
 
 function safeGet(key: string): string | null {
   try {
@@ -81,3 +82,44 @@ export const pendingStore = {
 export function fingerprintOf(file: File): string {
   return `${file.name}|${file.size}|${file.lastModified}`;
 }
+
+// Bereiche, die diese:r Nutzer:in per Link geöffnet hat. Dient dem Wechsel
+// zwischen mehreren Bereichen über das Profil-Menü oben rechts. Es werden
+// bewusst NUR Bereiche gespeichert, deren Link jemand tatsächlich angeklickt
+// (also geöffnet) hat – niemals alle vorhandenen Bereiche.
+export interface VisitedSpace {
+  slug: string;
+  name: string;
+  /** Zeitpunkt des letzten Besuchs (ms seit Epoch) – für die Sortierung. */
+  visitedAt: number;
+}
+
+const VISITED_LIMIT = 30;
+
+export const visitedSpacesStore = {
+  all(): VisitedSpace[] {
+    const raw = safeGet(VISITED_KEY);
+    if (!raw) return [];
+    try {
+      const list = JSON.parse(raw) as VisitedSpace[];
+      if (!Array.isArray(list)) return [];
+      return list
+        .filter((s): s is VisitedSpace => !!s && typeof s.slug === 'string' && s.slug.length > 0)
+        .sort((a, b) => (b.visitedAt ?? 0) - (a.visitedAt ?? 0));
+    } catch {
+      return [];
+    }
+  },
+  /** Merkt sich einen besuchten Bereich (oder aktualisiert Name/Zeitpunkt). */
+  record(slug: string, name: string) {
+    if (!slug) return;
+    const list = visitedSpacesStore.all().filter((s) => s.slug !== slug);
+    list.unshift({ slug, name: name || slug, visitedAt: Date.now() });
+    safeSet(VISITED_KEY, JSON.stringify(list.slice(0, VISITED_LIMIT)));
+  },
+  remove(slug: string) {
+    const list = visitedSpacesStore.all().filter((s) => s.slug !== slug);
+    if (list.length) safeSet(VISITED_KEY, JSON.stringify(list));
+    else safeRemove(VISITED_KEY);
+  },
+};
