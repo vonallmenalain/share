@@ -57,6 +57,13 @@ Die Dateien liegen **lokal auf deinem QNAP** – kein Cloud-Speicher Dritter.
   Startbildschirm hinzu, öffnet die installierte Verknüpfung direkt diesen Bereich
   statt der Startseite. Die installierte App heisst dabei **genau wie der Bereich**
   (z. B. „Ferien Tessin“) – der Name wird nicht mehr abgeschnitten.
+- **Zwischen Bereichen wechseln**: Öffnet man nach und nach mehrere Bereiche per
+  Link, merkt sich die App diese **nur lokal im Browser**. Über das Profil-Menü
+  oben rechts sieht man dann, in welchem Bereich man gerade ist (z. B. „Ferien
+  Tessin“), und kann mit einem Klick zu einem anderen **selbst besuchten**
+  Bereich wechseln (z. B. „Ferien Frankreich 2026“). Es werden dabei ausschliesslich
+  Bereiche angezeigt, deren Link man vorher selbst geöffnet hat – niemals alle
+  vorhandenen Bereiche.
 - **Video-Wiedergabe in der App** über eine kleinere, gut streambare Vorschau;
   **Download** liefert immer das **Original**. Hochformat-Videos werden mit dem
   richtigen Seitenverhältnis (Hochformat) angezeigt.

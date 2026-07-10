@@ -11,7 +11,7 @@ import { setSpaceManifest, resetManifest } from '../lib/pwaManifest';
 import { shareItems } from '../lib/share';
 import { api, ApiError, fileUrl, Item, Space as SpaceType } from '../api/client';
 import { useUploads } from '../context/Uploads';
-import { nameStore, tokenStore } from '../lib/storage';
+import { nameStore, tokenStore, visitedSpacesStore, VisitedSpace } from '../lib/storage';
 import { colorForName, initialsOf } from '../lib/avatar';
 import { dayKey, formatDayHeading } from '../lib/format';
 
@@ -35,6 +35,11 @@ export default function Space() {
   const [space, setSpace] = useState<SpaceType | null>(null);
   const [token, setToken] = useState('');
   const [name, setName] = useState(nameStore.get());
+  // Bereiche, deren Link diese:r Nutzer:in schon geöffnet hat (für den Wechsel
+  // über das Profil-Menü). Wird nur lokal im Browser gespeichert.
+  const [visitedSpaces, setVisitedSpaces] = useState<VisitedSpace[]>(() =>
+    visitedSpacesStore.all(),
+  );
 
   const [items, setItems] = useState<Item[]>([]);
   const [view, setView] = useState<View>('gallery');
@@ -122,6 +127,14 @@ export default function Space() {
     if (!slug || !space) return;
     setSpaceManifest(slug, space.name);
     return () => resetManifest();
+  }, [slug, space]);
+
+  // Diesen (per Link geöffneten) Bereich lokal merken, damit man später über
+  // das Profil-Menü zwischen den selbst besuchten Bereichen wechseln kann.
+  useEffect(() => {
+    if (!slug || !space) return;
+    visitedSpacesStore.record(slug, space.name);
+    setVisitedSpaces(visitedSpacesStore.all());
   }, [slug, space]);
 
   // Scroll-Richtung erkennen → Nav-Leiste & Buttons ein-/ausblenden.
@@ -499,6 +512,20 @@ export default function Space() {
     ['queued', 'uploading', 'processing'].includes(t.status),
   ).length;
 
+  // Andere, bereits besuchte Bereiche (ohne den aktuellen) – für den Wechsel
+  // über das Profil-Menü.
+  const otherSpaces = useMemo(
+    () => visitedSpaces.filter((s) => s.slug !== slug),
+    [visitedSpaces, slug],
+  );
+
+  const switchSpace = useCallback(
+    (targetSlug: string) => {
+      if (targetSlug !== slug) navigate(`/s/${targetSlug}`);
+    },
+    [navigate, slug],
+  );
+
   // ---- Render --------------------------------------------------------------
   if (phase === 'loading') {
     return (
@@ -574,6 +601,37 @@ export default function Space() {
           >
             {(close) => (
               <>
+                <div className="dropdown-label">Aktueller Bereich</div>
+                <div className="dropdown-current-space">
+                  <span className="dropdown-space-dot" aria-hidden="true" />
+                  <strong>{space?.name || slug}</strong>
+                </div>
+                {otherSpaces.length > 0 && (
+                  <>
+                    <div className="dropdown-label">Bereich wechseln</div>
+                    {otherSpaces.map((s) => (
+                      <button
+                        key={s.slug}
+                        type="button"
+                        className="dropdown-item"
+                        onClick={() => {
+                          close();
+                          switchSpace(s.slug);
+                        }}
+                        title={`Zu „${s.name}" wechseln`}
+                      >
+                        <span
+                          className="avatar sm"
+                          style={{ background: colorForName(s.name) }}
+                        >
+                          {initialsOf(s.name)}
+                        </span>
+                        <span className="dropdown-item-text">{s.name}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+                <div className="dropdown-divider" />
                 <div className="dropdown-label">Name Uploader</div>
                 <div className="dropdown-name">
                   <span className="avatar sm" style={{ background: colorForName(name || 'Gast') }}>

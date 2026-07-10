@@ -454,6 +454,24 @@ button {
   padding: 4px 12px 6px;
   font-size: 14px;
 }
+.dropdown-current-space {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 6px;
+  font-size: 14px;
+}
+.dropdown-space-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+  flex: 0 0 auto;
+}
+.dropdown-item-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .dropdown-divider {
   height: 1px;
   background: var(--line);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, Space as SpaceType } from '../api/client';
-import { nameStore, tokenStore } from './storage';
+import { nameStore, tokenStore, visitedSpacesStore } from './storage';
 
 export type SessionPhase = 'loading' | 'gate' | 'ready' | 'notfound';
 
@@ -53,6 +53,12 @@ export function useSpaceSession(slug: string) {
       cancelled = true;
     };
   }, [slug]);
+
+  // Diesen (per Link geöffneten) Bereich lokal merken, damit man später über
+  // das Profil-Menü zwischen den selbst besuchten Bereichen wechseln kann.
+  useEffect(() => {
+    if (slug && space) visitedSpacesStore.record(slug, space.name);
+  }, [slug, space]);
 
   const enter = useCallback(
     async (e?: React.FormEvent) => {
