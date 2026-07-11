@@ -22,6 +22,29 @@ export function optionalString(value: unknown, max = 2000): string | null {
 }
 
 /**
+ * Wie optionalString, aber OHNE zu trimmen – für freien Fliesstext (z. B.
+ * Notiz-Inhalte), bei dem führende/nachfolgende Leerzeichen oder Zeilenumbrüche
+ * bewusst zum Inhalt gehören und nicht "auf einmal" beim Speichern verschwinden
+ * sollen, während gerade getippt wird.
+ */
+export function optionalText(value: unknown, max = 20000): string | null {
+  if (value === undefined || value === null) return null;
+  const s = String(value);
+  if (!s) return null;
+  return s.length > max ? s.slice(0, max) : s;
+}
+
+const PIN_RE = /^\d{4,8}$/;
+
+/** Validiert einen optionalen Schutz-Code (4–8 Ziffern) für Teilnehmer-Identitäten. */
+export function optionalPin(value: unknown, field = 'Code'): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  const s = String(value).trim();
+  if (!PIN_RE.test(s)) throw new ApiError(400, `${field} muss aus 4 bis 8 Ziffern bestehen.`);
+  return s;
+}
+
+/**
  * Prüft einen Geldbetrag in Rappen/Cents: muss eine positive Ganzzahl sein.
  * Es findet KEINE Fliesskomma-Rechnung statt – der Client übermittelt bereits
  * ganzzahlige Rappen.
