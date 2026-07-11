@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import Dropdown from '../components/Dropdown';
@@ -26,6 +26,9 @@ function SpaceShell() {
   const { slug, phase, space, name, setName, gate, enter, chromeHidden, setChromeHidden, visitedSpaces } =
     useSpaceSessionContext();
   const location = useLocation();
+  // Modul-Navigation ist standardmässig eingeklappt (kein permanenter
+  // Platzverbrauch) und öffnet sich nur über den Hamburger-Button oben links.
+  const [navOpen, setNavOpen] = useState(false);
 
   // PWA-Manifest auf den aktuellen Bereich zeigen lassen (wie bisher).
   useEffect(() => {
@@ -35,11 +38,23 @@ function SpaceShell() {
   }, [slug, space]);
 
   // Beim Wechsel zwischen Modulen den „Vollbild"-Zustand zurücksetzen, damit
-  // TopBar & Navigation auf den anderen Seiten immer sichtbar sind.
+  // TopBar & Navigation auf den anderen Seiten immer sichtbar sind, und das
+  // Überlagerungsmenü schliessen.
   useEffect(() => {
     setChromeHidden(false);
+    setNavOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
+
+  // Überlagerungsmenü auch mit Escape schliessen können.
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNavOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navOpen]);
 
   if (phase === 'loading') {
     return (
@@ -135,7 +150,12 @@ function SpaceShell() {
 
   return (
     <>
-      <TopBar hidden={chromeHidden} brandTo={`/s/${slug}`}>
+      <TopBar
+        hidden={chromeHidden}
+        brandTo={`/s/${slug}`}
+        onMenuClick={showNav ? () => setNavOpen((o) => !o) : undefined}
+        menuOpen={navOpen}
+      >
         <div className="topbar-actions">
           <Dropdown
             align="end"
@@ -206,7 +226,15 @@ function SpaceShell() {
         </div>
       </TopBar>
 
-      {showNav && <ModuleNavigation slug={slug} modules={modules} hidden={chromeHidden} />}
+      {showNav && (
+        <ModuleNavigation
+          slug={slug}
+          modules={modules}
+          hidden={chromeHidden}
+          open={navOpen}
+          onClose={() => setNavOpen(false)}
+        />
+      )}
 
       <div className={`space-shell${showNav ? ' has-nav' : ''}`}>
         <Outlet />
