@@ -1,4 +1,4 @@
-# share · Fotos &amp; Videos privat teilen
+# share · Fotos, Videos &amp; mehr für die Gruppe
 
 Eine kleine, schöne App, um **Original-Fotos und -Videos** in einer privaten Gruppe
 zu teilen – plattformübergreifend (iOS &amp; Android, über den Browser). Jede:r lädt
@@ -6,7 +6,16 @@ die eigenen Aufnahmen in einen **Bereich** (z.&nbsp;B. „Ferien Tessin“) hoch
 sehen eine übersichtliche Galerie, können nach Person oder chronologisch
 filtern, die Galerie **selbst anordnen** und Originale wieder herunterladen.
 
+Aus der Foto-App ist eine allgemeine **Ferien- und Gruppen-App** geworden: Ein
+Bereich kann optional zusätzliche **Module** aktivieren – **Finanzen**
+(gemeinsame Ausgaben fair abrechnen), **Einkaufsliste**, **Notizen** (Text &amp;
+Checklisten, auch mit Bildern) und einen **Kalender**. Fotos &amp; Videos sind
+immer dabei; alle anderen Module sind pro Bereich frei wählbar. Bestehende
+Bereiche bleiben unverändert (nur das Fotomodul aktiv) – nichts geht verloren.
+
 Die Dateien liegen **lokal auf deinem QNAP** – kein Cloud-Speicher Dritter.
+Alle Metadaten (auch der neuen Module) bleiben in derselben lokalen
+**SQLite-Datei** – **keine externe Datenbank (z.&nbsp;B. Firebase) nötig**.
 
 ```
    ┌──────────────────────────┐        HTTPS         ┌────────────────────────────┐
@@ -89,12 +98,48 @@ Die Dateien liegen **lokal auf deinem QNAP** – kein Cloud-Speicher Dritter.
   Für normale Nutzer:innen ist davon **nichts** sichtbar.
 - **Lokale Speicherung** auf dem QNAP, Metadaten in einer einzelnen SQLite-Datei.
 
+## Module (optional pro Bereich)
+
+Beim Erstellen eines Bereichs (und später im Adminbereich) lässt sich auswählen,
+welche Module aktiv sind. **Fotos &amp; Videos** sind immer aktiviert und können
+nicht deaktiviert werden. Ein deaktiviertes Modul wird nur ausgeblendet –
+vorhandene Daten bleiben erhalten.
+
+- **Finanzen** – Gemeinsame Ausgaben erfassen, **gleichmässig** (unter allen
+  oder ausgewählten Personen) oder mit **manuellen Beträgen** aufteilen und mit
+  möglichst **wenigen Ausgleichszahlungen** abrechnen („Peter zahlt Alain
+  CHF 74.50“). Beträge werden **immer als ganzzahlige Rappen/Cents** gespeichert
+  – keine Fliesskomma-Rechnung. Pro Bereich eine feste Währung (CHF, EUR, USD,
+  GBP), keine automatische Umrechnung. Abrechnungen lassen sich abschliessen,
+  Zahlungen als bezahlt markieren und bei Bedarf wieder öffnen.
+- **Einkaufsliste** – Schnell etwas hinzufügen (Enter), optionale Menge, offene
+  Einträge zuerst, Erledigtes in einem zuklappbaren Bereich, mobil gut bedienbar.
+- **Notizen** – **Text-** und **Checklisten-Notizen**, anheftbar, mit
+  **Bildanhängen** (nutzen dieselbe Upload-/Vorschau-Logik wie die Galerie;
+  erscheinen aber **nicht** in der Fotogalerie). Autosave beim Tippen.
+- **Kalender** – Kompakte Monatsansicht mit Tagesagenda, ganztägige oder
+  zeitgebundene Termine, Ort und Beschreibung. Keine wiederkehrenden Termine,
+  keine externe Kalender-Integration.
+
+**Teilnehmer &amp; Identität:** Für Finanzen (und zur Zuordnung von Aktionen) gibt
+es pro Bereich stabile **Teilnehmer**. Beim ersten Öffnen des Finanzbereichs
+fragt die App „Wer bist du?“ – man wählt sich aus oder legt sich neu an. Die
+Auswahl wird nur **lokal im Browser** gespeichert. Das ist bewusst ein
+**Vertrauensmodell für Familie &amp; Freunde** – keine echte Benutzer-
+Authentifizierung.
+
+Alte geteilte Links, installierte PWAs und `/s/:slug` (öffnet weiterhin direkt
+die Fotogalerie) funktionieren unverändert.
+
 ## Technik
 
 - `frontend/`: React + Vite + TypeScript, gehostet auf **Netlify**.
 - `backend/`: Node.js + Express + TypeScript, läuft als **Docker-Container** auf dem QNAP.
   - Bildvarianten mit **sharp**, Video-Poster/Vorschau mit **ffmpeg**.
   - **SQLite** (`better-sqlite3`) als lokale Metadaten-DB – keine externe Datenbank nötig.
+  - Getrennte Router pro Modul (`participants`, `finance`, `shopping`, `notes`,
+    `calendar`); die Finanzberechnung liegt als reine, getestete Funktion in
+    `backend/src/lib/finance.ts` (`npm test`).
 - `docker-compose.yml` für das QNAP (inkl. optionalem Cloudflare-Tunnel &amp; Auto-Update).
 - GitHub Actions baut das Backend-Image automatisch nach GHCR.
 
@@ -121,6 +166,7 @@ cd backend
 cp .env.example .env        # JWT_SECRET und ADMIN_KEY eintragen (beliebige Werte für lokal)
 npm install
 DATA_DIR=./data npm run dev # API auf http://localhost:4000
+npm test                    # Unit-Tests der Finanzberechnung (optional)
 
 # Frontend (zweites Terminal)
 cd frontend
@@ -143,6 +189,7 @@ Folge den Anleitungen in `docs/` in dieser Reihenfolge:
 3. **[Netlify](docs/03-netlify.md)** – Frontend als `share.alae.app` hosten.
 4. **[Betrieb &amp; Troubleshooting](docs/04-betrieb.md)** – Updates, Backups, häufige Fehler.
 5. **[Uploads &amp; Videos – wie es funktioniert](docs/05-uploads-und-videos.md)** – Hintergrund zu grossen Dateien.
+6. **[Module: Finanzen, Einkauf, Notizen &amp; Kalender](docs/06-module.md)** – die optionalen Bereichs-Module, Migration und neue API.
 
 > Eine kompakte Checkliste „Was muss ich zusätzlich zum Code selbst erstellen?“
 > findest du am Ende von [docs/01-qnap.md](docs/01-qnap.md#checkliste).
