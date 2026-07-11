@@ -11,6 +11,7 @@ import { useParticipants, participantName } from '../../lib/useParticipants';
 import { formatDate, formatMoney } from '../../lib/format';
 import { colorForName, initialsOf } from '../../lib/avatar';
 import ParticipantGate from '../../components/ParticipantGate';
+import ParticipantPinManager from '../../components/ParticipantPinManager';
 import ExpenseForm from './ExpenseForm';
 import SettlementView from './SettlementView';
 
@@ -22,13 +23,23 @@ interface FinanceData {
 
 export default function FinancePage() {
   const { slug, token, space, name } = useSpaceSessionContext();
-  const { participants, current, currentId, loading: pLoading, select, create, reload: reloadParticipants } =
-    useParticipants(slug, token);
+  const {
+    participants,
+    current,
+    currentId,
+    loading: pLoading,
+    select,
+    create,
+    verifyPin,
+    setPin,
+    switchIdentity,
+  } = useParticipants(slug, token);
   const participantId = currentId ?? undefined;
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [settling, setSettling] = useState(false);
+  const [showPinManager, setShowPinManager] = useState(false);
 
   const load = useCallback(
     async (signal: AbortSignal): Promise<FinanceData> => {
@@ -105,6 +116,7 @@ export default function FinancePage() {
           prefillName={name}
           onSelect={select}
           onCreate={create}
+          onVerifyPin={verifyPin}
         />
       </div>
     );
@@ -120,12 +132,23 @@ export default function FinancePage() {
         <h1 className="space-title">Finanzen</h1>
         <span className="module-badge">{currency}</span>
         <div className="spacer" />
-        <span className="muted">
-          angemeldet als <strong>{current?.name}</strong>{' '}
-          <button className="link-btn" onClick={() => reloadParticipants()}>
-            ↻
+        <div className="finance-identity">
+          <span className="muted">
+            Aktiv als <strong>{current?.name}</strong>
+            {current?.hasPin && (
+              <span className="participant-choice-lock" title="Dein Name ist mit einem Code geschützt">
+                {' '}
+                🔒
+              </span>
+            )}
+          </span>
+          <button className="btn btn-sm btn-ghost" onClick={() => setShowPinManager(true)}>
+            {current?.hasPin ? 'Code ändern' : 'Code einrichten'}
           </button>
-        </span>
+          <button className="btn btn-sm btn-ghost" onClick={switchIdentity}>
+            Person wechseln
+          </button>
+        </div>
       </div>
 
       {loading && !data ? (
@@ -275,6 +298,14 @@ export default function FinancePage() {
             setShowForm(false);
             reload();
           }}
+        />
+      )}
+
+      {showPinManager && current && (
+        <ParticipantPinManager
+          participant={current}
+          onSetPin={(opts) => setPin(current.id, opts)}
+          onClose={() => setShowPinManager(false)}
         />
       )}
     </div>

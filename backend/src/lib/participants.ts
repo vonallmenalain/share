@@ -7,6 +7,9 @@ export function publicParticipant(row: ParticipantRow) {
     name: row.name,
     color: row.color,
     archived: row.archived === 1,
+    // Ob diese Identität mit einem Code geschützt ist – der Hash selbst wird
+    // nie an den Client geschickt.
+    hasPin: row.pin_hash != null,
     createdAt: row.created_at,
   };
 }

@@ -170,6 +170,8 @@ export interface Participant {
   name: string;
   color: string | null;
   archived: boolean;
+  /** Ob diese Identität mit einem Code (PIN) geschützt ist. */
+  hasPin: boolean;
   createdAt: string;
 }
 
