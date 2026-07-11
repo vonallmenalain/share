@@ -1,14 +1,17 @@
+import bcrypt from 'bcryptjs';
 import { Router } from 'express';
 import { getDb, ParticipantRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireSpace } from '../middleware/auth';
+import { resolveParticipant } from '../middleware/participant';
+import { pinLimiter } from '../middleware/rateLimit';
 import { newId } from '../lib/ids';
 import { publicParticipant } from '../lib/participants';
-import { optionalString, requireString } from '../lib/validation';
+import { optionalPin, optionalString, requireString } from '../lib/validation';
 
 const router = Router();
 
-router.use(requireSpace);
+router.use(requireSpace, resolveParticipant);
 
 /** Alle Teilnehmer eines Bereichs (standardmässig ohne archivierte). */
 router.get(
@@ -27,12 +30,20 @@ router.get(
   }),
 );
 
-/** Neuen Teilnehmer anlegen (Name pro Bereich eindeutig, Gross-/Kleinschreibung egal). */
+/**
+ * Neuen Teilnehmer anlegen (Name pro Bereich eindeutig, Gross-/Kleinschreibung
+ * egal). Optional kann direkt ein Schutz-Code (PIN, 4–8 Ziffern) vergeben
+ * werden – kein echtes Login, aber verhindert, dass später jemand anderes im
+ * selben Bereich einfach diesen Namen wählt und in dieser Person Namen etwas
+ * erfasst/bearbeitet.
+ */
 router.post(
   '/',
   asyncHandler(async (req, res) => {
     const name = requireString(req.body?.name, 'Name', { max: 60 });
     const color = optionalString(req.body?.color, 32);
+    const pin = optionalPin(req.body?.pin);
+    const pinHash = pin ? bcrypt.hashSync(pin, 10) : null;
     const db = getDb();
 
     const existing = db
@@ -41,7 +52,13 @@ router.post(
     if (existing) {
       // Einen archivierten Teilnehmer mit gleichem Namen wieder aktivieren,
       // statt einen Fehler zu werfen – so gehen keine Finanzdaten verloren.
+      // Ist die Identität mit einem Code geschützt, zählt das wie eine
+      // normale Auswahl (dafür ist der eigene Verify-Endpunkt da) – hier also
+      // nur reaktivieren, wenn (noch) kein Code gesetzt ist.
       if (existing.archived) {
+        if (existing.pin_hash) {
+          throw new ApiError(409, 'Diesen Namen gibt es bereits – bitte auswählen und Code eingeben.');
+        }
         db.prepare('UPDATE participants SET archived = 0, updated_at = ? WHERE id = ?').run(
           new Date().toISOString(),
           existing.id,
@@ -58,9 +75,9 @@ router.post(
     const now = new Date().toISOString();
     try {
       db.prepare(
-        `INSERT INTO participants (id, space_id, name, color, archived, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 0, ?, ?)`,
-      ).run(id, req.spaceId, name, color, now, now);
+        `INSERT INTO participants (id, space_id, name, color, archived, pin_hash, pin_updated_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+      ).run(id, req.spaceId, name, color, pinHash, pinHash ? now : null, now, now);
     } catch (err) {
       if (err instanceof Error && /UNIQUE/i.test(err.message)) {
         throw new ApiError(409, 'Diesen Namen gibt es in diesem Bereich bereits.');
@@ -69,6 +86,71 @@ router.post(
     }
     const row = db.prepare('SELECT * FROM participants WHERE id = ?').get(id) as ParticipantRow;
     res.status(201).json({ participant: publicParticipant(row) });
+  }),
+);
+
+/**
+ * Prüft den Schutz-Code einer Identität, BEVOR sie im Browser als "aktuelle
+ * Person" ausgewählt wird. Hat die Person keinen Code hinterlegt, gelingt die
+ * Auswahl immer (wie bisher – bewusstes Vertrauensmodell für Familie &
+ * Freunde, kein echtes Login).
+ */
+router.post(
+  '/:id/verify-pin',
+  pinLimiter,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT * FROM participants WHERE id = ? AND space_id = ?')
+      .get(req.params.id, req.spaceId) as ParticipantRow | undefined;
+    if (!row) throw new ApiError(404, 'Teilnehmer nicht gefunden.');
+    if (!row.pin_hash) return res.json({ ok: true });
+    const pin = String(req.body?.pin ?? '');
+    if (!pin || !bcrypt.compareSync(pin, row.pin_hash)) {
+      throw new ApiError(401, 'Falscher Code.');
+    }
+    res.json({ ok: true });
+  }),
+);
+
+/**
+ * Schutz-Code einer Identität setzen, ändern oder entfernen. Ist bereits ein
+ * Code hinterlegt, muss der aktuelle Code mitgeschickt werden (Beweis, dass
+ * man ihn kennt). Wird der allererste Code für eine Identität gesetzt, muss
+ * man sie im selben Zug im Browser gerade als "aktuelle Person" gewählt
+ * haben (X-Participant-Id) – so kann niemand fremden Namen vorsorglich einen
+ * Code aufzwingen und die eigentliche Person aussperren.
+ */
+router.patch(
+  '/:id/pin',
+  pinLimiter,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT * FROM participants WHERE id = ? AND space_id = ?')
+      .get(req.params.id, req.spaceId) as ParticipantRow | undefined;
+    if (!row) throw new ApiError(404, 'Teilnehmer nicht gefunden.');
+
+    if (row.pin_hash) {
+      const currentPin = String(req.body?.currentPin ?? '');
+      if (!currentPin || !bcrypt.compareSync(currentPin, row.pin_hash)) {
+        throw new ApiError(403, 'Aktueller Code stimmt nicht.');
+      }
+    } else if (req.participantId !== row.id) {
+      throw new ApiError(403, 'Bitte diese Person zuerst als „du" auswählen.');
+    }
+
+    const newPin = optionalPin(req.body?.pin);
+    const pinHash = newPin ? bcrypt.hashSync(newPin, 10) : null;
+    const now = new Date().toISOString();
+    db.prepare('UPDATE participants SET pin_hash = ?, pin_updated_at = ?, updated_at = ? WHERE id = ?').run(
+      pinHash,
+      pinHash ? now : null,
+      now,
+      row.id,
+    );
+    const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(row.id) as ParticipantRow;
+    res.json({ participant: publicParticipant(updated) });
   }),
 );
 

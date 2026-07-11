@@ -31,13 +31,27 @@ export default function NoteEditorPage() {
   const [uploading, setUploading] = useState(false);
   const dirtyRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Merkt sich, für welche Notiz-ID die Eingabefelder zuletzt vom Server
+  // befüllt wurden.
+  const loadedNoteIdRef = useRef<string | null>(null);
 
-  // Lokale Felder aus dem Server übernehmen, solange keine ungespeicherten
-  // Änderungen offen sind (kein stilles Überschreiben bei parallelen Edits).
+  // Titel/Text NUR beim ersten Laden einer Notiz aus dem Server übernehmen –
+  // danach ist das Eingabefeld die alleinige Quelle der Wahrheit, bis die
+  // Notiz gewechselt wird. Andernfalls würde jede automatische Zwischen-
+  // speicherung (z. B. nach einer kurzen Tippause) die Eingabe erneut
+  // überschreiben – etwa ein gerade erst gelöschter Titel oder ein frisch
+  // eingefügter Zeilenumbruch würden plötzlich wieder auftauchen bzw.
+  // verschwinden, während man noch am Schreiben ist.
   useEffect(() => {
-    if (note && !dirtyRef.current) {
+    if (note && loadedNoteIdRef.current !== note.id) {
       setTitle(note.title);
       setBody(note.body ?? '');
+      loadedNoteIdRef.current = note.id;
+      dirtyRef.current = false;
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
     }
   }, [note]);
 

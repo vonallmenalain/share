@@ -5,7 +5,7 @@ import { requireSpace } from '../middleware/auth';
 import { requireEnabledModule } from '../middleware/module';
 import { resolveParticipant } from '../middleware/participant';
 import { newId } from '../lib/ids';
-import { optionalString, requireString, toBool } from '../lib/validation';
+import { optionalText, requireString, toBool } from '../lib/validation';
 import { publicItem } from './items';
 
 const router = Router();
@@ -95,9 +95,13 @@ router.post(
   '/',
   asyncHandler(async (req, res) => {
     const spaceId = req.spaceId!;
-    const title = requireString(req.body?.title, 'Titel', { max: 200, min: 0 }) || 'Ohne Titel';
+    // Titel darf leer bleiben – ein leerer Titel wird nur in Übersichten als
+    // "Ohne Titel" angezeigt, aber NICHT als echter Wert gespeichert. So
+    // startet eine neue Notiz mit einem leeren Feld (Platzhalter), statt mit
+    // Text, den man erst wieder löschen müsste.
+    const title = requireString(req.body?.title, 'Titel', { max: 200, min: 0 });
     const noteType = req.body?.noteType === 'checklist' ? 'checklist' : 'text';
-    const body = optionalString(req.body?.body, 20000);
+    const body = optionalText(req.body?.body, 20000);
     const db = getDb();
     const id = newId();
     const now = new Date().toISOString();
@@ -123,11 +127,13 @@ router.patch(
   asyncHandler(async (req, res) => {
     const spaceId = req.spaceId!;
     const existing = getOwnNote(req.params.id, spaceId);
+    // Weder Titel noch Text werden beim Speichern "korrigiert" (z. B. leerer
+    // Titel → "Ohne Titel", oder ein Trimmen von Zeilenumbrüchen am Ende) –
+    // sonst überschreibt die Server-Antwort während des Tippens plötzlich
+    // das Eingabefeld. Genau das, was eingegeben wurde, wird gespeichert.
     const title =
-      req.body?.title === undefined
-        ? existing.title
-        : requireString(req.body.title, 'Titel', { max: 200, min: 0 }) || 'Ohne Titel';
-    const body = req.body?.body === undefined ? existing.body : optionalString(req.body.body, 20000);
+      req.body?.title === undefined ? existing.title : requireString(req.body.title, 'Titel', { max: 200, min: 0 });
+    const body = req.body?.body === undefined ? existing.body : optionalText(req.body.body, 20000);
     const pinned = req.body?.pinned === undefined ? existing.pinned : toBool(req.body.pinned) ? 1 : 0;
     getDb()
       .prepare('UPDATE notes SET title = ?, body = ?, pinned = ?, updated_at = ? WHERE id = ?')

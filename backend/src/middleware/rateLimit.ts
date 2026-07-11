@@ -25,3 +25,6 @@ export const accessLimiter = rateLimit({ ...common, limit: 15 });
 
 /** Für Admin-Endpunkte (Erstellen/Verwalten von Bereichen). */
 export const adminLimiter = rateLimit({ ...common, limit: 30 });
+
+/** Für das Prüfen/Ändern des optionalen Teilnehmer-Codes (PIN). */
+export const pinLimiter = rateLimit({ ...common, limit: 20 });

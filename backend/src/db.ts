@@ -209,13 +209,15 @@ function migrate(database: Database.Database) {
       );
 
       CREATE TABLE IF NOT EXISTS participants (
-        id         TEXT PRIMARY KEY,
-        space_id   TEXT NOT NULL,
-        name       TEXT NOT NULL,
-        color      TEXT,
-        archived   INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
+        id             TEXT PRIMARY KEY,
+        space_id       TEXT NOT NULL,
+        name           TEXT NOT NULL,
+        color          TEXT,
+        archived       INTEGER NOT NULL DEFAULT 0,
+        pin_hash       TEXT,
+        pin_updated_at TEXT,
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL,
         FOREIGN KEY (space_id) REFERENCES spaces(id) ON DELETE CASCADE
       );
       CREATE INDEX IF NOT EXISTS idx_participants_space ON participants(space_id, archived);
@@ -378,6 +380,14 @@ function migrate(database: Database.Database) {
   });
 
   migrateModules();
+
+  // Optionaler PIN-Schutz für Teilnehmer-Identitäten (nachträglich ergänzt).
+  // Kein echtes Login – aber verhindert, dass jemand anderes im selben
+  // Bereich einfach den Namen einer Person auswählt und in ihrem Namen etwas
+  // erfasst/bearbeitet, sofern diese Person einen Code hinterlegt hat.
+  const participantCols = columnsOf('participants');
+  addColumn('participants', participantCols, 'pin_hash', `pin_hash TEXT`);
+  addColumn('participants', participantCols, 'pin_updated_at', `pin_updated_at TEXT`);
 }
 
 export function getDb(): Database.Database {
@@ -481,6 +491,9 @@ export interface ParticipantRow {
   name: string;
   color: string | null;
   archived: number;
+  /** Bcrypt-Hash des optionalen Schutz-Codes (PIN), oder null = kein Schutz. */
+  pin_hash: string | null;
+  pin_updated_at: string | null;
   created_at: string;
   updated_at: string;
 }

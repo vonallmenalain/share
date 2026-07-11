@@ -27,11 +27,13 @@ export default function NotesPage() {
   const createNote = async (noteType: NoteType) => {
     setCreating(true);
     try {
+      // Bewusst ohne vorbelegten Titel: die Notiz startet mit einem leeren
+      // Feld (Platzhalter „Titel"), das man nicht erst löschen muss.
       const res = await api<{ note: Note }>('/api/notes', {
         method: 'POST',
         token,
         participantId,
-        body: { title: noteType === 'checklist' ? 'Neue Checkliste' : 'Neue Notiz', noteType },
+        body: { noteType },
       });
       navigate(`/s/${slug}/notes/${res.note.id}`);
     } catch (err) {
@@ -70,7 +72,7 @@ export default function NotesPage() {
             >
               <div className="note-card-head">
                 <span className="note-type-icon">{n.noteType === 'checklist' ? '☑' : '📄'}</span>
-                <strong className="note-card-title">{n.title}</strong>
+                <strong className="note-card-title">{n.title || 'Ohne Titel'}</strong>
                 {n.pinned && <span className="note-pin" title="Angeheftet">📌</span>}
               </div>
               {n.noteType === 'checklist' ? (

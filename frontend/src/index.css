@@ -1752,21 +1752,84 @@ button {
    Kalender. Nutzt die bestehenden Design-Tokens (Farben, Radius, Schatten).
    ========================================================================== */
 
-/* ---- Gemeinsame Navigation ---------------------------------------------- */
+/* ---- Hamburger-Button (öffnet/schliesst die Modul-Navigation) ----------- */
+.menu-btn {
+  display: inline-flex;
+}
+.menu-btn-bars {
+  position: relative;
+  width: 18px;
+  height: 13px;
+  display: inline-block;
+}
+.menu-btn-bars span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform 0.2s ease, opacity 0.2s ease, top 0.2s ease;
+}
+.menu-btn-bars span:nth-child(1) {
+  top: 0;
+}
+.menu-btn-bars span:nth-child(2) {
+  top: 5.5px;
+}
+.menu-btn-bars span:nth-child(3) {
+  top: 11px;
+}
+.menu-btn-bars.open span:nth-child(1) {
+  top: 5.5px;
+  transform: rotate(45deg);
+}
+.menu-btn-bars.open span:nth-child(2) {
+  opacity: 0;
+}
+.menu-btn-bars.open span:nth-child(3) {
+  top: 5.5px;
+  transform: rotate(-45deg);
+}
+
+/* ---- Gemeinsame Navigation ------------------------------------------------
+   Keine permanente Seitenleiste: Sie liegt ausserhalb des sichtbaren
+   Bereichs (translateX) und wird nur über den Hamburger-Button (siehe TopBar)
+   als Überlagerungsmenü eingeblendet. So bleibt auf grossen Bildschirmen der
+   volle Platz für Fotos/Finanzen/etc. erhalten. ---------------------------- */
+.module-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+.module-nav-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
 .module-nav {
   position: fixed;
   top: var(--topbar-h);
   left: 0;
   bottom: 0;
-  width: 208px;
+  width: 240px;
   background: var(--bg-elevated);
   border-right: 1px solid var(--line);
   padding: 14px 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  z-index: 20;
+  z-index: 45;
   overflow-y: auto;
+  transform: translateX(-100%);
+  transition: transform 0.24s ease;
+  box-shadow: 8px 0 28px rgba(15, 23, 42, 0.14);
+}
+.module-nav.module-nav-open {
+  transform: translateX(0);
 }
 .module-nav-item {
   display: flex;
@@ -1795,14 +1858,20 @@ button {
   text-align: center;
 }
 
-.space-shell.has-nav {
-  padding-left: 208px;
-}
-
 @media (max-width: 900px) {
-  /* Mobile / kleine Tablets: untere Navigationsleiste. */
+  /* Mobile / kleine Tablets: untere Navigationsleiste bleibt wie bisher
+     dauerhaft sichtbar (kein Drawer, kein Hamburger-Button nötig) – sie
+     nimmt kaum Platz weg und ist am Handy die erwartete Bedienung. */
+  .menu-btn {
+    display: none;
+  }
+  .module-nav-backdrop {
+    display: none;
+  }
   .module-nav {
+    position: fixed;
     top: auto;
+    left: 0;
     right: 0;
     bottom: 0;
     width: auto;
@@ -1813,6 +1882,7 @@ button {
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
     gap: 2px;
     box-shadow: 0 -2px 12px rgba(15, 23, 42, 0.06);
+    transform: none;
     transition: transform 0.28s ease;
     will-change: transform;
   }
@@ -1833,7 +1903,6 @@ button {
     width: auto;
   }
   .space-shell.has-nav {
-    padding-left: 0;
     padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px));
   }
 }
@@ -1961,6 +2030,16 @@ button {
 .participant-choice:hover {
   border-color: var(--brand);
   box-shadow: var(--shadow-sm);
+}
+.participant-choice-lock {
+  font-size: 12px;
+}
+
+.finance-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* ---- Finanzen ------------------------------------------------------------ */
