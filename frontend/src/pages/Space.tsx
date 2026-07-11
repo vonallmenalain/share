@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import TopBar from '../components/TopBar';
+import { useNavigate } from 'react-router-dom';
 import CollageGrid from '../components/CollageGrid';
 import Lightbox from '../components/Lightbox';
 import InstallButton from '../components/InstallButton';
 import ShareIcon from '../components/ShareIcon';
-import UserIcon from '../components/UserIcon';
 import Dropdown from '../components/Dropdown';
-import { setSpaceManifest, resetManifest } from '../lib/pwaManifest';
 import { shareItems } from '../lib/share';
-import { api, ApiError, fileUrl, Item, Space as SpaceType } from '../api/client';
+import { api, fileUrl, Item } from '../api/client';
 import { useUploads } from '../context/Uploads';
-import { nameStore, tokenStore, visitedSpacesStore, VisitedSpace } from '../lib/storage';
+import { useSpaceSessionContext } from '../context/SpaceSessionContext';
+import { nameStore } from '../lib/storage';
 import { colorForName, initialsOf } from '../lib/avatar';
 import { dayKey, formatDayHeading } from '../lib/format';
 
@@ -25,121 +23,54 @@ const VIEW_OPTIONS: { key: View; label: string }[] = [
 ];
 
 export default function Space() {
-  const { slug = '' } = useParams();
   const navigate = useNavigate();
   const uploads = useUploads();
+  const { slug, space, token, name, setName, chromeHidden, setChromeHidden } =
+    useSpaceSessionContext();
   const uploadHref = `/s/${slug}/upload`;
   const goUpload = useCallback(() => navigate(uploadHref), [navigate, uploadHref]);
-
-  const [phase, setPhase] = useState<'loading' | 'gate' | 'ready' | 'notfound'>('loading');
-  const [space, setSpace] = useState<SpaceType | null>(null);
-  const [token, setToken] = useState('');
-  const [name, setName] = useState(nameStore.get());
-  // Bereiche, deren Link diese:r Nutzer:in schon geöffnet hat (für den Wechsel
-  // über das Profil-Menü). Wird nur lokal im Browser gespeichert.
-  const [visitedSpaces, setVisitedSpaces] = useState<VisitedSpace[]>(() =>
-    visitedSpacesStore.all(),
-  );
 
   const [items, setItems] = useState<Item[]>([]);
   const [view, setView] = useState<View>('gallery');
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lightboxId, setLightboxId] = useState<string | null>(null);
-  // "Nach Person": standardmässig sind alle Gruppen eingeklappt, erst ein Klick
-  // auf den Namen zeigt die Fotos der jeweiligen Person an.
   const [expandedPeople, setExpandedPeople] = useState<Set<string>>(new Set());
-  // "Chronologisch": standardmässig sind alle Tage ausgeklappt. Ein Klick auf das
-  // Datum klappt die Fotos dieses Tages ein (und wieder aus).
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
-
-  const [gatePassword, setGatePassword] = useState('');
-  const [gateError, setGateError] = useState('');
-  const [gateBusy, setGateBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  // Läuft gerade ein Teilen-Vorgang (Dateien werden geladen / Teilen-Menü offen)?
   const [sharing, setSharing] = useState(false);
 
-  // "Vollbild"-Modus der Galerie: Beim Herunterscrollen verschwinden Nav-Leiste
-  // und Buttons, damit nur die Fotos sichtbar sind. Beim Hochscrollen (oder ganz
-  // oben) erscheinen sie wieder.
-  const [chromeHidden, setChromeHidden] = useState(false);
-
-  // ---- Laden / Zugang ------------------------------------------------------
-  const loadItems = useCallback(
-    async (tok: string) => {
-      try {
-        const res = await api<{ items: Item[] }>('/api/items', { token: tok });
-        setItems(res.items);
-      } catch {
-        /* ignore transient */
-      }
-    },
-    [],
-  );
+  // ---- Laden ---------------------------------------------------------------
+  const loadItems = useCallback(async (tok: string) => {
+    try {
+      const res = await api<{ items: Item[] }>('/api/items', { token: tok });
+      setItems(res.items);
+    } catch {
+      /* ignore transient */
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setPhase('loading');
-      const stored = tokenStore.get(slug);
-      if (stored) {
-        try {
-          const res = await api<{ space: SpaceType }>('/api/spaces/current', {
-            token: stored,
-            uploaderName: nameStore.get() || undefined,
-          });
-          if (cancelled) return;
-          setSpace(res.space);
-          setToken(stored);
-          setPhase('ready');
-          void loadItems(stored);
-          return;
-        } catch {
-          tokenStore.clear(slug);
-        }
-      }
-      try {
-        const res = await api<{ space: SpaceType }>(`/api/spaces/by-slug/${encodeURIComponent(slug)}`);
-        if (cancelled) return;
-        setSpace(res.space);
-        setPhase('gate');
-      } catch (err) {
-        if (cancelled) return;
-        setPhase(err instanceof ApiError && err.status === 404 ? 'notfound' : 'gate');
-      }
-    })();
+    if (token) void loadItems(token);
+  }, [token, loadItems]);
+
+  // Periodisch aktualisieren (um Uploads anderer Personen zu sehen) – nur wenn
+  // das Dokument sichtbar ist.
+  useEffect(() => {
+    if (!token) return;
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadItems(token);
+    }, 20000);
+    const onFocus = () => void loadItems(token);
+    window.addEventListener('focus', onFocus);
     return () => {
-      cancelled = true;
+      clearInterval(id);
+      window.removeEventListener('focus', onFocus);
     };
-  }, [slug, loadItems]);
+  }, [token, loadItems]);
 
-  // Periodisch aktualisieren (um Uploads anderer Personen zu sehen).
+  // Scroll-Richtung erkennen → TopBar & Navigation ein-/ausblenden.
   useEffect(() => {
-    if (phase !== 'ready' || !token) return;
-    const id = setInterval(() => void loadItems(token), 20000);
-    return () => clearInterval(id);
-  }, [phase, token, loadItems]);
-
-  // Dynamisches Manifest: solange dieser Bereich offen ist, zeigt die PWA-
-  // Installation auf genau diesen Bereich (statt auf die Startseite).
-  useEffect(() => {
-    if (!slug || !space) return;
-    setSpaceManifest(slug, space.name);
-    return () => resetManifest();
-  }, [slug, space]);
-
-  // Diesen (per Link geöffneten) Bereich lokal merken, damit man später über
-  // das Profil-Menü zwischen den selbst besuchten Bereichen wechseln kann.
-  useEffect(() => {
-    if (!slug || !space) return;
-    visitedSpacesStore.record(slug, space.name);
-    setVisitedSpaces(visitedSpacesStore.all());
-  }, [slug, space]);
-
-  // Scroll-Richtung erkennen → Nav-Leiste & Buttons ein-/ausblenden.
-  useEffect(() => {
-    if (phase !== 'ready') return;
     let lastY = window.scrollY;
     let ticking = false;
     const apply = () => {
@@ -158,13 +89,17 @@ export default function Space() {
       }
     };
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [phase]);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      setChromeHidden(false);
+    };
+  }, [setChromeHidden]);
 
-  // Eigene Uploads sofort in die Galerie übernehmen.
+  // Eigene Uploads sofort in die Galerie übernehmen (nur Galerie-Medien).
   useEffect(() => {
     if (!token) return;
     return uploads.subscribe((item) => {
+      if (item.scope && item.scope !== 'gallery') return;
       setItems((prev) => {
         const idx = prev.findIndex((p) => p.id === item.id);
         if (idx >= 0) {
@@ -177,31 +112,6 @@ export default function Space() {
     });
   }, [token, uploads]);
 
-  const enter = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setGateError('');
-    setGateBusy(true);
-    try {
-      const res = await api<{ space: SpaceType; accessToken: string }>(
-        `/api/spaces/by-slug/${encodeURIComponent(slug)}/access`,
-        {
-          method: 'POST',
-          body: { password: gatePassword || undefined, name: name.trim() || undefined },
-        },
-      );
-      tokenStore.set(slug, res.accessToken);
-      if (name.trim()) nameStore.set(name.trim());
-      setSpace(res.space);
-      setToken(res.accessToken);
-      setPhase('ready');
-      void loadItems(res.accessToken);
-    } catch (err) {
-      setGateError(err instanceof Error ? err.message : 'Zugang fehlgeschlagen.');
-    } finally {
-      setGateBusy(false);
-    }
-  };
-
   // ---- Upload --------------------------------------------------------------
   const startUpload = useCallback(
     (files: File[]) => {
@@ -211,11 +121,10 @@ export default function Space() {
         uploaderName = (window.prompt('Dein Name (wird bei deinen Medien angezeigt):') || '').trim();
         if (!uploaderName) return;
         setName(uploaderName);
-        nameStore.set(uploaderName);
       }
       uploads.addFiles(files, { spaceId: space.id, token, uploaderName });
     },
-    [space, token, name, uploads],
+    [space, token, name, uploads, setName],
   );
 
   const onDrop = (e: React.DragEvent) => {
@@ -223,16 +132,11 @@ export default function Space() {
     setDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       startUpload(Array.from(e.dataTransfer.files));
-      // Auf die eigenständige Upload-Seite wechseln, wo der Fortschritt
-      // (Balken, Geschwindigkeit, verbleibende MB) sofort sichtbar ist.
       navigate(uploadHref);
     }
   };
 
   // ---- Auswahl / Download / Löschen ---------------------------------------
-  // Klickt man erneut auf das (einzige) ausgewählte Foto, wird es abgewählt –
-  // ist dann nichts mehr ausgewählt, verlassen wir den Mehrfachauswahl-Modus
-  // automatisch wieder.
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -246,10 +150,6 @@ export default function Space() {
     });
   };
 
-  // Wählt eine ganze Gruppe (z. B. alle Fotos einer Person oder eines Tages)
-  // auf einmal aus. Ein erneuter Klick hebt die Auswahl dieser Gruppe wieder
-  // auf. So lassen sich z. B. schnell alle Fotos von zwei Uploadern oder
-  // mehreren Tagen kombinieren, ohne jede Kachel einzeln antippen zu müssen.
   const isGroupSelected = useCallback(
     (arr: Item[]) => arr.length > 0 && arr.every((i) => selected.has(i.id)),
     [selected],
@@ -287,8 +187,6 @@ export default function Space() {
     });
   };
 
-  // Langes Drücken auf einer Kachel (mobil) → Auswahl-Modus starten und das
-  // betreffende Medium direkt markieren.
   const longPressSelect = useCallback((id: string) => {
     setSelectMode(true);
     setSelected((prev) => {
@@ -316,9 +214,6 @@ export default function Space() {
     a.remove();
   };
 
-  // Teilt die übergebenen Medien über das native Teilen-Menü des Geräts. Klappt
-  // das nicht (z. B. Desktop-Browser ohne Datei-Teilen), wird als Ausweichlösung
-  // heruntergeladen (einzeln als Original, mehrere als ZIP).
   const shareItemsWithFallback = async (list: Item[]) => {
     if (list.length === 0 || sharing) return;
     setSharing(true);
@@ -344,42 +239,6 @@ export default function Space() {
     await shareItemsWithFallback(list);
   };
 
-  // Teilt den Link zu diesem Bereich (Einladung), damit weitere Personen
-  // beitreten und Fotos ansehen/hochladen können. Bevorzugt das native
-  // Teilen-Menü; sonst wird der Link in die Zwischenablage kopiert.
-  const shareSpaceLink = async () => {
-    const url = `${window.location.origin}/s/${slug}`;
-    const title = space?.name || 'Fotos teilen';
-    if (typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ title, text: `Schau dir „${title}" an:`, url });
-        return;
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        /* sonst: Fallback unten */
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      alert('Link kopiert – jetzt kannst du ihn teilen.');
-    } catch {
-      window.prompt('Link zum Teilen:', url);
-    }
-  };
-
-  const changeName = () => {
-    const n = (window.prompt('Dein Name:', name) || '').trim();
-    if (n) {
-      setName(n);
-      nameStore.set(n);
-    }
-  };
-
-  // (Weiches) Löschen darf jede Person mit Zugriff auf den Link – unabhängig
-  // davon, wer das Medium hochgeladen hat. Das Medium verschwindet sofort aus
-  // der Galerie; die Datei bleibt auf dem QNAP und ist nur noch für den Admin
-  // (unter „Gelöscht“) sichtbar, der sie wiederherstellen oder endgültig
-  // löschen kann.
   const softDeleteItems = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0) return;
@@ -431,8 +290,6 @@ export default function Space() {
     setLightboxId(null);
   };
 
-  // Favorit setzen/entfernen. Darf jede Person im Bereich. Der neue Zustand wird
-  // sofort optimistisch angezeigt und bei einem Fehler wieder zurückgesetzt.
   const toggleFavorite = useCallback(
     async (item: Item) => {
       const next = !item.favorite;
@@ -445,22 +302,18 @@ export default function Space() {
           uploaderName: name || undefined,
         });
       } catch {
-        setItems((prev) =>
-          prev.map((i) => (i.id === item.id ? { ...i, favorite: !next } : i)),
-        );
+        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, favorite: !next } : i)));
       }
     },
     [token, name],
   );
 
-  // Aktualisiertes Item (z. B. nach Anpassen des Vorschaubilds) übernehmen.
   const handleThumbUpdated = useCallback((updated: Item) => {
     setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
   }, []);
 
   // ---- Abgeleitete Daten ---------------------------------------------------
   const readyItems = useMemo(() => items, [items]);
-
   const favoriteItems = useMemo(() => readyItems.filter((i) => i.favorite), [readyItems]);
 
   const peopleGroups = useMemo(() => {
@@ -488,7 +341,6 @@ export default function Space() {
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [readyItems]);
 
-  // Flache Liste in aktueller Anzeige-Reihenfolge (für die Lightbox-Navigation).
   const flatOrder = useMemo(() => {
     if (view === 'favorites') return favoriteItems;
     if (view === 'people') return peopleGroups.flatMap(([, arr]) => arr);
@@ -499,174 +351,19 @@ export default function Space() {
 
   const lightboxIndex = lightboxId ? flatOrder.findIndex((i) => i.id === lightboxId) : -1;
 
-  // Wählt (oder entwählt) alle Medien der aktuell sichtbaren Ansicht auf einmal.
   const allVisibleSelected = flatOrder.length > 0 && flatOrder.every((i) => selected.has(i.id));
   const toggleSelectAllVisible = () => {
     setSelected(allVisibleSelected ? new Set() : new Set(flatOrder.map((i) => i.id)));
   };
 
-  // Laufende Uploads dieses Bereichs (für die Hintergrund-Anzeige, wenn der
-  // Hochlade-Bereich geschlossen ist).
   const spaceTasks = space ? uploads.tasks.filter((t) => t.spaceId === space.id) : [];
   const activeUploads = spaceTasks.filter((t) =>
     ['queued', 'uploading', 'processing'].includes(t.status),
   ).length;
 
-  // Andere, bereits besuchte Bereiche (ohne den aktuellen) – für den Wechsel
-  // über das Profil-Menü.
-  const otherSpaces = useMemo(
-    () => visitedSpaces.filter((s) => s.slug !== slug),
-    [visitedSpaces, slug],
-  );
-
-  const switchSpace = useCallback(
-    (targetSlug: string) => {
-      if (targetSlug !== slug) navigate(`/s/${targetSlug}`);
-    },
-    [navigate, slug],
-  );
-
   // ---- Render --------------------------------------------------------------
-  if (phase === 'loading') {
-    return (
-      <div className="center-page">
-        <span className="spinner lg" />
-      </div>
-    );
-  }
-
-  if (phase === 'notfound') {
-    return (
-      <div className="center-page">
-        <div className="panel">
-          <h1>Bereich nicht gefunden</h1>
-          <p className="sub">Der Link ist ungültig oder der Bereich wurde gelöscht.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (phase === 'gate') {
-    return (
-      <div className="center-page">
-        <div className="panel">
-          <span className="hero-badge">{space?.name ?? 'Bereich'}</span>
-          <h1>Bereich betreten</h1>
-          <p className="sub">
-            Gib deinen Namen ein, damit alle sehen, von wem die Fotos stammen
-            {space?.hasPassword ? ' – und das Passwort des Bereichs.' : '.'}
-          </p>
-          {gateError && <div className="error-box">{gateError}</div>}
-          <form onSubmit={enter}>
-            <div className="field">
-              <label className="label">Dein Name</label>
-              <input
-                className="input"
-                placeholder="z. B. Anna"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-              />
-            </div>
-            {space?.hasPassword && (
-              <div className="field">
-                <label className="label">Passwort</label>
-                <input
-                  className="input"
-                  type="password"
-                  value={gatePassword}
-                  onChange={(e) => setGatePassword(e.target.value)}
-                />
-              </div>
-            )}
-            <button className="btn btn-primary" style={{ width: '100%' }} disabled={gateBusy}>
-              {gateBusy ? 'Öffne…' : 'Bereich betreten'}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
-      <TopBar hidden={chromeHidden} brandTo={`/s/${slug}`}>
-        <div className="topbar-actions">
-          <Dropdown
-            align="end"
-            ariaLabel="Name & Konto"
-            title={name || 'Gast'}
-            triggerClassName="btn icon-btn"
-            label={<UserIcon size={19} />}
-          >
-            {(close) => (
-              <>
-                <div className="dropdown-label">Aktueller Bereich</div>
-                <div className="dropdown-current-space">
-                  <span className="dropdown-space-dot" aria-hidden="true" />
-                  <strong>{space?.name || slug}</strong>
-                </div>
-                {otherSpaces.length > 0 && (
-                  <>
-                    <div className="dropdown-label">Bereich wechseln</div>
-                    {otherSpaces.map((s) => (
-                      <button
-                        key={s.slug}
-                        type="button"
-                        className="dropdown-item"
-                        onClick={() => {
-                          close();
-                          switchSpace(s.slug);
-                        }}
-                        title={`Zu „${s.name}" wechseln`}
-                      >
-                        <span
-                          className="avatar sm"
-                          style={{ background: colorForName(s.name) }}
-                        >
-                          {initialsOf(s.name)}
-                        </span>
-                        <span className="dropdown-item-text">{s.name}</span>
-                      </button>
-                    ))}
-                  </>
-                )}
-                <div className="dropdown-divider" />
-                <div className="dropdown-label">Name Uploader</div>
-                <div className="dropdown-name">
-                  <span className="avatar sm" style={{ background: colorForName(name || 'Gast') }}>
-                    {initialsOf(name || 'Gast')}
-                  </span>
-                  <strong>{name || 'Gast'}</strong>
-                </div>
-                <div className="dropdown-divider" />
-                <button
-                  type="button"
-                  className="dropdown-item"
-                  onClick={() => {
-                    close();
-                    changeName();
-                  }}
-                >
-                  Name ändern
-                </button>
-                <button
-                  type="button"
-                  className="dropdown-item"
-                  onClick={() => {
-                    close();
-                    void shareSpaceLink();
-                  }}
-                >
-                  <ShareIcon size={16} />
-                  Galerie teilen
-                </button>
-              </>
-            )}
-          </Dropdown>
-        </div>
-      </TopBar>
-
       <div
         className="container"
         style={{ paddingBottom: 80 }}
@@ -777,15 +474,13 @@ export default function Space() {
               </button>
             </>
           ) : (
-            <>
-              <button
-                className="btn btn-sm select-enter-btn"
-                disabled={readyItems.length === 0}
-                onClick={() => setSelectMode(true)}
-              >
-                Auswählen
-              </button>
-            </>
+            <button
+              className="btn btn-sm select-enter-btn"
+              disabled={readyItems.length === 0}
+              onClick={() => setSelectMode(true)}
+            >
+              Auswählen
+            </button>
           )}
         </div>
 

@@ -1,19 +1,46 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
-import { api, Space } from '../api/client';
+import { api, ModuleKey, Space } from '../api/client';
 import { adminKeyStore } from '../lib/storage';
+
+interface ModuleOption {
+  key: Exclude<ModuleKey, 'photos'>;
+  label: string;
+  icon: string;
+  desc: string;
+}
+
+const OPTIONAL_MODULES: ModuleOption[] = [
+  { key: 'finance', label: 'Finanzen', icon: '💰', desc: 'Ausgaben erfassen, aufteilen und fair abrechnen.' },
+  { key: 'shopping', label: 'Einkaufsliste', icon: '🛒', desc: 'Gemeinsame Liste – abhaken, was erledigt ist.' },
+  { key: 'notes', label: 'Notizen', icon: '📝', desc: 'Text- und Checklisten-Notizen, auch mit Bildern.' },
+  { key: 'calendar', label: 'Kalender', icon: '📅', desc: 'Termine der Gruppe an einem Ort.' },
+];
+
+const CURRENCIES = ['CHF', 'EUR', 'USD', 'GBP'];
 
 export default function CreateSpace() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [adminKey, setAdminKey] = useState(adminKeyStore.get());
+  const [modules, setModules] = useState<Set<ModuleKey>>(new Set());
+  const [currency, setCurrency] = useState('CHF');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState<Space | null>(null);
   const [copied, setCopied] = useState(false);
 
   const shareUrl = created ? `${window.location.origin}/s/${created.slug}` : '';
+
+  const toggleModule = (key: ModuleKey) => {
+    setModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +50,12 @@ export default function CreateSpace() {
       const res = await api<{ space: Space }>('/api/spaces', {
         method: 'POST',
         adminKey,
-        body: { name, password: password || undefined },
+        body: {
+          name,
+          password: password || undefined,
+          modules: Array.from(modules),
+          financeCurrency: modules.has('finance') ? currency : undefined,
+        },
       });
       adminKeyStore.set(adminKey);
       setCreated(res.space);
@@ -85,6 +117,64 @@ export default function CreateSpace() {
                     Mit Passwort kommen nur Personen rein, die es zusätzlich zum Link kennen.
                   </p>
                 </div>
+
+                <div className="field">
+                  <label className="label">Module</label>
+                  <p className="hint" style={{ marginTop: 0, marginBottom: 10 }}>
+                    Fotos &amp; Videos sind immer dabei. Aktiviere, was ihr sonst noch braucht –
+                    das lässt sich später jederzeit ändern.
+                  </p>
+                  <div className="module-picker">
+                    <div className="module-option locked">
+                      <span className="module-option-icon">🖼️</span>
+                      <div className="module-option-text">
+                        <strong>Fotos &amp; Videos</strong>
+                        <span className="hint">Immer aktiviert.</span>
+                      </div>
+                      <span className="module-option-check">✓</span>
+                    </div>
+                    {OPTIONAL_MODULES.map((m) => {
+                      const active = modules.has(m.key);
+                      return (
+                        <button
+                          type="button"
+                          key={m.key}
+                          className={`module-option${active ? ' active' : ''}`}
+                          onClick={() => toggleModule(m.key)}
+                          aria-pressed={active}
+                        >
+                          <span className="module-option-icon">{m.icon}</span>
+                          <div className="module-option-text">
+                            <strong>{m.label}</strong>
+                            <span className="hint">{m.desc}</span>
+                          </div>
+                          <span className="module-option-check">{active ? '✓' : ''}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {modules.has('finance') && (
+                  <div className="field">
+                    <label className="label">Abrechnungswährung</label>
+                    <select
+                      className="input"
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                    >
+                      {CURRENCIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="hint" style={{ marginTop: 6 }}>
+                      Pro Bereich wird nur eine Währung verwendet – keine automatische Umrechnung.
+                    </p>
+                  </div>
+                )}
+
                 <div className="field">
                   <label className="label">Admin-Schlüssel</label>
                   <input
