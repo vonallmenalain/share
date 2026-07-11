@@ -13,6 +13,11 @@ import spacesRoutes from './routes/spaces';
 import itemsRoutes from './routes/items';
 import uploadsRoutes from './routes/uploads';
 import filesRoutes from './routes/files';
+import participantsRoutes from './routes/participants';
+import financeRoutes from './routes/finance';
+import shoppingRoutes from './routes/shopping';
+import notesRoutes from './routes/notes';
+import calendarRoutes from './routes/calendar';
 
 function buildApp() {
   const app = express();
@@ -44,6 +49,11 @@ function buildApp() {
   app.use('/api/spaces', express.json({ limit: '1mb' }), spacesRoutes);
   app.use('/api/items', express.json({ limit: '1mb' }), itemsRoutes);
   app.use('/api/uploads', express.json({ limit: '1mb' }), uploadsRoutes);
+  app.use('/api/participants', express.json({ limit: '1mb' }), participantsRoutes);
+  app.use('/api/finance', express.json({ limit: '1mb' }), financeRoutes);
+  app.use('/api/shopping', express.json({ limit: '1mb' }), shoppingRoutes);
+  app.use('/api/notes', express.json({ limit: '1mb' }), notesRoutes);
+  app.use('/api/calendar', express.json({ limit: '1mb' }), calendarRoutes);
   app.use('/files', filesRoutes);
 
   app.use(notFound);

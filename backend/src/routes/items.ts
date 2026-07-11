@@ -38,6 +38,8 @@ export function publicItem(item: ItemRow) {
     thumbVersion: item.thumb_version ?? 0,
     thumbW: item.thumb_w,
     thumbH: item.thumb_h,
+    scope: item.scope ?? 'gallery',
+    noteId: item.note_id ?? null,
     createdAt: item.created_at,
     hasPreview,
     hasPoster,
@@ -72,7 +74,8 @@ router.get(
     const db = getDb();
     const rows = db
       .prepare(
-        `SELECT * FROM items WHERE space_id = ? AND state = 'active' ORDER BY position ASC, created_at ASC`,
+        `SELECT * FROM items WHERE space_id = ? AND state = 'active' AND scope = 'gallery'
+         ORDER BY position ASC, created_at ASC`,
       )
       .all(req.spaceId) as ItemRow[];
     res.json({ items: rows.map(publicItem) });

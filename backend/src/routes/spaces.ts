@@ -9,6 +9,9 @@ import { signAccessToken } from '../lib/auth';
 import { deleteAllVariants, deleteSpaceStorage } from '../lib/media';
 import { logAccess } from '../lib/access';
 import { publicItem } from './items';
+import { getEnabledModules, isModuleKey, setEnabledModules } from '../lib/modules';
+import { normalizeCurrency } from '../lib/validation';
+import { ModuleKey } from '../db';
 
 const router = Router();
 
@@ -42,13 +45,23 @@ function publicAccessLog(row: AccessLogRow) {
   };
 }
 
+function financeCurrencyOf(spaceId: string): string | null {
+  const row = getDb()
+    .prepare('SELECT currency FROM space_finance_settings WHERE space_id = ?')
+    .get(spaceId) as { currency: string } | undefined;
+  return row?.currency ?? null;
+}
+
 function publicSpace(space: SpaceRow) {
+  const modules = getEnabledModules(space.id);
   return {
     id: space.id,
     slug: space.slug,
     name: space.name,
     hasPassword: !!space.password_hash,
     createdAt: space.created_at,
+    modules,
+    financeCurrency: modules.includes('finance') ? financeCurrencyOf(space.id) : null,
   };
 }
 
@@ -62,6 +75,16 @@ router.post(
     const password = String(req.body?.password ?? '');
     if (!name) throw new ApiError(400, 'Bitte einen Namen für den Bereich angeben.');
     if (name.length > 80) throw new ApiError(400, 'Der Name ist zu lang.');
+
+    // Modulauswahl: photos ist immer aktiv. Weitere Module optional.
+    const requestedModules = Array.isArray(req.body?.modules)
+      ? (req.body.modules.filter(isModuleKey) as ModuleKey[])
+      : [];
+    const modules: ModuleKey[] = Array.from(new Set<ModuleKey>(['photos', ...requestedModules]));
+    // Abrechnungswährung nur relevant, wenn Finanzen aktiviert sind.
+    const currency = modules.includes('finance')
+      ? normalizeCurrency(req.body?.financeCurrency, 'CHF')
+      : 'CHF';
 
     const db = getDb();
     // Slug aus Name + kurzem Zufallsteil, garantiert eindeutig.
@@ -79,9 +102,22 @@ router.post(
     const id = newId();
     const passwordHash = password ? bcrypt.hashSync(password, 10) : null;
     const createdAt = new Date().toISOString();
-    db.prepare(
-      'INSERT INTO spaces (id, slug, name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(id, slug, name, passwordHash, createdAt);
+
+    // Space, Module und (falls nötig) Finanzkonfiguration in einer Transaktion.
+    const create = db.transaction(() => {
+      db.prepare(
+        'INSERT INTO spaces (id, slug, name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)',
+      ).run(id, slug, name, passwordHash, createdAt);
+      setEnabledModules(id, modules, db);
+      if (modules.includes('finance')) {
+        db.prepare(
+          `INSERT INTO space_finance_settings (space_id, currency, created_at, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(space_id) DO UPDATE SET currency = excluded.currency, updated_at = excluded.updated_at`,
+        ).run(id, currency, createdAt, createdAt);
+      }
+    });
+    create();
 
     const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(id) as SpaceRow;
     res.status(201).json({ space: publicSpace(space), accessToken: signAccessToken(id) });
@@ -100,7 +136,7 @@ router.get(
       `SELECT
          COALESCE(SUM(state = 'active'), 0)   AS active,
          COALESCE(SUM(state = 'deleted'), 0)  AS deleted
-       FROM items WHERE space_id = ?`,
+       FROM items WHERE space_id = ? AND scope = 'gallery'`,
     );
     const accessBy = db.prepare(
       `SELECT COUNT(*) AS total, MAX(at) AS last FROM access_logs WHERE space_id = ?`,
@@ -154,7 +190,10 @@ router.get(
       | undefined;
     if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
     const rows = db
-      .prepare('SELECT * FROM items WHERE space_id = ? ORDER BY position ASC, created_at ASC')
+      .prepare(
+        `SELECT * FROM items WHERE space_id = ? AND scope = 'gallery'
+         ORDER BY position ASC, created_at ASC`,
+      )
       .all(space.id) as ItemRow[];
     res.json({
       space: publicSpace(space),
@@ -276,6 +315,81 @@ router.delete(
     db.prepare('DELETE FROM items WHERE id = ?').run(item.id);
     await deleteAllVariants(item.storage_key, item.ext);
     res.json({ ok: true });
+  }),
+);
+
+/** Admin: aktivierte Module eines Bereichs (inkl. Finanzwährung) abrufen. */
+router.get(
+  '/:id/modules',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.params.id) as
+      | SpaceRow
+      | undefined;
+    if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
+    res.json({
+      space: publicSpace(space),
+      modules: getEnabledModules(space.id),
+      financeCurrency: financeCurrencyOf(space.id),
+    });
+  }),
+);
+
+/**
+ * Admin: aktivierte Module eines Bereichs ändern. Das Fotomodul kann nicht
+ * deaktiviert werden. Deaktivierte Module blenden nur aus – Daten bleiben
+ * erhalten. Optional lässt sich die Abrechnungswährung setzen (nur solange
+ * noch keine Ausgaben existieren, um Inkonsistenzen zu vermeiden).
+ */
+router.patch(
+  '/:id/modules',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.params.id) as
+      | SpaceRow
+      | undefined;
+    if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
+
+    const requested = Array.isArray(req.body?.modules)
+      ? (req.body.modules.filter(isModuleKey) as ModuleKey[])
+      : [];
+    const modules: ModuleKey[] = Array.from(new Set<ModuleKey>(['photos', ...requested]));
+
+    const wantCurrency =
+      req.body?.financeCurrency !== undefined
+        ? normalizeCurrency(req.body.financeCurrency, 'CHF')
+        : null;
+
+    const now = new Date().toISOString();
+    const tx = db.transaction(() => {
+      setEnabledModules(space.id, modules, db);
+      if (modules.includes('finance')) {
+        const existing = financeCurrencyOf(space.id);
+        const hasExpenses = !!db
+          .prepare('SELECT 1 FROM finance_expenses WHERE space_id = ? LIMIT 1')
+          .get(space.id);
+        // Währung nur setzen, wenn noch keine existiert oder (auf Wunsch) solange
+        // keine Ausgaben erfasst wurden.
+        const currency = wantCurrency && !hasExpenses ? wantCurrency : existing ?? wantCurrency ?? 'CHF';
+        db.prepare(
+          `INSERT INTO space_finance_settings (space_id, currency, created_at, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(space_id) DO UPDATE SET currency = excluded.currency, updated_at = excluded.updated_at`,
+        ).run(space.id, currency, now, now);
+      }
+    });
+    tx();
+
+    const updated = db.prepare('SELECT * FROM spaces WHERE id = ?').get(space.id) as SpaceRow;
+    res.json({
+      space: publicSpace(updated),
+      modules: getEnabledModules(space.id),
+      financeCurrency: financeCurrencyOf(space.id),
+    });
   }),
 );
 
