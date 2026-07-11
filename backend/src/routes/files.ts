@@ -144,7 +144,9 @@ router.get(
         .all(req.spaceId, ...ids) as ItemRow[];
     } else {
       items = db
-        .prepare('SELECT * FROM items WHERE space_id = ? ORDER BY position ASC')
+        .prepare(
+          `SELECT * FROM items WHERE space_id = ? AND scope = 'gallery' ORDER BY position ASC`,
+        )
         .all(req.spaceId) as ItemRow[];
     }
     if (items.length === 0) throw new ApiError(404, 'Keine Medien zum Herunterladen.');

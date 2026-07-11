@@ -10,6 +10,8 @@ import { newId } from '../lib/ids';
 import { variantPath } from '../lib/media';
 import { detectKind, enqueueProcessing, extFromFilename } from '../services/process';
 import { publicItem } from './items';
+import { isModuleEnabled } from '../lib/modules';
+import { NoteRow } from '../db';
 
 const router = Router();
 
@@ -66,6 +68,10 @@ router.post(
     const mime = String(req.body?.mime ?? 'application/octet-stream');
     const size = Number(req.body?.size);
     const uploaderName = String(req.body?.uploaderName ?? '').trim() || 'Unbekannt';
+    // Kontext des Uploads: 'gallery' (Fotogalerie, Standard) oder 'note'
+    // (Bildanhang einer Notiz). Notiz-Uploads erscheinen NICHT in der Galerie.
+    const scope = req.body?.scope === 'note' ? 'note' : 'gallery';
+    const noteId = scope === 'note' ? String(req.body?.noteId ?? '').trim() : '';
 
     if (!filename) throw new ApiError(400, 'Dateiname fehlt.');
     if (!Number.isFinite(size) || size <= 0) throw new ApiError(400, 'Ungültige Dateigrösse.');
@@ -75,15 +81,31 @@ router.post(
     }
 
     const db = getDb();
+
+    // Notiz-Uploads verlangen ein aktiviertes Notiz-Modul und eine gültige,
+    // zum Bereich gehörende Notiz-ID (Schutz gegen fremde IDs).
+    if (scope === 'note') {
+      if (!isModuleEnabled(req.spaceId!, 'notes')) {
+        throw new ApiError(403, 'Das Notiz-Modul ist in diesem Bereich nicht aktiviert.');
+      }
+      const note = db
+        .prepare('SELECT * FROM notes WHERE id = ? AND space_id = ? AND deleted_at IS NULL')
+        .get(noteId, req.spaceId) as NoteRow | undefined;
+      if (!note) throw new ApiError(404, 'Notiz nicht gefunden.');
+      if (!/^image\//i.test(mime)) {
+        // Für die erste Version sind nur Bildanhänge vorgesehen.
+        throw new ApiError(400, 'Für Notizen sind nur Bilder als Anhang möglich.');
+      }
+    }
     const chunkSize = config.upload.chunkSizeBytes;
     const totalChunks = Math.max(1, Math.ceil(size / chunkSize));
 
     // Bestehende offene Session mit gleichen Eckdaten wiederverwenden (Resume).
     const existing = db
       .prepare(
-        `SELECT * FROM uploads WHERE space_id = ? AND filename = ? AND size_bytes = ? AND status = 'open' ORDER BY created_at DESC LIMIT 1`,
+        `SELECT * FROM uploads WHERE space_id = ? AND filename = ? AND size_bytes = ? AND scope = ? AND status = 'open' ORDER BY created_at DESC LIMIT 1`,
       )
-      .get(req.spaceId, filename, size) as UploadRow | undefined;
+      .get(req.spaceId, filename, size, scope) as UploadRow | undefined;
 
     let upload: UploadRow;
     if (existing && existing.chunk_size === chunkSize) {
@@ -92,9 +114,22 @@ router.post(
       const id = newId();
       const now = new Date().toISOString();
       db.prepare(
-        `INSERT INTO uploads (id, space_id, uploader_name, filename, mime, size_bytes, chunk_size, total_chunks, received, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'open', ?, ?)`,
-      ).run(id, req.spaceId, uploaderName, filename, mime, size, chunkSize, totalChunks, now, now);
+        `INSERT INTO uploads (id, space_id, uploader_name, filename, mime, size_bytes, chunk_size, total_chunks, received, status, scope, note_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'open', ?, ?, ?, ?)`,
+      ).run(
+        id,
+        req.spaceId,
+        uploaderName,
+        filename,
+        mime,
+        size,
+        chunkSize,
+        totalChunks,
+        scope,
+        noteId || null,
+        now,
+        now,
+      );
       await fsp.mkdir(uploadDir(id), { recursive: true });
       upload = db.prepare('SELECT * FROM uploads WHERE id = ?').get(id) as UploadRow;
     }
@@ -234,30 +269,51 @@ router.post(
 
     const db = getDb();
     const now = new Date().toISOString();
+    const scope = upload.scope === 'note' ? 'note' : 'gallery';
     const maxPos = db
-      .prepare('SELECT COALESCE(MAX(position), -1) AS m FROM items WHERE space_id = ?')
-      .get(upload.space_id) as { m: number };
-    db.prepare(
-      `INSERT INTO items (id, space_id, kind, status, uploader_name, original_filename, ext, mime, storage_key, size_bytes, position, created_at)
-       VALUES (?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      itemId,
-      upload.space_id,
-      kind,
-      upload.uploader_name,
-      upload.filename,
-      ext,
-      upload.mime,
-      storageKey,
-      upload.size_bytes,
-      maxPos.m + 1,
-      now,
-    );
-    db.prepare(`UPDATE uploads SET status='completed', item_id=?, updated_at=? WHERE id=?`).run(
-      itemId,
-      now,
-      upload.id,
-    );
+      .prepare(`SELECT COALESCE(MAX(position), -1) AS m FROM items WHERE space_id = ? AND scope = ?`)
+      .get(upload.space_id, scope) as { m: number };
+    const insertItemAndLink = db.transaction(() => {
+      db.prepare(
+        `INSERT INTO items (id, space_id, kind, status, uploader_name, original_filename, ext, mime, storage_key, size_bytes, position, scope, note_id, created_at)
+         VALUES (?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        itemId,
+        upload.space_id,
+        kind,
+        upload.uploader_name,
+        upload.filename,
+        ext,
+        upload.mime,
+        storageKey,
+        upload.size_bytes,
+        maxPos.m + 1,
+        scope,
+        upload.note_id ?? null,
+        now,
+      );
+      // Notiz-Anhang verknüpfen (falls die Notiz noch existiert).
+      if (scope === 'note' && upload.note_id) {
+        const note = db
+          .prepare(`SELECT id FROM notes WHERE id = ? AND space_id = ? AND deleted_at IS NULL`)
+          .get(upload.note_id, upload.space_id) as { id: string } | undefined;
+        if (note) {
+          const maxAtt = db
+            .prepare('SELECT COALESCE(MAX(position), -1) AS m FROM note_attachments WHERE note_id = ?')
+            .get(upload.note_id) as { m: number };
+          db.prepare(
+            'INSERT OR IGNORE INTO note_attachments (note_id, item_id, position) VALUES (?, ?, ?)',
+          ).run(upload.note_id, itemId, maxAtt.m + 1);
+          db.prepare('UPDATE notes SET updated_at = ? WHERE id = ?').run(now, upload.note_id);
+        }
+      }
+      db.prepare(`UPDATE uploads SET status='completed', item_id=?, updated_at=? WHERE id=?`).run(
+        itemId,
+        now,
+        upload.id,
+      );
+    });
+    insertItemAndLink();
 
     // Temporäre Chunks aufräumen.
     fsp.rm(uploadDir(upload.id), { recursive: true, force: true }).catch(() => undefined);

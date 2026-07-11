@@ -37,6 +37,39 @@ export function formatDuration(seconds: number | null): string {
   return `${m}:${rem.toString().padStart(2, '0')}`;
 }
 
+/**
+ * Formatiert einen Geldbetrag, der als ganzzahlige Rappen/Cents vorliegt, für
+ * die Anzeige. Es wird KEINE Geldrechnung mit Fliesskommazahlen durchgeführt –
+ * lediglich die Anzeige teilt durch 100. Nutzt `Intl.NumberFormat`.
+ */
+export function formatMoney(cents: number, currency = 'CHF'): string {
+  const value = cents / 100;
+  try {
+    return new Intl.NumberFormat('de-CH', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(2)}`;
+  }
+}
+
+/** Wandelt eine Benutzereingabe (z. B. "74.50") in ganzzahlige Rappen um. */
+export function parseMoneyToCents(input: string): number | null {
+  const cleaned = input.replace(/[^0-9.,-]/g, '').replace(/,/g, '.');
+  if (!cleaned) return null;
+  const value = Number(cleaned);
+  if (!Number.isFinite(value)) return null;
+  // Auf Rappen runden und als Ganzzahl zurückgeben.
+  return Math.round(value * 100);
+}
+
+/** Formatiert Rappen ohne Währungssymbol für Eingabefelder (z. B. "74.50"). */
+export function centsToInput(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
 export function formatDate(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);

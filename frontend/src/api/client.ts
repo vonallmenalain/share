@@ -20,6 +20,8 @@ interface RequestOptions {
   adminKey?: string;
   /** Anzeigename der aktuellen Person (X-Uploader-Name) – z. B. für Löschrechte. */
   uploaderName?: string;
+  /** Stabile Teilnehmer-ID für Modulaktionen (X-Participant-Id). */
+  participantId?: string;
   signal?: AbortSignal;
 }
 
@@ -28,6 +30,7 @@ export async function api<T = unknown>(path: string, opts: RequestOptions = {}):
   if (opts.token) headers['Authorization'] = `Bearer ${opts.token}`;
   if (opts.adminKey) headers['X-Admin-Key'] = opts.adminKey;
   if (opts.uploaderName) headers['X-Uploader-Name'] = encodeURIComponent(opts.uploaderName);
+  if (opts.participantId) headers['X-Participant-Id'] = opts.participantId;
 
   const init: RequestInit = {
     method: opts.method ?? 'GET',
@@ -85,12 +88,18 @@ export async function uploadThumb(
 
 // ---- Typen -----------------------------------------------------------------
 
+export type ModuleKey = 'photos' | 'finance' | 'shopping' | 'notes' | 'calendar';
+
 export interface Space {
   id: string;
   slug: string;
   name: string;
   hasPassword: boolean;
   createdAt: string;
+  /** Aktivierte Module dieses Bereichs (photos ist immer dabei). */
+  modules: ModuleKey[];
+  /** Abrechnungswährung, falls das Finanzmodul aktiv ist. */
+  financeCurrency?: string | null;
   itemCount?: number;
   deletedCount?: number;
   accessCount?: number;
@@ -147,7 +156,150 @@ export interface Item {
   /** Masse des (ggf. angepassten) Thumbnails – bestimmen das Kachel-Seitenverhältnis. */
   thumbW: number | null;
   thumbH: number | null;
+  scope?: 'gallery' | 'note';
+  noteId?: string | null;
   createdAt: string;
   hasPreview: boolean;
   hasPoster: boolean;
+}
+
+// ---- Teilnehmer ------------------------------------------------------------
+
+export interface Participant {
+  id: string;
+  name: string;
+  color: string | null;
+  archived: boolean;
+  createdAt: string;
+}
+
+// ---- Finanzen --------------------------------------------------------------
+
+export type SplitMode = 'equal' | 'manual';
+export type ExpenseStatus = 'open' | 'settled';
+
+export interface ExpenseSplit {
+  participantId: string;
+  shareCents: number;
+}
+
+export interface Expense {
+  id: string;
+  title: string;
+  amountCents: number;
+  currency: string;
+  paidByParticipantId: string;
+  expenseDate: string;
+  notes: string | null;
+  splitMode: SplitMode;
+  status: ExpenseStatus;
+  createdByParticipantId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  splits: ExpenseSplit[];
+}
+
+export interface Balance {
+  participantId: string;
+  balanceCents: number;
+}
+
+export interface Transfer {
+  fromParticipantId: string;
+  toParticipantId: string;
+  amountCents: number;
+}
+
+export interface FinanceSummary {
+  currency: string;
+  participants: Participant[];
+  openExpenseCount: number;
+  totalOpenCents: number;
+  totalAllTimeCents: number;
+  balances: Balance[];
+  transfers: Transfer[];
+}
+
+export interface SettlementTransfer {
+  id: string;
+  fromParticipantId: string;
+  toParticipantId: string;
+  amountCents: number;
+  paidAt: string | null;
+}
+
+export interface Settlement {
+  id: string;
+  currency: string;
+  createdByParticipantId: string | null;
+  createdAt: string;
+  reopenedAt: string | null;
+  expenseIds: string[];
+  transfers: SettlementTransfer[];
+}
+
+export interface SettlementPreview {
+  currency: string;
+  balances: Balance[];
+  transfers: Transfer[];
+  expenseCount: number;
+  totalCents: number;
+}
+
+// ---- Einkaufsliste ---------------------------------------------------------
+
+export interface ShoppingItem {
+  id: string;
+  text: string;
+  quantity: string | null;
+  checked: boolean;
+  checkedByParticipantId: string | null;
+  checkedAt: string | null;
+  position: number;
+  createdByParticipantId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---- Notizen ---------------------------------------------------------------
+
+export type NoteType = 'text' | 'checklist';
+
+export interface NoteChecklistItem {
+  id: string;
+  text: string;
+  checked: boolean;
+  position: number;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  noteType: NoteType;
+  body: string | null;
+  pinned: boolean;
+  createdByParticipantId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  checklistCount: number;
+  checklistCheckedCount: number;
+  attachmentCount: number;
+  attachments: Item[];
+  checklist?: NoteChecklistItem[];
+}
+
+// ---- Kalender --------------------------------------------------------------
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  startAt: string | null;
+  endAt: string | null;
+  allDay: boolean;
+  allDayDate: string | null;
+  location: string | null;
+  description: string | null;
+  createdByParticipantId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import TopBar from '../components/TopBar';
+import { Link } from 'react-router-dom';
 import { useUploads } from '../context/Uploads';
-import { useSpaceSession } from '../lib/useSpaceSession';
+import { useSpaceSessionContext } from '../context/SpaceSessionContext';
 import { nameStore } from '../lib/storage';
 import { formatBytes, formatEta, formatSpeed } from '../lib/format';
 
@@ -34,9 +33,8 @@ const isUploaded = (s: string) => s === 'processing' || s === 'done';
  * und einer geschätzten Restdauer.
  */
 export default function UploadPage() {
-  const { slug = '' } = useParams();
   const uploads = useUploads();
-  const { phase, space, token, name, setName, gate, enter } = useSpaceSession(slug);
+  const { slug, space, token, name, setName } = useSpaceSessionContext();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -124,78 +122,8 @@ export default function UploadPage() {
   const eta = speed > 0 && activeCount > 0 ? remainingBytes / speed : null;
 
   // ---- Render --------------------------------------------------------------
-  if (phase === 'loading') {
-    return (
-      <div className="center-page">
-        <span className="spinner lg" />
-      </div>
-    );
-  }
-
-  if (phase === 'notfound') {
-    return (
-      <div className="center-page">
-        <div className="panel">
-          <h1>Bereich nicht gefunden</h1>
-          <p className="sub">Der Link ist ungültig oder der Bereich wurde gelöscht.</p>
-          <Link className="btn" to="/">
-            Zur Startseite
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (phase === 'gate') {
-    return (
-      <div className="center-page">
-        <div className="panel">
-          <span className="hero-badge">{space?.name ?? 'Bereich'}</span>
-          <h1>Bereich betreten</h1>
-          <p className="sub">
-            Gib deinen Namen ein, damit alle sehen, von wem die Fotos stammen
-            {space?.hasPassword ? ' – und das Passwort des Bereichs.' : '.'}
-          </p>
-          {gate.error && <div className="error-box">{gate.error}</div>}
-          <form onSubmit={enter}>
-            <div className="field">
-              <label className="label">Dein Name</label>
-              <input
-                className="input"
-                placeholder="z. B. Anna"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-              />
-            </div>
-            {space?.hasPassword && (
-              <div className="field">
-                <label className="label">Passwort</label>
-                <input
-                  className="input"
-                  type="password"
-                  value={gate.password}
-                  onChange={(e) => gate.setPassword(e.target.value)}
-                />
-              </div>
-            )}
-            <button className="btn btn-primary" style={{ width: '100%' }} disabled={gate.busy}>
-              {gate.busy ? 'Öffne…' : 'Bereich betreten'}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
-      <TopBar brandTo={`/s/${slug}`}>
-        <Link className="btn btn-sm" to={`/s/${slug}`}>
-          ← Zur Galerie
-        </Link>
-      </TopBar>
-
       <div
         className="container upload-page"
         onDragOver={(e) => {

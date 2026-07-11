@@ -78,6 +78,7 @@ export async function createSession(
   file: File,
   uploaderName: string,
   signal?: AbortSignal,
+  extra?: { scope?: 'gallery' | 'note'; noteId?: string },
 ): Promise<CreateSessionResult> {
   return withRetry(
     async () => {
@@ -91,6 +92,8 @@ export async function createSession(
             mime: file.type || 'application/octet-stream',
             size: file.size,
             uploaderName,
+            ...(extra?.scope ? { scope: extra.scope } : {}),
+            ...(extra?.noteId ? { noteId: extra.noteId } : {}),
           }),
           signal,
         });
@@ -196,6 +199,39 @@ export function putChunk(
     },
     { attempts: MAX_CHUNK_ATTEMPTS, signal },
   );
+}
+
+/**
+ * Lädt ein Bild als Notiz-Anhang hoch (voller, fortsetzbarer Chunk-Upload über
+ * dieselbe Logik wie die Galerie). Gibt das (ggf. noch in Verarbeitung
+ * befindliche) Item zurück.
+ */
+export async function uploadNoteImage(
+  token: string,
+  noteId: string,
+  file: File,
+  uploaderName: string,
+  onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<Item> {
+  const session = await createSession(token, file, uploaderName, signal, {
+    scope: 'note',
+    noteId,
+  });
+  const { chunkSize, totalChunks } = session;
+  const received = new Set(session.received);
+  let done = received.size;
+  for (let index = 0; index < totalChunks; index++) {
+    if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+    if (received.has(index)) continue;
+    const start = index * chunkSize;
+    const end = Math.min(start + chunkSize, file.size);
+    const blob = file.slice(start, end);
+    await putChunk(token, session.uploadId, index, blob, () => undefined, signal);
+    done++;
+    onProgress?.(done / totalChunks);
+  }
+  return completeUpload(token, session.uploadId, signal);
 }
 
 export async function completeUpload(

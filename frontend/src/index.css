@@ -1746,3 +1746,798 @@ button {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
+/* ==========================================================================
+   Module (Ferien-/Gruppen-App): Navigation, Finanzen, Einkauf, Notizen,
+   Kalender. Nutzt die bestehenden Design-Tokens (Farben, Radius, Schatten).
+   ========================================================================== */
+
+/* ---- Gemeinsame Navigation ---------------------------------------------- */
+.module-nav {
+  position: fixed;
+  top: var(--topbar-h);
+  left: 0;
+  bottom: 0;
+  width: 208px;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--line);
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 20;
+  overflow-y: auto;
+}
+.module-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.module-nav-item:hover {
+  background: var(--bg);
+  text-decoration: none;
+}
+.module-nav-item.active {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.module-nav-icon {
+  font-size: 20px;
+  line-height: 1;
+  width: 24px;
+  text-align: center;
+}
+
+.space-shell.has-nav {
+  padding-left: 208px;
+}
+
+@media (max-width: 900px) {
+  /* Mobile / kleine Tablets: untere Navigationsleiste. */
+  .module-nav {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    flex-direction: row;
+    justify-content: space-around;
+    border-right: none;
+    border-top: 1px solid var(--line);
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    gap: 2px;
+    box-shadow: 0 -2px 12px rgba(15, 23, 42, 0.06);
+    transition: transform 0.28s ease;
+    will-change: transform;
+  }
+  .module-nav.module-nav-hidden {
+    transform: translateY(120%);
+  }
+  .module-nav-item {
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    padding: 6px 4px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .module-nav-icon {
+    font-size: 21px;
+    width: auto;
+  }
+  .space-shell.has-nav {
+    padding-left: 0;
+    padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ---- Gemeinsame Modul-Seiten -------------------------------------------- */
+.module-page {
+  padding-top: 18px;
+  padding-bottom: 40px;
+}
+.module-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.module-head .space-title {
+  margin: 0;
+}
+.module-badge,
+.module-page .module-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 700;
+  font-size: 13px;
+}
+.empty-hint {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--ink-soft);
+  background: var(--bg-elevated);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+.module-page .card {
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+/* ---- Modal --------------------------------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  z-index: 60;
+}
+.modal {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-elevated);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  margin: auto;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.modal-head h2 {
+  margin: 0;
+  font-size: 19px;
+}
+.modal-body {
+  padding: 18px 20px;
+}
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+.form-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.checkbox-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+/* ---- Teilnehmer-Gate ("Wer bist du?") ----------------------------------- */
+.participant-gate {
+  display: flex;
+  justify-content: center;
+  padding-top: 12px;
+}
+.participant-gate .panel {
+  max-width: 480px;
+}
+.participant-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 18px;
+}
+.participant-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  font-weight: 600;
+  cursor: pointer;
+}
+.participant-choice:hover {
+  border-color: var(--brand);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- Finanzen ------------------------------------------------------------ */
+.finance-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.stat-sub {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.finance-actions {
+  margin-bottom: 16px;
+}
+.balance-list,
+.expense-list,
+.transfer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.balance-row,
+.expense-row,
+.transfer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.balance-row:last-child,
+.expense-row:last-child,
+.transfer-row:last-child {
+  border-bottom: none;
+}
+.balance-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.balance-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.balance-amount.positive {
+  color: var(--ok);
+}
+.balance-amount.negative {
+  color: var(--danger);
+}
+.expense-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.expense-main .muted {
+  font-size: 12.5px;
+}
+.expense-notes {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.expense-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.expense-amount {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.expense-row.settled {
+  opacity: 0.7;
+}
+.transfer-amount {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.transfer-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.transfer-row.paid {
+  opacity: 0.55;
+}
+.transfer-row.paid .transfer-check span {
+  text-decoration: line-through;
+}
+.settlement-batch {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.settlement-batch:first-of-type {
+  border-top: none;
+}
+.settlement-batch.reopened {
+  opacity: 0.6;
+}
+.settlement-batch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.split-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.split-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.split-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.split-row.off {
+  opacity: 0.5;
+}
+.split-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.split-input {
+  width: 110px;
+  text-align: right;
+}
+.split-sum {
+  margin-top: 10px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.split-sum.ok {
+  color: var(--ok);
+}
+.split-sum.bad {
+  color: var(--danger);
+}
+
+/* ---- Einkaufsliste ------------------------------------------------------- */
+.shopping-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.shopping-add .input {
+  flex: 1;
+}
+.shopping-qty {
+  flex: 0 0 110px;
+  max-width: 110px;
+}
+.shopping-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+.shopping-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  min-height: 52px;
+}
+.shopping-row:last-child {
+  border-bottom: none;
+}
+.shopping-row.editing {
+  flex-wrap: wrap;
+}
+.shopping-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.shopping-check input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.shopping-text {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shopping-row.checked .shopping-text {
+  text-decoration: line-through;
+  color: var(--ink-faint);
+}
+.shopping-qty-badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.shopping-meta {
+  font-size: 12px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.shopping-actions {
+  display: inline-flex;
+  gap: 2px;
+}
+.shopping-done-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+/* ---- Notizen ------------------------------------------------------------- */
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.note-card {
+  text-align: left;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
+}
+.note-card:hover {
+  box-shadow: var(--shadow-md);
+}
+.note-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.note-card-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-card-preview {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  max-height: 60px;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.note-card-thumbs {
+  display: flex;
+  gap: 6px;
+}
+.note-card-thumbs img {
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.note-card-foot {
+  font-size: 12px;
+}
+.note-title-input {
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+.note-body-input {
+  resize: vertical;
+  min-height: 200px;
+  line-height: 1.5;
+}
+.note-save-state {
+  font-size: 13px;
+}
+.note-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.checklist-row input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.checklist-text-input {
+  flex: 1;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 15px;
+  color: var(--ink);
+}
+.checklist-text-input:focus {
+  outline: none;
+  border-color: var(--line);
+  background: var(--bg-elevated);
+}
+.checklist-row.checked .checklist-text-input {
+  text-decoration: line-through;
+  color: var(--ink-faint);
+}
+.checklist-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.checklist-add .input {
+  flex: 1;
+}
+.note-attachments {
+  margin-top: 22px;
+}
+.note-attachments-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.note-attachments-head h3 {
+  margin: 0;
+}
+.note-attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+.note-attachment {
+  position: relative;
+}
+.note-attachment img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.note-attachment-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(15, 23, 42, 0.6);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* ---- Kalender ------------------------------------------------------------ */
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  font-size: 17px;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.calendar-weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-faint);
+  padding-bottom: 6px;
+}
+.calendar-cell {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  background: var(--bg);
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.calendar-cell.empty {
+  background: transparent;
+  cursor: default;
+}
+.calendar-cell:hover:not(.empty) {
+  border-color: var(--brand);
+}
+.calendar-cell.today {
+  color: var(--brand);
+  font-weight: 800;
+}
+.calendar-cell.selected {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+.calendar-dot {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--brand);
+}
+.agenda-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.agenda-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.agenda-row:last-child {
+  border-bottom: none;
+}
+.agenda-time {
+  flex: 0 0 84px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--brand);
+}
+.agenda-main {
+  flex: 1;
+  min-width: 0;
+}
+.agenda-desc {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.agenda-actions {
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* ---- Modulauswahl (Bereich erstellen) ----------------------------------- */
+.module-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.module-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.module-option:hover {
+  border-color: var(--brand);
+}
+.module-option.active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+.module-option.locked {
+  cursor: default;
+  opacity: 0.85;
+}
+.module-option-icon {
+  font-size: 22px;
+}
+.module-option-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.module-option-text .hint {
+  font-size: 12.5px;
+}
+.module-option-check {
+  width: 22px;
+  text-align: center;
+  color: var(--brand);
+  font-weight: 800;
+}
+
+/* ---- Admin: Modul-Panel -------------------------------------------------- */
+.admin-module-panel {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+.admin-module-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+.admin-module-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag-toggle {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+.tag-toggle.active {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: var(--brand);
+}

@@ -8,6 +8,7 @@ const NAME_KEY = 'share.uploaderName';
 const ADMIN_KEY = 'share.adminKey';
 const PENDING_PREFIX = 'share.pending.'; // + spaceId
 const VISITED_KEY = 'share.visitedSpaces';
+const PARTICIPANT_PREFIX = 'share.participant.'; // + slug
 
 function safeGet(key: string): string | null {
   try {
@@ -46,6 +47,14 @@ export const adminKeyStore = {
   get: () => safeGet(ADMIN_KEY) ?? '',
   set: (key: string) => safeSet(ADMIN_KEY, key),
   clear: () => safeRemove(ADMIN_KEY),
+};
+
+// Gewählte Teilnehmer-Identität pro Bereich (für die Modulaktionen). Nur lokal
+// im Browser – bewusstes Vertrauensmodell für Familie & Freunde.
+export const participantStore = {
+  get: (slug: string) => safeGet(PARTICIPANT_PREFIX + slug),
+  set: (slug: string, id: string) => safeSet(PARTICIPANT_PREFIX + slug, id),
+  clear: (slug: string) => safeRemove(PARTICIPANT_PREFIX + slug),
 };
 
 export interface PendingUpload {

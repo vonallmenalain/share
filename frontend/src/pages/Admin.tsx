@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import ShareIcon from '../components/ShareIcon';
-import { AccessLog, AccessLogsResponse, api, fileUrl, Item, ItemState, Space } from '../api/client';
+import {
+  AccessLog,
+  AccessLogsResponse,
+  api,
+  fileUrl,
+  Item,
+  ItemState,
+  ModuleKey,
+  Space,
+} from '../api/client';
 import { shareItems } from '../lib/share';
 import { adminKeyStore } from '../lib/storage';
 import {
@@ -321,6 +330,8 @@ export default function Admin() {
                         </button>
                       </div>
 
+                      <AdminModulePanel spaceId={s.id} adminKey={adminKey} />
+
                       <AccessLogPanel spaceId={s.id} adminKey={adminKey} />
 
                       {!detail || detail.status === 'loading' ? (
@@ -349,6 +360,131 @@ export default function Admin() {
         )}
       </div>
     </>
+  );
+}
+
+const MODULE_META: { key: Exclude<ModuleKey, 'photos'>; label: string; icon: string }[] = [
+  { key: 'finance', label: 'Finanzen', icon: '💰' },
+  { key: 'shopping', label: 'Einkaufsliste', icon: '🛒' },
+  { key: 'notes', label: 'Notizen', icon: '📝' },
+  { key: 'calendar', label: 'Kalender', icon: '📅' },
+];
+
+const MODULE_CURRENCIES = ['CHF', 'EUR', 'USD', 'GBP'];
+
+/** Adminbereich: aktivierte Module eines Bereichs anzeigen und ändern. */
+function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: string }) {
+  const [modules, setModules] = useState<Set<ModuleKey>>(new Set(['photos']));
+  const [currency, setCurrency] = useState('CHF');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await api<{ modules: ModuleKey[]; financeCurrency: string | null }>(
+          `/api/spaces/${spaceId}/modules`,
+          { adminKey },
+        );
+        if (cancelled) return;
+        setModules(new Set(res.modules));
+        if (res.financeCurrency) setCurrency(res.financeCurrency);
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [spaceId, adminKey]);
+
+  const toggle = (key: ModuleKey) => {
+    if (key === 'photos') return;
+    setModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setMsg('');
+    try {
+      const res = await api<{ modules: ModuleKey[]; financeCurrency: string | null }>(
+        `/api/spaces/${spaceId}/modules`,
+        {
+          method: 'PATCH',
+          adminKey,
+          body: {
+            modules: Array.from(modules),
+            financeCurrency: modules.has('finance') ? currency : undefined,
+          },
+        },
+      );
+      setModules(new Set(res.modules));
+      if (res.financeCurrency) setCurrency(res.financeCurrency);
+      setMsg('Gespeichert ✓');
+      setTimeout(() => setMsg(''), 1800);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="admin-module-panel">
+        <span className="spinner" /> <span className="muted">Lade Module…</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-module-panel">
+      <div className="admin-module-title">Module</div>
+      <div className="admin-module-row">
+        <span className="tag">🖼️ Fotos &amp; Videos (immer aktiv)</span>
+        {MODULE_META.map((m) => (
+          <button
+            key={m.key}
+            type="button"
+            className={`tag tag-toggle${modules.has(m.key) ? ' active' : ''}`}
+            onClick={() => toggle(m.key)}
+            aria-pressed={modules.has(m.key)}
+          >
+            {m.icon} {m.label} {modules.has(m.key) ? '✓' : ''}
+          </button>
+        ))}
+      </div>
+      {modules.has('finance') && (
+        <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 8 }}>
+          <span className="muted" style={{ fontSize: 13 }}>
+            Währung:
+          </span>
+          <select className="input" style={{ width: 'auto' }} value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            {MODULE_CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 10 }}>
+        <button className="btn btn-sm btn-primary" disabled={saving} onClick={save}>
+          {saving ? 'Speichere…' : 'Module speichern'}
+        </button>
+        {msg && <span className="muted" style={{ fontSize: 13 }}>{msg}</span>}
+      </div>
+    </div>
   );
 }
 
