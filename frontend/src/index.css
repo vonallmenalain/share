@@ -1991,6 +1991,29 @@ button {
   gap: 12px;
   flex-wrap: wrap;
 }
+.duration-chips {
+  margin-top: -6px;
+}
+.chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.duration-chip {
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  color: var(--ink-soft);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.duration-chip:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
 .checkbox-line {
   display: flex;
   align-items: center;
@@ -2244,12 +2267,39 @@ button {
   padding: 12px 14px;
   border-bottom: 1px solid var(--line);
   min-height: 52px;
+  background: var(--bg-elevated);
 }
 .shopping-row:last-child {
   border-bottom: none;
 }
 .shopping-row.editing {
   flex-wrap: wrap;
+}
+.shopping-row.dragging {
+  box-shadow: var(--shadow-md);
+  border-radius: 10px;
+  position: relative;
+}
+.shopping-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 40px;
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  cursor: grab;
+  touch-action: none;
+  border-radius: 8px;
+  margin: -8px 0;
+  margin-right: -4px;
+}
+.shopping-drag-handle:hover {
+  color: var(--ink-soft);
+  background: var(--bg);
+}
+.shopping-drag-handle:active {
+  cursor: grabbing;
 }
 .shopping-check {
   display: flex;
@@ -2281,14 +2331,39 @@ button {
   font-size: 12px;
   color: var(--ink-soft);
 }
+.shopping-row-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
 .shopping-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   font-size: 12px;
   color: var(--ink-faint);
   white-space: nowrap;
+  line-height: 1.3;
+}
+.shopping-meta-line {
+  display: inline-flex;
+  gap: 6px;
+}
+.shopping-meta-name {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.shopping-meta-checked {
+  color: var(--ok);
 }
 .shopping-actions {
   display: inline-flex;
   gap: 2px;
+}
+.shopping-sort-switch {
+  flex-shrink: 0;
 }
 .shopping-done-toggle {
   display: inline-flex;
@@ -2301,6 +2376,26 @@ button {
   font-size: 14px;
   cursor: pointer;
   padding: 8px 0;
+}
+@media (max-width: 640px) {
+  .shopping-row {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+  .shopping-row-side {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+  .shopping-row:has(.shopping-drag-handle) .shopping-row-side {
+    padding-left: 30px;
+  }
+  .shopping-meta {
+    align-items: flex-start;
+  }
+  .shopping-meta-line {
+    flex-wrap: wrap;
+  }
 }
 
 /* ---- Notizen ------------------------------------------------------------- */
@@ -2452,18 +2547,29 @@ button {
 }
 
 /* ---- Kalender ------------------------------------------------------------ */
-.calendar-nav {
+.calendar-view-switch {
+  flex-shrink: 0;
+}
+.calendar-toolbar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
-  margin-bottom: 12px;
-  font-size: 17px;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.calendar-toolbar-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.calendar-toolbar-label {
+  font-size: 16px;
+  font-weight: 700;
 }
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: 6px;
 }
 .calendar-weekday {
   text-align: center;
@@ -2474,33 +2580,82 @@ button {
 }
 .calendar-cell {
   position: relative;
-  aspect-ratio: 1;
-  border: 1px solid transparent;
+  min-height: 88px;
+  border: 1px solid var(--line);
   background: var(--bg);
   border-radius: 10px;
   cursor: pointer;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 6px;
-  font-size: 14px;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 6px 5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink);
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  overflow: hidden;
 }
-.calendar-cell.empty {
+.calendar-grid.view-week .calendar-cell {
+  min-height: 150px;
+}
+.calendar-cell.dimmed {
+  color: var(--ink-faint);
   background: transparent;
-  cursor: default;
 }
-.calendar-cell:hover:not(.empty) {
+.calendar-cell.dimmed .cal-chip {
+  opacity: 0.6;
+}
+.calendar-cell:hover {
   border-color: var(--brand);
 }
-.calendar-cell.today {
+.calendar-cell.today .calendar-cell-daynum {
   color: var(--brand);
-  font-weight: 800;
+}
+.calendar-cell.today {
+  border-color: var(--brand-soft);
 }
 .calendar-cell.selected {
   background: var(--brand-soft);
   border-color: var(--brand);
+}
+.calendar-cell-daynum {
+  flex-shrink: 0;
+  margin-bottom: 4px;
+}
+.calendar-cell-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.cal-chip {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-grid.view-week .cal-chip {
+  font-size: 12px;
+  padding: 3px 7px;
+}
+.cal-chip.allday {
+  background: #eef2ff;
+  color: #4338ca;
+  font-weight: 600;
+}
+.cal-chip-more {
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-weight: 600;
+  padding: 0 6px;
 }
 .calendar-dot {
   position: absolute;
@@ -2511,6 +2666,42 @@ button {
   height: 6px;
   border-radius: 999px;
   background: var(--brand);
+}
+.calendar-daystrip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.calendar-strip-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border: 1px solid transparent;
+  background: var(--bg);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.calendar-strip-cell:hover {
+  border-color: var(--brand);
+}
+.calendar-strip-weekday {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+.calendar-strip-daynum {
+  font-size: 16px;
+  font-weight: 700;
+}
+.calendar-strip-cell.today .calendar-strip-daynum {
+  color: var(--brand);
+}
+.calendar-strip-cell.selected {
+  background: var(--brand-soft);
+  border-color: var(--brand);
 }
 .agenda-list {
   list-style: none;
@@ -2544,6 +2735,37 @@ button {
 .agenda-actions {
   display: inline-flex;
   gap: 2px;
+}
+@media (max-width: 640px) {
+  .calendar-toolbar {
+    justify-content: space-between;
+  }
+  .calendar-toolbar-label {
+    font-size: 14px;
+    order: 3;
+    flex: 1 1 100%;
+    text-align: center;
+  }
+  .calendar-cell {
+    min-height: 64px;
+    padding: 4px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .calendar-grid.view-week .calendar-cell {
+    min-height: 118px;
+  }
+  .cal-chip,
+  .calendar-grid.view-week .cal-chip {
+    font-size: 10.5px;
+    padding: 2px 4px;
+  }
+  .calendar-grid {
+    gap: 4px;
+  }
+  .calendar-strip-cell {
+    padding: 8px 2px;
+  }
 }
 
 /* ---- Modulauswahl (Bereich erstellen) ----------------------------------- */
