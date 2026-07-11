@@ -9,6 +9,8 @@ const ADMIN_KEY = 'share.adminKey';
 const PENDING_PREFIX = 'share.pending.'; // + spaceId
 const VISITED_KEY = 'share.visitedSpaces';
 const PARTICIPANT_PREFIX = 'share.participant.'; // + slug
+const CALENDAR_VIEW_KEY = 'share.calendarView';
+const SHOPPING_SORT_PREFIX = 'share.shoppingSort.'; // + slug
 
 function safeGet(key: string): string | null {
   try {
@@ -55,6 +57,33 @@ export const participantStore = {
   get: (slug: string) => safeGet(PARTICIPANT_PREFIX + slug),
   set: (slug: string, id: string) => safeSet(PARTICIPANT_PREFIX + slug, id),
   clear: (slug: string) => safeRemove(PARTICIPANT_PREFIX + slug),
+};
+
+// Zuletzt gewählte Kalenderansicht (Tag/Woche/Monat) – geräteweit, damit die
+// Wahl beim nächsten Besuch erhalten bleibt. Standard ist die Wochenansicht.
+export type CalendarViewMode = 'day' | 'week' | 'month';
+
+export const calendarViewStore = {
+  get(): CalendarViewMode {
+    const v = safeGet(CALENDAR_VIEW_KEY);
+    return v === 'day' || v === 'week' || v === 'month' ? v : 'week';
+  },
+  set(mode: CalendarViewMode) {
+    safeSet(CALENDAR_VIEW_KEY, mode);
+  },
+};
+
+// Sortiermodus der Einkaufsliste (Standard = zuletzt Hinzugefügte/Abgehakte
+// oben, Manuell = per Ziehen selbst festgelegte Reihenfolge). Pro Bereich.
+export type ShoppingSortMode = 'recent' | 'manual';
+
+export const shoppingSortStore = {
+  get(slug: string): ShoppingSortMode {
+    return safeGet(SHOPPING_SORT_PREFIX + slug) === 'manual' ? 'manual' : 'recent';
+  },
+  set(slug: string, mode: ShoppingSortMode) {
+    safeSet(SHOPPING_SORT_PREFIX + slug, mode);
+  },
 };
 
 export interface PendingUpload {

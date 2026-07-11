@@ -68,6 +68,30 @@ router.post(
   }),
 );
 
+/**
+ * Benutzerdefinierte Reihenfolge speichern (manuelles Sortieren per Ziehen).
+ * Body: { order: string[] } mit den Eintrags-IDs in gewünschter Reihenfolge.
+ * Es werden nur die übergebenen IDs neu positioniert (0..n-1) – so lässt sich
+ * z. B. nur die offene oder nur die erledigte Gruppe für sich neu anordnen,
+ * ohne die Position der jeweils anderen Gruppe zu beeinflussen.
+ */
+router.patch(
+  '/order',
+  asyncHandler(async (req, res) => {
+    const order = req.body?.order;
+    if (!Array.isArray(order)) throw new ApiError(400, 'Ungültige Reihenfolge.');
+    const db = getDb();
+    const update = db.prepare(
+      'UPDATE shopping_items SET position = ? WHERE id = ? AND space_id = ?',
+    );
+    const tx = db.transaction((ids: string[]) => {
+      ids.forEach((id, index) => update.run(index, String(id), req.spaceId));
+    });
+    tx(order as string[]);
+    res.json({ ok: true });
+  }),
+);
+
 router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
