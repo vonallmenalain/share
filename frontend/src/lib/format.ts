@@ -100,6 +100,33 @@ export function formatDateTime(iso: string | null, opts?: { floating?: boolean }
   });
 }
 
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+/**
+ * Kurzform von Datum + Uhrzeit für Listeneinträge (z. B. Einkaufsliste):
+ * „Heute, 14:32“, „Gestern, 09:05“ oder „11.07., 14:32“ (ohne Jahr, ausser
+ * es liegt nicht im aktuellen Jahr).
+ */
+export function formatShortDateTime(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const time = d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  if (isSameDay(d, now)) return `Heute, ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameDay(d, yesterday)) return `Gestern, ${time}`;
+  const datePart = d.toLocaleDateString('de-CH', {
+    day: '2-digit',
+    month: '2-digit',
+    year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+  });
+  return `${datePart}, ${time}`;
+}
+
 /** Gruppiert nach Tag (YYYY-MM-DD) anhand takenAt (Fallback createdAt). */
 export function dayKey(iso: string | null, fallback: string): string {
   const src = iso || fallback;
