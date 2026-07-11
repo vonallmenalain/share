@@ -23,6 +23,20 @@ function localToIso(date: string, time: string): string | null {
   return d.toISOString();
 }
 
+/** Addiert Minuten auf eine „HH:MM"-Uhrzeit (rollt über Mitternacht). */
+function addMinutesToTime(time: string, minutes: number): string {
+  const [h, m] = time.split(':').map(Number);
+  const total = (((h * 60 + m + minutes) % (24 * 60)) + 24 * 60) % (24 * 60);
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+}
+
+const DURATION_PRESETS: { label: string; minutes: number }[] = [
+  { label: '30 Min.', minutes: 30 },
+  { label: '1 Std.', minutes: 60 },
+  { label: '1½ Std.', minutes: 90 },
+  { label: '2 Std.', minutes: 120 },
+];
+
 export default function EventForm({
   token,
   participantId,
@@ -51,6 +65,27 @@ export default function EventForm({
   const [description, setDescription] = useState(editing?.description ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  /** Beim Ändern der Startzeit die Endzeit mitverschieben, sofern sie noch
+   * nicht eigenständig verändert wurde (bzw. leer ist) – so bleibt eine
+   * einmal gewählte Dauer erhalten, ohne dass man die Endzeit von Hand
+   * nachziehen muss. */
+  const handleStartTimeChange = (value: string) => {
+    if (endTime && startTime) {
+      const [sh, sm] = startTime.split(':').map(Number);
+      const [eh, em] = endTime.split(':').map(Number);
+      const durationMin = eh * 60 + em - (sh * 60 + sm);
+      if (durationMin > 0) {
+        setEndTime(addMinutesToTime(value, durationMin));
+      }
+    }
+    setStartTime(value);
+  };
+
+  const applyDuration = (minutes: number) => {
+    setEndTime(addMinutesToTime(startTime, minutes));
+    if (!endDate) setEndDate(date);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,8 +188,9 @@ export default function EventForm({
                   <input
                     className="input"
                     type="time"
+                    step={900}
                     value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
+                    onChange={(e) => handleStartTimeChange(e.target.value)}
                   />
                 </div>
                 <div className="field" style={{ flex: 1 }}>
@@ -162,9 +198,25 @@ export default function EventForm({
                   <input
                     className="input"
                     type="time"
+                    step={900}
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
                   />
+                </div>
+              </div>
+              <div className="field duration-chips">
+                <label className="label">Dauer</label>
+                <div className="chip-row">
+                  {DURATION_PRESETS.map((p) => (
+                    <button
+                      type="button"
+                      key={p.minutes}
+                      className="duration-chip"
+                      onClick={() => applyDuration(p.minutes)}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </>

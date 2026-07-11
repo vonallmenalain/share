@@ -3,67 +3,73 @@ import { api, CalendarEvent } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { useModuleData } from '../../lib/useModuleData';
 import { useParticipants } from '../../lib/useParticipants';
+import { calendarViewStore, CalendarViewMode } from '../../lib/storage';
 import EventForm from './EventForm';
+import {
+  WEEKDAYS,
+  addDays,
+  addMonths,
+  dayLabel,
+  eventChipLabel,
+  eventDay,
+  eventTimeLabel,
+  monthGridWeeks,
+  monthLabel,
+  parseKey,
+  sortDayEvents,
+  startOfWeek,
+  todayKey,
+  weekDays,
+  weekLabel,
+} from './dateUtils';
 
-const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-const MONTHS = [
-  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
-];
-
-function pad(n: number): string {
-  return String(n).padStart(2, '0');
-}
-function dateKey(y: number, m: number, d: number): string {
-  return `${y}-${pad(m + 1)}-${pad(d)}`;
-}
-/** Auf welchen (lokalen) Tag fällt ein Termin. */
-function eventDay(ev: CalendarEvent): string {
-  if (ev.allDay) return ev.allDayDate ?? '';
-  if (!ev.startAt) return '';
-  const d = new Date(ev.startAt);
-  return dateKey(d.getFullYear(), d.getMonth(), d.getDate());
-}
-function eventTimeLabel(ev: CalendarEvent): string {
-  if (ev.allDay) return 'Ganztägig';
-  if (!ev.startAt) return '';
-  const s = new Date(ev.startAt);
-  const start = s.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
-  if (ev.endAt) {
-    const e = new Date(ev.endAt);
-    return `${start}–${e.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}`;
-  }
-  return start;
-}
+const MONTH_CHIP_LIMIT = 2;
+const WEEK_CHIP_LIMIT = 4;
 
 export default function CalendarPage() {
   const { slug, token } = useSpaceSessionContext();
   const { currentId } = useParticipants(slug, token);
   const participantId = currentId ?? undefined;
 
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth());
-  const [selectedDay, setSelectedDay] = useState(dateKey(now.getFullYear(), now.getMonth(), now.getDate()));
+  const today = todayKey();
+  const [viewMode, setViewMode] = useState<CalendarViewMode>(() => calendarViewStore.get());
+  const [focusDate, setFocusDate] = useState(today);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<CalendarEvent | null>(null);
 
+  const changeView = (mode: CalendarViewMode) => {
+    setViewMode(mode);
+    calendarViewStore.set(mode);
+  };
+
+  const focusParts = useMemo(() => {
+    const d = parseKey(focusDate);
+    return { year: d.getFullYear(), month: d.getMonth() };
+  }, [focusDate]);
+
+  const weekStart = useMemo(() => startOfWeek(focusDate), [focusDate]);
+  const gridWeeks = useMemo(
+    () => (viewMode === 'month' ? monthGridWeeks(focusParts.year, focusParts.month) : [weekDays(weekStart)]),
+    [viewMode, focusParts.year, focusParts.month, weekStart],
+  );
+
+  const range = useMemo(
+    () => ({ from: gridWeeks[0][0], to: gridWeeks[gridWeeks.length - 1][6] }),
+    [gridWeeks],
+  );
+
   const load = useCallback(
     async (signal: AbortSignal) => {
-      // Grosszügiges Fenster um den Monat (für Übergänge zum Vor-/Folgemonat).
-      const from = dateKey(year, month, 1);
-      const toDate = new Date(year, month + 1, 0);
-      const to = dateKey(toDate.getFullYear(), toDate.getMonth(), toDate.getDate());
       const res = await api<{ events: CalendarEvent[] }>(
-        `/api/calendar/events?from=${from}&to=${to}`,
+        `/api/calendar/events?from=${range.from}&to=${range.to}`,
         { token, signal },
       );
       return res.events;
     },
-    [token, year, month],
+    [token, range.from, range.to],
   );
 
-  const { data, loading, reload } = useModuleData<CalendarEvent[]>(load, [token, year, month], {
+  const { data, loading, reload } = useModuleData<CalendarEvent[]>(load, [token, range.from, range.to], {
     intervalMs: 15000,
   });
   const events = data ?? [];
@@ -79,40 +85,14 @@ export default function CalendarPage() {
     return map;
   }, [events]);
 
-  // Kalendergitter (Wochen Mo–So).
-  const weeks = useMemo(() => {
-    const first = new Date(year, month, 1);
-    const startOffset = (first.getDay() + 6) % 7; // Mo=0
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const cells: (number | null)[] = [];
-    for (let i = 0; i < startOffset; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-    while (cells.length % 7 !== 0) cells.push(null);
-    const rows: (number | null)[][] = [];
-    for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
-    return rows;
-  }, [year, month]);
+  const goPrev = () => setFocusDate((d) => (viewMode === 'day' ? addDays(d, -1) : viewMode === 'week' ? addDays(d, -7) : addMonths(d, -1)));
+  const goNext = () => setFocusDate((d) => (viewMode === 'day' ? addDays(d, 1) : viewMode === 'week' ? addDays(d, 7) : addMonths(d, 1)));
+  const goToday = () => setFocusDate(today);
 
-  const changeMonth = (delta: number) => {
-    let m = month + delta;
-    let y = year;
-    if (m < 0) {
-      m = 11;
-      y -= 1;
-    } else if (m > 11) {
-      m = 0;
-      y += 1;
-    }
-    setMonth(m);
-    setYear(y);
-  };
+  const toolbarLabel =
+    viewMode === 'day' ? dayLabel(focusDate) : viewMode === 'week' ? weekLabel(weekStart) : monthLabel(focusParts.year, focusParts.month);
 
-  const todayKey = dateKey(now.getFullYear(), now.getMonth(), now.getDate());
-  const dayEvents = (eventsByDay.get(selectedDay) ?? []).sort((a, b) => {
-    if (a.allDay && !b.allDay) return -1;
-    if (!a.allDay && b.allDay) return 1;
-    return (a.startAt ?? '').localeCompare(b.startAt ?? '');
-  });
+  const dayEvents = sortDayEvents(eventsByDay.get(focusDate) ?? []);
 
   const deleteEvent = async (ev: CalendarEvent) => {
     if (!confirm('Diesen Termin löschen?')) return;
@@ -124,11 +104,51 @@ export default function CalendarPage() {
     }
   };
 
+  const renderDayCell = (day: string, opts: { chipLimit: number; dimmed?: boolean }) => {
+    const has = sortDayEvents(eventsByDay.get(day) ?? []);
+    const visible = has.slice(0, opts.chipLimit);
+    const overflow = has.length - visible.length;
+    const isSelected = day === focusDate;
+    const isToday = day === today;
+    const dayNum = parseKey(day).getDate();
+    return (
+      <button
+        key={day}
+        type="button"
+        className={`calendar-cell${isSelected ? ' selected' : ''}${isToday ? ' today' : ''}${opts.dimmed ? ' dimmed' : ''}`}
+        onClick={() => setFocusDate(day)}
+      >
+        <span className="calendar-cell-daynum">{dayNum}</span>
+        {has.length > 0 && (
+          <span className="calendar-cell-chips">
+            {visible.map((ev) => (
+              <span key={ev.id} className={`cal-chip${ev.allDay ? ' allday' : ''}`}>
+                {eventChipLabel(ev)}
+              </span>
+            ))}
+            {overflow > 0 && <span className="cal-chip-more">+{overflow} weitere</span>}
+          </span>
+        )}
+      </button>
+    );
+  };
+
   return (
     <div className="container module-page">
       <div className="module-head">
         <h1 className="space-title">Kalender</h1>
         <div className="spacer" />
+        <div className="segmented sm calendar-view-switch" role="tablist" aria-label="Ansicht wählen">
+          <button type="button" className={viewMode === 'day' ? 'active' : ''} onClick={() => changeView('day')}>
+            Tag
+          </button>
+          <button type="button" className={viewMode === 'week' ? 'active' : ''} onClick={() => changeView('week')}>
+            Woche
+          </button>
+          <button type="button" className={viewMode === 'month' ? 'active' : ''} onClick={() => changeView('month')}>
+            Monat
+          </button>
+        </div>
         <button
           className="btn btn-sm btn-primary"
           onClick={() => {
@@ -140,52 +160,24 @@ export default function CalendarPage() {
         </button>
       </div>
 
-      <div className="calendar-card card">
-        <div className="calendar-nav">
-          <button className="btn btn-sm btn-ghost" onClick={() => changeMonth(-1)} aria-label="Vorheriger Monat">
+      <div className="calendar-toolbar">
+        <div className="calendar-toolbar-nav">
+          <button className="btn btn-sm btn-ghost" onClick={goPrev} aria-label="Zurück">
             ‹
           </button>
-          <strong>
-            {MONTHS[month]} {year}
-          </strong>
-          <button className="btn btn-sm btn-ghost" onClick={() => changeMonth(1)} aria-label="Nächster Monat">
+          <button className="btn btn-sm btn-ghost" onClick={goToday}>
+            Heute
+          </button>
+          <button className="btn btn-sm btn-ghost" onClick={goNext} aria-label="Weiter">
             ›
           </button>
-          {loading && <span className="spinner" style={{ marginLeft: 8 }} />}
         </div>
-
-        <div className="calendar-grid">
-          {WEEKDAYS.map((w) => (
-            <div key={w} className="calendar-weekday">
-              {w}
-            </div>
-          ))}
-          {weeks.flat().map((d, idx) => {
-            if (d === null) return <div key={idx} className="calendar-cell empty" />;
-            const key = dateKey(year, month, d);
-            const has = eventsByDay.has(key);
-            return (
-              <button
-                key={idx}
-                className={`calendar-cell${key === selectedDay ? ' selected' : ''}${key === todayKey ? ' today' : ''}`}
-                onClick={() => setSelectedDay(key)}
-              >
-                <span className="calendar-day-num">{d}</span>
-                {has && <span className="calendar-dot" aria-hidden="true" />}
-              </button>
-            );
-          })}
-        </div>
+        <strong className="calendar-toolbar-label">{toolbarLabel}</strong>
+        {loading && <span className="spinner" />}
       </div>
 
       <div className="calendar-agenda card">
-        <h3 style={{ marginTop: 0 }}>
-          {new Date(`${selectedDay}T12:00:00`).toLocaleDateString('de-CH', {
-            weekday: 'long',
-            day: '2-digit',
-            month: 'long',
-          })}
-        </h3>
+        <h3 style={{ marginTop: 0 }}>{dayLabel(focusDate)}</h3>
         {dayEvents.length === 0 ? (
           <p className="muted">Keine Termine an diesem Tag.</p>
         ) : (
@@ -218,12 +210,55 @@ export default function CalendarPage() {
         )}
       </div>
 
+      {viewMode !== 'day' && (
+        <div className="calendar-card card">
+          <div className={`calendar-grid view-${viewMode}`}>
+            {WEEKDAYS.map((w) => (
+              <div key={w} className="calendar-weekday">
+                {w}
+              </div>
+            ))}
+            {gridWeeks.flat().map((day) =>
+              renderDayCell(day, {
+                chipLimit: viewMode === 'week' ? WEEK_CHIP_LIMIT : MONTH_CHIP_LIMIT,
+                dimmed: viewMode === 'month' && parseKey(day).getMonth() !== focusParts.month,
+              }),
+            )}
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'day' && (
+        <div className="calendar-card card">
+          <div className="calendar-daystrip">
+            {weekDays(weekStart).map((day) => {
+              const has = eventsByDay.get(day)?.length ?? 0;
+              const isSelected = day === focusDate;
+              const isToday = day === today;
+              const d = parseKey(day);
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  className={`calendar-strip-cell${isSelected ? ' selected' : ''}${isToday ? ' today' : ''}`}
+                  onClick={() => setFocusDate(day)}
+                >
+                  <span className="calendar-strip-weekday">{WEEKDAYS[(d.getDay() + 6) % 7]}</span>
+                  <span className="calendar-strip-daynum">{d.getDate()}</span>
+                  {has > 0 && <span className="calendar-dot" aria-hidden="true" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {showForm && (
         <EventForm
           token={token}
           participantId={participantId}
           editing={editing}
-          defaultDate={selectedDay}
+          defaultDate={focusDate}
           onClose={() => setShowForm(false)}
           onSaved={() => {
             setShowForm(false);
