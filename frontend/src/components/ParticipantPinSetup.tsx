@@ -1,19 +1,17 @@
 import { useState } from 'react';
-import { Participant } from '../api/client';
-import { colorForName, initialsOf } from '../lib/avatar';
 
 /**
  * Erzwungene Code-Vergabe: Der Bereich verlangt einen Code (PIN) für jede
- * Identität, aber die aktuelle Person hat (noch) keinen – z. B. weil sie neu
- * ausgewählt wurde oder weil der Administrator den Code zurückgesetzt hat
- * (Funktion „Code vergessen?"). Ohne Schliessen-Möglichkeit: Erst nach dem
- * Festlegen eines Codes geht es weiter.
+ * Identität, aber die aktuelle Person hat (noch) keinen – z. B. weil ihre
+ * Identität hier neu angelegt wird oder weil der Administrator den Code
+ * zurückgesetzt hat (Funktion „Code vergessen?"). Ohne Schliessen-Möglichkeit:
+ * Erst nach dem Festlegen eines Codes geht es weiter.
  */
 export default function ParticipantPinSetup({
-  participant,
+  name,
   onSetPin,
 }: {
-  participant: Participant;
+  name: string;
   onSetPin: (opts: { pin: string | null }) => Promise<unknown>;
 }) {
   const [pin, setPinValue] = useState('');
@@ -43,12 +41,7 @@ export default function ParticipantPinSetup({
   return (
     <div className="participant-gate">
       <div className="panel">
-        <div className="row" style={{ alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <span className="avatar" style={{ background: participant.color || colorForName(participant.name) }}>
-            {initialsOf(participant.name)}
-          </span>
-          <h2 style={{ margin: 0 }}>Code für {participant.name} festlegen</h2>
-        </div>
+        <h2 style={{ margin: '0 0 4px' }}>Code für {name} festlegen</h2>
         <p className="sub">
           In diesem Bereich ist ein Code (PIN) Pflicht. Lege jetzt deinen Code fest – du brauchst ihn
           nur, wenn du deinen Namen später auf einem weiteren Gerät wieder auswählst.
@@ -62,7 +55,6 @@ export default function ParticipantPinSetup({
               type="password"
               inputMode="numeric"
               autoComplete="off"
-              placeholder="••••"
               value={pin}
               onChange={(e) => setPinValue(e.target.value)}
               autoFocus
@@ -75,7 +67,6 @@ export default function ParticipantPinSetup({
               type="password"
               inputMode="numeric"
               autoComplete="off"
-              placeholder="••••"
               value={confirmPin}
               onChange={(e) => setConfirmPin(e.target.value)}
             />

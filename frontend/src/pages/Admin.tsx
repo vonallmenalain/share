@@ -15,7 +15,6 @@ import {
 } from '../api/client';
 import { shareItems } from '../lib/share';
 import { adminKeyStore } from '../lib/storage';
-import { colorForName, initialsOf } from '../lib/avatar';
 import {
   formatBytes,
   formatDate,
@@ -631,9 +630,6 @@ function AdminParticipantsPanel({
               <ul className="admin-participant-list">
                 {participants.map((p) => (
                   <li key={p.id} className="admin-participant-row">
-                    <span className="avatar sm" style={{ background: p.color || colorForName(p.name) }}>
-                      {initialsOf(p.name)}
-                    </span>
                     <span className="grow">
                       {p.name}
                       {p.archived && (

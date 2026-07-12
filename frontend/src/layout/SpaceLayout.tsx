@@ -9,7 +9,6 @@ import ParticipantGate from '../components/ParticipantGate';
 import ParticipantPinSetup from '../components/ParticipantPinSetup';
 import ParticipantPinManager from '../components/ParticipantPinManager';
 import { setSpaceManifest, resetManifest } from '../lib/pwaManifest';
-import { colorForName, initialsOf } from '../lib/avatar';
 import {
   SpaceSessionProvider,
   useSpaceSessionContext,
@@ -95,28 +94,34 @@ function SpaceShell() {
   }
 
   if (phase === 'gate') {
-    const pinHint = space?.requireParticipantPin
-      ? 'Mit dem Code kannst nur du Änderungen in deinem Namen vornehmen.'
-      : 'Du kannst deinen Namen mit einem Code schützen, damit nur du unter deinem Namen Änderungen vornehmen kannst.';
+    // Ist die Identität bereits geräteweit bekannt, wird hier nur noch das
+    // Passwort erfragt (falls der Bereich eines verlangt) – der Name (und
+    // ein allfälliger Code) läuft unsichtbar im Hintergrund weiter, siehe
+    // SpaceSessionContext. Nur beim allerersten geöffneten Link überhaupt
+    // wird der Name erfragt.
     return (
       <div className="center-page">
         <div className="panel">
           <span className="hero-badge">{space?.name ?? 'Bereich'}</span>
           <h1>Bereich betreten</h1>
-          <p className="sub">Gib deinen Namen ein, damit alle sehen, von wem die Beiträge stammen.</p>
+          {!gate.hasKnownIdentity && (
+            <p className="sub">Gib deinen Namen ein, damit alle sehen, von wem die Beiträge stammen.</p>
+          )}
           {gate.error && <div className="error-box">{gate.error}</div>}
           <form onSubmit={enter}>
-            <div className="field">
-              <label className="label">Dein Name</label>
-              <input
-                className="input"
-                placeholder="z. B. Anna"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-                required
-              />
-            </div>
+            {!gate.hasKnownIdentity && (
+              <div className="field">
+                <label className="label">Dein Name</label>
+                <input
+                  className="input"
+                  placeholder="z. B. Anna"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+            )}
             {space?.hasPassword && (
               <div className="field">
                 <label className="label">Passwort</label>
@@ -125,30 +130,13 @@ function SpaceShell() {
                   type="password"
                   value={gate.password}
                   onChange={(e) => gate.setPassword(e.target.value)}
+                  autoFocus={gate.hasKnownIdentity}
                 />
                 <p className="hint" style={{ marginTop: 6 }}>
                   Auf den Bereich kann nur mit einem Passwort des Erstellers zugegriffen werden.
                 </p>
               </div>
             )}
-            <div className="field">
-              <label className="label">
-                {space?.requireParticipantPin ? 'Code (4–8 Ziffern, Pflicht)' : 'Code (4–8 Ziffern, optional)'}
-              </label>
-              <input
-                className="input"
-                type="password"
-                inputMode="numeric"
-                autoComplete="off"
-                placeholder="••••"
-                value={gate.pin}
-                onChange={(e) => gate.setPin(e.target.value)}
-                required={space?.requireParticipantPin}
-              />
-              <p className="hint" style={{ marginTop: 6 }}>
-                {pinHint}
-              </p>
-            </div>
             <button className="btn btn-primary" style={{ width: '100%' }} disabled={gate.busy}>
               {gate.busy ? 'Öffne…' : 'Bereich betreten'}
             </button>
@@ -162,15 +150,17 @@ function SpaceShell() {
   const showNav = modules.length > 1;
   const otherSpaces = visitedSpaces.filter((s) => s.slug !== slug);
 
-  // „Wer bist du?" – einmal pro Bereich und Gerät, unabhängig vom zuerst
-  // geöffneten Link/Modul. Erst danach wird der eigentliche Inhalt gezeigt.
-  // Während die beim Betreten erfasste Identität im Hintergrund angelegt wird
-  // (identity.creating), soll diese Abfrage nicht kurz aufblitzen.
-  const needsIdentity = !identity.loading && !identity.current && !identity.creating;
+  // Die geräteweite Identität wird automatisch im Hintergrund aufgelöst bzw.
+  // angelegt (siehe useParticipants) – normalerweise ohne jede Rückfrage.
+  // Aktiv nachgefragt wird nur, wenn das nicht eindeutig gelingt (z. B. noch
+  // gar keine Identität vorhanden, oder der Name ist hier bereits mit einem
+  // anderen Code geschützt). Während die Auflösung läuft (identity.resolving)
+  // soll diese Abfrage nicht kurz aufblitzen.
+  const needsIdentity =
+    !identity.loading && !identity.resolving && !identity.current && !identity.needsPin;
   // Ist der Code (PIN) in diesem Bereich Pflicht, aber die aktuelle Person
-  // hat (noch) keinen – z. B. frisch angelegt ohne Code (sollte nicht
-  // vorkommen) oder weil der Administrator ihn zurückgesetzt hat („Code
-  // vergessen?") – muss zuerst ein neuer Code vergeben werden.
+  // hat (noch) keinen – z. B. weil der Administrator ihn zurückgesetzt hat
+  // („Code vergessen?") – muss zuerst ein neuer Code vergeben werden.
   const needsPinSetup =
     !identity.loading && !!identity.current && identity.requirePin && !identity.current.hasPin;
 
@@ -216,33 +206,6 @@ function SpaceShell() {
                   <span className="dropdown-space-dot" aria-hidden="true" />
                   <strong>{space?.name || slug}</strong>
                 </div>
-                {otherSpaces.map((s) => (
-                  <div key={s.slug} className="dropdown-space-row">
-                    <Link
-                      to={`/s/${s.slug}`}
-                      className="dropdown-item dropdown-space-link"
-                      onClick={() => close()}
-                      title={`Zu „${s.name}" wechseln`}
-                    >
-                      <span className="avatar sm" style={{ background: colorForName(s.name) }}>
-                        {initialsOf(s.name)}
-                      </span>
-                      <span className="dropdown-item-text">{s.name}</span>
-                    </Link>
-                    <button
-                      type="button"
-                      className="dropdown-space-remove"
-                      title={`„${s.name}" verlassen (aus dieser Liste entfernen)`}
-                      aria-label={`„${s.name}" verlassen`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeVisitedSpace(s.slug);
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
                 <button
                   type="button"
                   className="dropdown-item"
@@ -254,17 +217,41 @@ function SpaceShell() {
                   <ShareIcon size={16} />
                   Bereich teilen
                 </button>
+                {otherSpaces.length > 0 && (
+                  <>
+                    <div className="dropdown-divider" />
+                    <div className="dropdown-label">Andere Bereiche</div>
+                    {otherSpaces.map((s) => (
+                      <div key={s.slug} className="dropdown-space-row">
+                        <Link
+                          to={`/s/${s.slug}`}
+                          className="dropdown-item dropdown-space-link"
+                          onClick={() => close()}
+                          title={`Zu „${s.name}" wechseln`}
+                        >
+                          <span className="dropdown-item-text">{s.name}</span>
+                        </Link>
+                        <button
+                          type="button"
+                          className="dropdown-space-remove"
+                          title={`„${s.name}" verlassen (aus dieser Liste entfernen)`}
+                          aria-label={`„${s.name}" verlassen`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeVisitedSpace(s.slug);
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                )}
                 {identity.current && !needsIdentity && !needsPinSetup && (
                   <>
                     <div className="dropdown-divider" />
                     <div className="dropdown-label">Deine Identität</div>
                     <div className="dropdown-name">
-                      <span
-                        className="avatar sm"
-                        style={{ background: identity.current.color || colorForName(identity.current.name) }}
-                      >
-                        {initialsOf(identity.current.name)}
-                      </span>
                       <strong>{identity.current.name}</strong>
                       {identity.current.hasPin && (
                         <span className="participant-choice-lock" title="Mit Code geschützt">
@@ -290,26 +277,31 @@ function SpaceShell() {
         </div>
       </TopBar>
 
-      {showNav && !identity.loading && !needsIdentity && !needsPinSetup && (
-        <ModuleNavigation
-          slug={slug}
-          modules={modules}
-          hidden={chromeHidden}
-          open={navOpen}
-          onClose={() => setNavOpen(false)}
-        />
-      )}
+      {showNav &&
+        !identity.loading &&
+        !identity.resolving &&
+        !needsIdentity &&
+        !identity.needsPin &&
+        !needsPinSetup && (
+          <ModuleNavigation
+            slug={slug}
+            modules={modules}
+            hidden={chromeHidden}
+            open={navOpen}
+            onClose={() => setNavOpen(false)}
+          />
+        )}
 
       <div className={`space-shell${showNav ? ' has-nav' : ''}`}>
-        {identity.loading || identity.creating ? (
+        {identity.loading || identity.resolving ? (
           <div className="center-page" style={{ minHeight: 240 }}>
             <span className="spinner lg" />
           </div>
         ) : needsIdentity ? (
           <div className="container module-page">
-            {identity.createError && (
+            {identity.resolveError && (
               <div className="error-box" style={{ maxWidth: 480, margin: '0 auto 12px' }}>
-                {identity.createError}
+                {identity.resolveError}
               </div>
             )}
             <ParticipantGate
@@ -321,10 +313,17 @@ function SpaceShell() {
               onVerifyPin={identity.verifyPin}
             />
           </div>
+        ) : identity.needsPin ? (
+          <div className="container module-page">
+            <ParticipantPinSetup
+              name={name || 'dich'}
+              onSetPin={(opts) => identity.establishPin(opts.pin ?? '')}
+            />
+          </div>
         ) : needsPinSetup && identity.current ? (
           <div className="container module-page">
             <ParticipantPinSetup
-              participant={identity.current}
+              name={identity.current.name}
               onSetPin={(opts) => identity.setPin(identity.current!.id, opts)}
             />
           </div>

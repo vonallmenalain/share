@@ -4,7 +4,8 @@
 // fortsetzen kann, indem er die gleichen Dateien erneut auswählt).
 
 const TOKEN_PREFIX = 'share.token.'; // + slug
-const NAME_KEY = 'share.uploaderName';
+const NAME_KEY = 'share.uploaderName'; // veraltet, siehe identityStore (Migration)
+const IDENTITY_KEY = 'share.identity';
 const ADMIN_KEY = 'share.adminKey';
 const PENDING_PREFIX = 'share.pending.'; // + spaceId
 const VISITED_KEY = 'share.visitedSpaces';
@@ -40,9 +41,63 @@ export const tokenStore = {
   clear: (slug: string) => safeRemove(TOKEN_PREFIX + slug),
 };
 
+/**
+ * Die geräteweite Identität („wer bin ich") – Name und optionaler Schutz-Code
+ * (PIN). Wird EINMAL gespeichert und automatisch für JEDEN Bereich verwendet,
+ * ohne dass beim Wechsel zwischen Bereichen erneut nachgefragt wird (siehe
+ * useParticipants). Bewusst kein echtes Login – nur ein einfacher, lokal
+ * gespeicherter Hinweis, wer gerade unterwegs ist.
+ */
+export interface StoredIdentity {
+  name: string;
+  pin: string | null;
+}
+
+export const identityStore = {
+  get(): StoredIdentity | null {
+    const raw = safeGet(IDENTITY_KEY);
+    if (raw) {
+      try {
+        const v = JSON.parse(raw) as Partial<StoredIdentity>;
+        if (v && typeof v.name === 'string' && v.name.trim()) {
+          return { name: v.name, pin: typeof v.pin === 'string' && v.pin ? v.pin : null };
+        }
+      } catch {
+        /* fällt auf die Migration unten zurück */
+      }
+    }
+    // Migration von der früheren, reinen Namensspeicherung (ohne Code).
+    const legacyName = safeGet(NAME_KEY);
+    if (legacyName && legacyName.trim()) {
+      const migrated: StoredIdentity = { name: legacyName.trim(), pin: null };
+      safeSet(IDENTITY_KEY, JSON.stringify(migrated));
+      return migrated;
+    }
+    return null;
+  },
+  set(name: string, pin: string | null) {
+    safeSet(IDENTITY_KEY, JSON.stringify({ name, pin } satisfies StoredIdentity));
+  },
+  /** Setzt nur den Namen, behält einen vorhandenen Code unverändert. */
+  setName(name: string) {
+    const cur = identityStore.get();
+    identityStore.set(name, cur?.pin ?? null);
+  },
+  /** Setzt/entfernt nur den Code, behält den Namen unverändert. */
+  setPin(pin: string | null) {
+    const cur = identityStore.get();
+    if (!cur) return;
+    identityStore.set(cur.name, pin);
+  },
+  clear() {
+    safeRemove(IDENTITY_KEY);
+  },
+};
+
+/** @deprecated Zeigt weiterhin auf die geräteweite Identität (siehe identityStore). */
 export const nameStore = {
-  get: () => safeGet(NAME_KEY) ?? '',
-  set: (name: string) => safeSet(NAME_KEY, name),
+  get: () => identityStore.get()?.name ?? '',
+  set: (name: string) => identityStore.setName(name),
 };
 
 export const adminKeyStore = {
@@ -51,12 +106,23 @@ export const adminKeyStore = {
   clear: () => safeRemove(ADMIN_KEY),
 };
 
-// Gewählte Teilnehmer-Identität pro Bereich (für die Modulaktionen). Nur lokal
-// im Browser – bewusstes Vertrauensmodell für Familie & Freunde.
+// Aufgelöste Teilnehmer-Identität pro Bereich – dient nur als schneller
+// Cache, damit ein einmal aufgelöster Bereich beim nächsten Besuch nicht neu
+// aufgelöst werden muss. Die eigentliche Identität (Name + Code) ist
+// geräteweit in identityStore gespeichert.
 export const participantStore = {
   get: (slug: string) => safeGet(PARTICIPANT_PREFIX + slug),
   set: (slug: string, id: string) => safeSet(PARTICIPANT_PREFIX + slug, id),
   clear: (slug: string) => safeRemove(PARTICIPANT_PREFIX + slug),
+  /** Entfernt die Auswahl für ALLE Bereiche (z. B. beim Wechseln der Identität). */
+  clearAll() {
+    try {
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith(PARTICIPANT_PREFIX));
+      for (const k of keys) localStorage.removeItem(k);
+    } catch {
+      /* ignore */
+    }
+  },
 };
 
 // Zuletzt gewählte Kalenderansicht (Tag/Woche/Monat) – geräteweit, damit die

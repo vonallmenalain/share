@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Participant } from '../api/client';
-import { colorForName, initialsOf } from '../lib/avatar';
 
 /**
  * „Identität ändern" – ein einziger Einstiegspunkt im Dropdown für alles, was
@@ -57,12 +56,6 @@ export default function ParticipantPinManager({
         </div>
         <div className="modal-body">
           <div className="dropdown-name" style={{ padding: '0 0 14px' }}>
-            <span
-              className="avatar sm"
-              style={{ background: participant.color || colorForName(participant.name) }}
-            >
-              {initialsOf(participant.name)}
-            </span>
             <strong>{participant.name}</strong>
             {participant.hasPin && (
               <span className="participant-choice-lock" title="Mit Code geschützt">
@@ -100,7 +93,6 @@ export default function ParticipantPinManager({
                 type="password"
                 inputMode="numeric"
                 autoComplete="off"
-                placeholder="••••"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 autoFocus={!participant.hasPin}

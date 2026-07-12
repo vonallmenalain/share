@@ -9,7 +9,6 @@ import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { useModuleData } from '../../lib/useModuleData';
 import { participantName } from '../../lib/useParticipants';
 import { formatDate, formatMoney } from '../../lib/format';
-import { colorForName, initialsOf } from '../../lib/avatar';
 import ExpenseForm from './ExpenseForm';
 import SettlementView from './SettlementView';
 
@@ -132,12 +131,7 @@ export default function FinancePage() {
                     const nm = nameOf(b.participantId);
                     return (
                       <li key={b.participantId} className="balance-row">
-                        <span className="balance-name">
-                          <span className="avatar sm" style={{ background: colorForName(nm) }}>
-                            {initialsOf(nm)}
-                          </span>
-                          {nm}
-                        </span>
+                        <span className="balance-name">{nm}</span>
                         <span
                           className={`balance-amount${b.balanceCents > 0 ? ' positive' : b.balanceCents < 0 ? ' negative' : ''}`}
                         >
