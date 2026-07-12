@@ -104,6 +104,26 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
   const [gateBusy, setGateBusy] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
 
+  // Wechselt `slug` (Bereichswechsel), müssen `space`/`token` NOCH IM
+  // SELBEN Render (nicht erst über einen Effekt danach) zurückgesetzt
+  // werden – sonst gäbe es einen Zwischen-Render, in dem `slug` schon den
+  // NEUEN, aber `token`/`space` noch den ALTEN Bereich referenzieren.
+  // Genau in diesem Fenster würde useParticipants (siehe dort) mit dem
+  // neuen `slug`, aber dem alten `token` die Teilnehmerliste des falschen
+  // (alten) Bereichs laden und fälschlich dem neuen Bereich zuordnen –
+  // eine Ursache dafür, dass Namen aus einem anderen Bereich kurz im
+  // Identitäts-Wechsler auftauchen konnten. Das Zurücksetzen während des
+  // Renderns (statt in einem Effekt) sorgt dafür, dass der weiter unten
+  // aufgerufene useParticipants-Hook in genau diesem Render bereits den
+  // passenden (zurückgesetzten) Token sieht – siehe
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [resolvedSlug, setResolvedSlug] = useState(slug);
+  if (slug !== resolvedSlug) {
+    setResolvedSlug(slug);
+    setSpace(null);
+    setToken('');
+  }
+
   // „Wer bist du?" – geräteweit für ALLE Bereiche, damit die Auswahl nur
   // einmal pro Gerät nötig ist, unabhängig davon, welcher Bereich oder
   // welches Modul zuerst geöffnet wird (siehe useParticipants).

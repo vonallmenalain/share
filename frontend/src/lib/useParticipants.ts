@@ -32,11 +32,47 @@ export function useParticipants(slug: string, token: string, requirePin: boolean
   // Ist in diesem (neuen) Bereich ein Code Pflicht, aber die geräteweite
   // Identität hat noch keinen? Dann muss jetzt aktiv einer vergeben werden.
   const [needsPin, setNeedsPin] = useState(false);
+  // Verhindert, dass ein einmal erfolglos versuchter Auflösungsversuch
+  // (siehe automatische Identität weiter unten) für denselben Bereich
+  // wiederholt wird.
+  const resolvedForRef = useRef<string | null>(null);
+  // Fortlaufende Nummer für `reload()`-Aufrufe: Wird schnell zwischen
+  // Bereichen gewechselt, könnte die Antwort eines ÄLTEREN Aufrufs (noch
+  // für den vorherigen Bereich) erst NACH der Antwort des neueren Aufrufs
+  // eintreffen und dessen bereits korrekte Daten wieder überschreiben.
+  // Nur die Antwort des zuletzt gestarteten Aufrufs wird übernommen.
+  const reloadSeqRef = useRef(0);
+
+  // Sobald der Bereich wechselt, gehört der bisherige Zustand (Teilnehmer,
+  // Auswahl, …) zum VORHERIGEN Bereich und darf nicht weiterverwendet
+  // werden – sonst könnten kurz Namen eines anderen Bereichs auftauchen
+  // (bzw. sogar fälschlich als „aktuell" gelten), bis der nächste `reload()`
+  // für den neuen Bereich durchgelaufen ist. Das Zurücksetzen erfolgt
+  // bewusst SYNCHRON während des Renderns (nicht in einem Effekt danach) –
+  // sonst könnte `reload()` (siehe unten) noch mit dem zum VORHERIGEN
+  // Bereich passenden Token aufgerufen werden, bevor der Reset greift. Die
+  // eigentliche, für DIESEN Bereich gespeicherte Auswahl (siehe
+  // participantStore) wird hier neu eingelesen statt aus dem alten
+  // React-State übernommen.
+  const [resolvedSlug, setResolvedSlug] = useState(slug);
+  if (slug !== resolvedSlug) {
+    setResolvedSlug(slug);
+    setParticipants([]);
+    setCurrentId(participantStore.get(slug));
+    setLoading(true);
+    setError(null);
+    setResolving(false);
+    setResolveError(null);
+    setNeedsPin(false);
+    resolvedForRef.current = null;
+  }
 
   const reload = useCallback(async () => {
     if (!token) return;
+    const seq = ++reloadSeqRef.current;
     try {
       const res = await api<{ participants: Participant[] }>('/api/participants', { token });
+      if (reloadSeqRef.current !== seq) return; // durch neueren Aufruf überholt
       setParticipants(res.participants);
       // Gespeicherte Auswahl verwerfen, wenn der Teilnehmer nicht mehr existiert.
       setCurrentId((prev) => {
@@ -47,9 +83,10 @@ export function useParticipants(slug: string, token: string, requirePin: boolean
         return prev;
       });
     } catch (err) {
+      if (reloadSeqRef.current !== seq) return;
       setError(err instanceof Error ? err.message : 'Teilnehmer konnten nicht geladen werden.');
     } finally {
-      setLoading(false);
+      if (reloadSeqRef.current === seq) setLoading(false);
     }
   }, [slug, token]);
 
@@ -145,15 +182,22 @@ export function useParticipants(slug: string, token: string, requirePin: boolean
   );
 
   /**
-   * Identität wechseln – geräteweit, damit auf JEDEM Bereich wieder
-   * „Wer bist du?" gefragt wird (nicht nur im aktuellen).
+   * Identität wechseln – betrifft NUR den aktuellen Bereich, damit hier
+   * wieder „Wer bist du?" gefragt wird. Die für ANDERE (bereits besuchte)
+   * Bereiche gespeicherten Auswahlen bleiben unangetastet – sonst würde ein
+   * Identitätswechsel in einem Bereich überall sonst ebenfalls zur
+   * Neuauswahl zwingen bzw. (schlimmer) dort fälschlich Namen anbieten, die
+   * dort gar nichts zu suchen haben. Die geräteweite „Standard-Identität"
+   * (siehe identityStore) wird zusätzlich gelöscht, damit die automatische
+   * Auflösung hier nicht sofort wieder dieselbe Person zurückholt – ein
+   * NEU besuchter Bereich fragt danach wieder aktiv nach.
    */
   const switchIdentity = useCallback(() => {
-    participantStore.clearAll();
+    participantStore.clear(slug);
     identityStore.clear();
     setCurrentId(null);
     setNeedsPin(false);
-  }, []);
+  }, [slug]);
 
   const clearResolveError = useCallback(() => setResolveError(null), []);
 
@@ -165,7 +209,6 @@ export function useParticipants(slug: string, token: string, requirePin: boolean
   // Identität. Gelingt das nicht eindeutig (z. B. ist der Name hier bereits
   // mit einem ANDEREN Code geschützt) oder existiert noch gar keine
   // Identität, bleibt die gewohnte Auswahl („Wer bist du?") als Rückfall.
-  const resolvedForRef = useRef<string | null>(null);
   useEffect(() => {
     if (!token || loading) return;
     if (currentId && participants.some((p) => p.id === currentId && !p.archived)) return;

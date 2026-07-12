@@ -113,16 +113,12 @@ export const adminKeyStore = {
 export const participantStore = {
   get: (slug: string) => safeGet(PARTICIPANT_PREFIX + slug),
   set: (slug: string, id: string) => safeSet(PARTICIPANT_PREFIX + slug, id),
+  /** Entfernt die Auswahl NUR für diesen einen Bereich – andere Bereiche
+   * behalten ihre eigene, unabhängig gespeicherte Auswahl (siehe
+   * useParticipants: switchIdentity betrifft bewusst nur den aktuellen
+   * Bereich, damit gewählte Identitäten nicht bereichsübergreifend
+   * verloren gehen oder sich vermischen). */
   clear: (slug: string) => safeRemove(PARTICIPANT_PREFIX + slug),
-  /** Entfernt die Auswahl für ALLE Bereiche (z. B. beim Wechseln der Identität). */
-  clearAll() {
-    try {
-      const keys = Object.keys(localStorage).filter((k) => k.startsWith(PARTICIPANT_PREFIX));
-      for (const k of keys) localStorage.removeItem(k);
-    } catch {
-      /* ignore */
-    }
-  },
 };
 
 // Zuletzt gewählte Kalenderansicht (Tag/Woche/Monat) – geräteweit, damit die
