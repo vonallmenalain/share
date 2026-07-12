@@ -3,16 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, fileUrl, Note, NoteChecklistItem } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { useModuleData } from '../../lib/useModuleData';
-import { useParticipants } from '../../lib/useParticipants';
 import { uploadNoteImage } from '../../lib/uploader';
 import { nameStore } from '../../lib/storage';
 
 export default function NoteEditorPage() {
-  const { slug, token, name } = useSpaceSessionContext();
+  const { slug, token, name, identity } = useSpaceSessionContext();
   const { noteId = '' } = useParams();
   const navigate = useNavigate();
-  const { currentId } = useParticipants(slug, token);
-  const participantId = currentId ?? undefined;
+  const participantId = identity.currentId ?? undefined;
 
   const load = useCallback(
     async (signal: AbortSignal) => {

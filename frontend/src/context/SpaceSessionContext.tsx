@@ -28,17 +28,24 @@ export interface IdentityValue {
   /** Ist in diesem Bereich ein Code (PIN) für Identitäten Pflicht? */
   requirePin: boolean;
   /**
-   * Läuft im Hintergrund gerade das automatische Anlegen der Identität, die
-   * beim Betreten des Bereichs (Name + Passwort + Code in einem Schritt)
-   * angegeben wurde? Solange das der Fall ist, soll keine Zwischenansicht
-   * aufblitzen.
+   * Läuft im Hintergrund gerade die automatische Auflösung/Anlage der
+   * geräteweiten Identität für diesen Bereich? Solange das der Fall ist,
+   * soll keine Zwischenansicht aufblitzen.
    */
-  creating: boolean;
-  /** Fehler beim automatischen Anlegen (z. B. Name bereits vergeben). */
-  createError: string | null;
-  clearCreateError: () => void;
-  select: (id: string) => void;
+  resolving: boolean;
+  /** Fehler bei der automatischen Anlage (z. B. Name bereits vergeben). */
+  resolveError: string | null;
+  clearResolveError: () => void;
+  /**
+   * Ist in diesem (neuen) Bereich ein Code Pflicht, hat die geräteweite
+   * Identität aber noch keinen? Dann muss jetzt aktiv einer vergeben werden
+   * (siehe establishPin) – der einzige Fall, in dem trotz bereits bekannter
+   * Identität aktiv nachgefragt wird.
+   */
+  needsPin: boolean;
+  select: (id: string, pin?: string) => void;
   create: (name: string, pin?: string) => Promise<Participant>;
+  establishPin: (pin: string) => Promise<Participant>;
   verifyPin: (id: string, pin: string) => Promise<boolean>;
   setPin: (id: string, opts: { pin: string | null; currentPin?: string }) => Promise<Participant>;
   switchIdentity: () => void;
@@ -54,11 +61,10 @@ export interface SpaceSessionValue {
   gate: {
     password: string;
     setPassword: (p: string) => void;
-    /** Code (PIN) für die eigene Identität – wird direkt beim Betreten mitgegeben. */
-    pin: string;
-    setPin: (p: string) => void;
     error: string;
     busy: boolean;
+    /** Ist die geräteweite Identität bereits bekannt (Name muss nicht mehr erfragt werden)? */
+    hasKnownIdentity: boolean;
   };
   enter: (e?: React.FormEvent) => Promise<void>;
   /** Galerie-„Vollbildmodus": blendet TopBar & Navigation beim Scrollen aus. */
@@ -94,24 +100,14 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
   const [visitedSpaces, setVisitedSpaces] = useState<VisitedSpace[]>(() => visitedSpacesStore.all());
 
   const [gatePassword, setGatePassword] = useState('');
-  const [gatePin, setGatePin] = useState('');
   const [gateError, setGateError] = useState('');
   const [gateBusy, setGateBusy] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
 
-  // Name + Passwort + Code werden in einem Schritt erfasst (siehe SpaceLayout).
-  // Sobald der Zugang geprüft ist, wird die Identität hier im Hintergrund
-  // angelegt – ohne dass dafür ein zusätzlicher Bildschirm nötig ist.
-  const [pendingIdentity, setPendingIdentity] = useState<{ name: string; pin?: string } | null>(
-    null,
-  );
-  const [identityCreating, setIdentityCreating] = useState(false);
-  const [identityCreateError, setIdentityCreateError] = useState<string | null>(null);
-
-  // „Wer bist du?" – zentral für den ganzen Bereich (alle Module), damit die
-  // Auswahl nur einmal pro Gerät nötig ist, unabhängig vom zuerst geöffneten
-  // Link/Modul.
-  const participantState = useParticipants(slug, token);
+  // „Wer bist du?" – geräteweit für ALLE Bereiche, damit die Auswahl nur
+  // einmal pro Gerät nötig ist, unabhängig davon, welcher Bereich oder
+  // welches Modul zuerst geöffnet wird (siehe useParticipants).
+  const participantState = useParticipants(slug, token, !!space?.requireParticipantPin);
 
   const setName = useCallback((n: string) => {
     setNameState(n);
@@ -146,6 +142,30 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
         );
         if (cancelled) return;
         setSpace(res.space);
+
+        // Ist die geräteweite Identität bereits bekannt und braucht dieser
+        // Bereich kein Passwort, kann der Zugang vollständig unsichtbar im
+        // Hintergrund erfolgen – ohne jede Rückfrage. Nur wenn ein Passwort
+        // nötig ist oder es noch gar keine Identität gibt (allererster
+        // geöffneter Link), wird das Betreten-Formular gezeigt.
+        const knownName = nameStore.get().trim();
+        if (!res.space.hasPassword && knownName) {
+          try {
+            const accessRes = await api<{ space: SpaceType; accessToken: string }>(
+              `/api/spaces/by-slug/${encodeURIComponent(slug)}/access`,
+              { method: 'POST', body: { name: knownName } },
+            );
+            if (cancelled) return;
+            tokenStore.set(slug, accessRes.accessToken);
+            setSpace(accessRes.space);
+            setToken(accessRes.accessToken);
+            setPhase('ready');
+            return;
+          } catch {
+            // Bei einem Fehler (z. B. Netzwerk) normal weiter zum Formular.
+          }
+        }
+        if (cancelled) return;
         setPhase('gate');
       } catch (err) {
         if (cancelled) return;
@@ -179,11 +199,6 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
         setGateError('Bitte deinen Namen eingeben.');
         return;
       }
-      const pin = gatePin.trim();
-      if (space?.requireParticipantPin && !pin) {
-        setGateError('In diesem Bereich ist ein Code (PIN) Pflicht – bitte einen vergeben.');
-        return;
-      }
       setGateBusy(true);
       try {
         const res = await api<{ space: SpaceType; accessToken: string }>(
@@ -191,13 +206,11 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
           { method: 'POST', body: { password: gatePassword || undefined, name: trimmedName } },
         );
         tokenStore.set(slug, res.accessToken);
+        // Der Name wird geräteweit gespeichert (siehe identityStore) – ein
+        // Code (PIN) wird erst danach erfragt, falls dieser Bereich ihn
+        // zwingend verlangt (siehe needsPin in useParticipants).
         nameStore.set(trimmedName);
         setSpace(res.space);
-        // Name, Passwort und Code wurden in einem einzigen Schritt erfasst –
-        // die Identität wird jetzt automatisch im Hintergrund angelegt, sobald
-        // der Token aktiv ist (siehe Effekt weiter unten).
-        setIdentityCreateError(null);
-        setPendingIdentity({ name: trimmedName, pin: pin || undefined });
         setToken(res.accessToken);
         setPhase('ready');
       } catch (err) {
@@ -206,50 +219,8 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
         setGateBusy(false);
       }
     },
-    [slug, gatePassword, gatePin, name, space?.requireParticipantPin],
+    [slug, gatePassword, name],
   );
-
-  // Legt die beim Betreten angegebene Identität an, sobald der Zugriffs-Token
-  // aktiv ist und die Teilnehmerliste geladen wurde. So erscheint für den
-  // häufigsten Fall (neue Person, kein Namenskonflikt) kein zweiter
-  // Bildschirm – Name, Passwort und Code wurden bereits in einem Formular
-  // erfasst. Gibt es einen Konflikt (Name bereits vergeben), bleibt die
-  // gewohnte Auswahl („Wer bist du?") als Rückfalllösung bestehen.
-  useEffect(() => {
-    if (!pendingIdentity || !token || participantState.loading) return;
-    if (participantState.current) {
-      setPendingIdentity(null);
-      return;
-    }
-    let cancelled = false;
-    setIdentityCreating(true);
-    (async () => {
-      try {
-        await participantState.create(pendingIdentity.name, pendingIdentity.pin);
-      } catch (err) {
-        if (!cancelled) {
-          setIdentityCreateError(
-            err instanceof Error ? err.message : 'Identität konnte nicht angelegt werden.',
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setIdentityCreating(false);
-          setPendingIdentity(null);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingIdentity, token, participantState.loading, participantState.current]);
-
-  // Sobald eine Identität gewählt ist (egal auf welchem Weg), ist ein
-  // vorheriger Konflikt-Hinweis nicht mehr relevant.
-  useEffect(() => {
-    if (participantState.current) setIdentityCreateError(null);
-  }, [participantState.current]);
 
   // Der frei wählbare Anzeigename (für Modul-Aktionen ausserhalb der
   // Teilnehmer-Identität, z. B. ältere Uploads) folgt der gewählten Identität
@@ -261,8 +232,6 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [participantState.current]);
-
-  const clearIdentityCreateError = useCallback(() => setIdentityCreateError(null), []);
 
   const hasModule = useCallback(
     (key: ModuleKey) => (key === 'photos' ? true : !!space?.modules?.includes(key)),
@@ -277,11 +246,13 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       loading: participantState.loading,
       error: participantState.error,
       requirePin: !!space?.requireParticipantPin,
-      creating: identityCreating,
-      createError: identityCreateError,
-      clearCreateError: clearIdentityCreateError,
+      resolving: participantState.resolving,
+      resolveError: participantState.resolveError,
+      clearResolveError: participantState.clearResolveError,
+      needsPin: participantState.needsPin,
       select: participantState.select,
       create: participantState.create,
+      establishPin: participantState.establishPin,
       verifyPin: participantState.verifyPin,
       setPin: participantState.setPin,
       switchIdentity: participantState.switchIdentity,
@@ -292,15 +263,17 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       participantState.currentId,
       participantState.loading,
       participantState.error,
+      participantState.resolving,
+      participantState.resolveError,
+      participantState.clearResolveError,
+      participantState.needsPin,
       participantState.select,
       participantState.create,
+      participantState.establishPin,
       participantState.verifyPin,
       participantState.setPin,
       participantState.switchIdentity,
       space?.requireParticipantPin,
-      identityCreating,
-      identityCreateError,
-      clearIdentityCreateError,
     ],
   );
 
@@ -315,10 +288,9 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       gate: {
         password: gatePassword,
         setPassword: setGatePassword,
-        pin: gatePin,
-        setPin: setGatePin,
         error: gateError,
         busy: gateBusy,
+        hasKnownIdentity: !!nameStore.get().trim(),
       },
       enter,
       chromeHidden,
@@ -336,7 +308,6 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       name,
       setName,
       gatePassword,
-      gatePin,
       gateError,
       gateBusy,
       enter,

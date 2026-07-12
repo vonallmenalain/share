@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Participant } from '../api/client';
-import { colorForName, initialsOf } from '../lib/avatar';
 
 /**
  * „Wer bist du?" – Auswahl der eigenen Identität für den gesamten Bereich.
@@ -29,7 +28,7 @@ export default function ParticipantGate({
   prefillName?: string;
   /** Ist ein Code in diesem Bereich Pflicht? Erzwingt das PIN-Feld beim Anlegen. */
   requirePin?: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, pin?: string) => void;
   onCreate: (name: string, pin?: string) => Promise<unknown>;
   /** Prüft einen eingegebenen Code gegen den Server, bevor ausgewählt wird. */
   onVerifyPin: (id: string, pin: string) => Promise<boolean>;
@@ -90,7 +89,7 @@ export default function ParticipantGate({
     try {
       const ok = await onVerifyPin(pinTarget.id, pin);
       if (ok) {
-        onSelect(pinTarget.id);
+        onSelect(pinTarget.id, pin);
         setPinTarget(null);
       } else {
         setPinError('Falscher Code. Bitte erneut versuchen.');
@@ -175,12 +174,6 @@ export default function ParticipantGate({
                 className="participant-choice"
                 onClick={() => choose(p)}
               >
-                <span
-                  className="avatar"
-                  style={{ background: p.color || colorForName(p.name) }}
-                >
-                  {initialsOf(p.name)}
-                </span>
                 <span>{p.name}</span>
                 {p.hasPin && <span className="participant-choice-lock" title="Mit Code geschützt">🔒</span>}
               </button>
