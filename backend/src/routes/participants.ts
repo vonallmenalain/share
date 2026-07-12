@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { Router } from 'express';
-import { getDb, ParticipantRow } from '../db';
+import { getDb, ParticipantRow, SpaceRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireSpace } from '../middleware/auth';
 import { resolveParticipant } from '../middleware/participant';
@@ -12,6 +12,14 @@ import { optionalPin, optionalString, requireString } from '../lib/validation';
 const router = Router();
 
 router.use(requireSpace, resolveParticipant);
+
+/** Ob in diesem Bereich ein Code (PIN) für Teilnehmer-Identitäten Pflicht ist. */
+function spaceRequiresPin(spaceId: string): boolean {
+  const row = getDb().prepare('SELECT require_participant_pin FROM spaces WHERE id = ?').get(spaceId) as
+    | Pick<SpaceRow, 'require_participant_pin'>
+    | undefined;
+  return row?.require_participant_pin === 1;
+}
 
 /** Alle Teilnehmer eines Bereichs (standardmässig ohne archivierte). */
 router.get(
@@ -43,6 +51,12 @@ router.post(
     const name = requireString(req.body?.name, 'Name', { max: 60 });
     const color = optionalString(req.body?.color, 32);
     const pin = optionalPin(req.body?.pin);
+    // Ist der Code in diesem Bereich Pflicht, muss beim Anlegen einer neuen
+    // Identität einer vergeben werden. Als Option gibt es ihn immer, aber
+    // hier wird er ggf. erzwungen.
+    if (spaceRequiresPin(req.spaceId!) && !pin) {
+      throw new ApiError(400, 'In diesem Bereich ist ein Code (PIN) Pflicht – bitte einen vergeben.');
+    }
     const pinHash = pin ? bcrypt.hashSync(pin, 10) : null;
     const db = getDb();
 
@@ -54,15 +68,16 @@ router.post(
       // statt einen Fehler zu werfen – so gehen keine Finanzdaten verloren.
       // Ist die Identität mit einem Code geschützt, zählt das wie eine
       // normale Auswahl (dafür ist der eigene Verify-Endpunkt da) – hier also
-      // nur reaktivieren, wenn (noch) kein Code gesetzt ist.
+      // nur reaktivieren, wenn (noch) kein Code gesetzt ist (der oben ggf.
+      // erzwungene neue Code wird dabei direkt übernommen).
       if (existing.archived) {
         if (existing.pin_hash) {
           throw new ApiError(409, 'Diesen Namen gibt es bereits – bitte auswählen und Code eingeben.');
         }
-        db.prepare('UPDATE participants SET archived = 0, updated_at = ? WHERE id = ?').run(
-          new Date().toISOString(),
-          existing.id,
-        );
+        const now = new Date().toISOString();
+        db.prepare(
+          'UPDATE participants SET archived = 0, pin_hash = ?, pin_updated_at = ?, updated_at = ? WHERE id = ?',
+        ).run(pinHash, pinHash ? now : null, now, existing.id);
         const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(existing.id) as
           | ParticipantRow
           | undefined;

@@ -46,17 +46,43 @@ SQLite-Transaktion.
 
 ## Teilnehmer &amp; Identität
 
-Für Finanzen (und zur Zuordnung von Aktionen) gibt es pro Bereich stabile
-**Teilnehmer** (`participants`). Beim ersten Öffnen des Finanzbereichs fragt die
-App „Wer bist du?“ – man wählt sich aus oder legt sich neu an. Die Auswahl wird
-pro Bereich **lokal im Browser** gespeichert (`share.participant.<slug>`) und bei
-Modulaktionen über den Header `X-Participant-Id` mitgeschickt. Das Backend prüft
-immer, dass die Teilnehmer-ID zum aktuellen Bereich (`req.spaceId`) gehört.
+Zur Zuordnung von Aktionen (Finanzen, Einkaufsliste, Notizen, Kalender – auch
+bei reinen Foto-Bereichen) gibt es pro Bereich stabile **Teilnehmer**
+(`participants`). „Wer bist du?“ ist **app-weit**: Beim ersten Öffnen eines
+beliebigen Links innerhalb eines Bereichs (auf einem Gerät) fragt die App
+einmalig danach – man wählt sich aus oder legt sich neu an. Die Abfrage sitzt
+zentral in `SpaceLayout`/`SpaceSessionContext` (nicht mehr pro Modul) und
+blockiert den restlichen Inhalt, bis eine Identität gewählt ist.
+
+Die Auswahl wird pro Bereich **lokal im Browser** gespeichert
+(`share.participant.<slug>`) und bei Modulaktionen über den Header
+`X-Participant-Id` mitgeschickt. Das Backend prüft immer, dass die
+Teilnehmer-ID zum aktuellen Bereich (`req.spaceId`) gehört.
 
 Das ist bewusst ein **Vertrauensmodell für Familie &amp; Freunde** – **keine**
 echte Benutzer-Authentifizierung. Teilnehmernamen sind pro Bereich (ohne
 Beachtung der Gross-/Kleinschreibung) eindeutig. Verwendete Teilnehmer werden
 nicht gelöscht, sondern nur **archiviert**.
+
+### Schutz-Code (PIN)
+
+Jede Identität kann freiwillig mit einem **Code (PIN, 4–8 Ziffern)** geschützt
+werden – nur so kann später jemand denselben Namen auf einem **weiteren
+Gerät** wieder verwenden (auf demselben Gerät reicht die lokal gespeicherte
+Auswahl, der Code wird nur einmal benötigt). Beim Erstellen eines Bereichs
+lässt sich zusätzlich festlegen, dass der Code **Pflicht** ist
+(`spaces.require_participant_pin`) – dann muss beim Anlegen einer neuen
+Identität (oder beim erneuten Auswählen einer Identität ohne Code) zwingend
+einer vergeben werden. Diese Einstellung lässt sich im Adminbereich jederzeit
+ändern (`PATCH /api/spaces/:id/participant-policy`).
+
+**Code vergessen?** Da der Code nicht rückwärts auflösbar ist (bcrypt-Hash),
+kann er nicht wiederhergestellt werden. Stattdessen kann der Administrator den
+Code im Adminbereich (Bereich aufklappen → „Personen &amp; Codes verwalten“)
+**zurücksetzen** (`POST /api/spaces/:id/participants/:participantId/reset-pin`).
+Danach hat die Identität wieder keinen Code – die betroffene Person legt beim
+nächsten Öffnen des Bereichs (erzwungen, falls der Code Pflicht ist) einfach
+einen neuen fest.
 
 ## Finanzberechnung
 
@@ -104,6 +130,8 @@ eingeschränkt. Modulrouten prüfen zusätzlich, ob das Modul aktiviert ist
 
 - `GET /api/participants`
 - `POST /api/participants`
+- `POST /api/participants/:id/verify-pin`
+- `PATCH /api/participants/:id/pin`
 - `PATCH /api/participants/:id`
 - `POST /api/participants/:id/archive`
 
@@ -148,10 +176,16 @@ eingeschränkt. Modulrouten prüfen zusätzlich, ob das Modul aktiviert ist
 - `PATCH /api/calendar/events/:id`
 - `DELETE /api/calendar/events/:id`
 
-**Adminbereich (Module)**
+**Adminbereich (Module &amp; Teilnehmer)**
 
 - `GET /api/spaces/:id/modules`
 - `PATCH /api/spaces/:id/modules`
+- `PATCH /api/spaces/:id/participant-policy` – Code (PIN) für neue Identitäten
+  zur Pflicht machen oder wieder freiwillig machen.
+- `GET /api/spaces/:id/participants` – alle Identitäten eines Bereichs
+  (inkl. archivierter).
+- `POST /api/spaces/:id/participants/:participantId/reset-pin` – Code einer
+  Identität entfernen (Antwort auf „Code vergessen?“).
 
 ## Umgebungsvariablen
 

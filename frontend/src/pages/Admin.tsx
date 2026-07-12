@@ -10,10 +10,12 @@ import {
   Item,
   ItemState,
   ModuleKey,
+  Participant,
   Space,
 } from '../api/client';
 import { shareItems } from '../lib/share';
 import { adminKeyStore } from '../lib/storage';
+import { colorForName, initialsOf } from '../lib/avatar';
 import {
   formatBytes,
   formatDate,
@@ -123,6 +125,10 @@ export default function Admin() {
       }
       return next;
     });
+  };
+
+  const updateSpace = (updated: Space) => {
+    setSpaces((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
   };
 
   const removeSpace = async (space: Space) => {
@@ -332,6 +338,12 @@ export default function Admin() {
 
                       <AdminModulePanel spaceId={s.id} adminKey={adminKey} />
 
+                      <AdminParticipantsPanel
+                        space={s}
+                        adminKey={adminKey}
+                        onUpdateSpace={updateSpace}
+                      />
+
                       <AccessLogPanel spaceId={s.id} adminKey={adminKey} />
 
                       {!detail || detail.status === 'loading' ? (
@@ -483,6 +495,173 @@ function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: st
           {saving ? 'Speichere…' : 'Module speichern'}
         </button>
         {msg && <span className="muted" style={{ fontSize: 13 }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Adminbereich: Pflicht-Einstellung für den Teilnehmer-Code (PIN) sowie
+ * Verwaltung aller Identitäten eines Bereichs. Von hier aus kann der Code
+ * jeder Person zurückgesetzt werden – die Antwort auf „Code vergessen?": die
+ * Person wendet sich an den Administrator, der den Code hier entfernt, damit
+ * sie beim nächsten Auswählen ihres Namens einen neuen festlegen kann.
+ */
+function AdminParticipantsPanel({
+  space,
+  adminKey,
+  onUpdateSpace,
+}: {
+  space: Space;
+  adminKey: string;
+  onUpdateSpace: (space: Space) => void;
+}) {
+  const [requirePin, setRequirePin] = useState(space.requireParticipantPin);
+  const [savingPolicy, setSavingPolicy] = useState(false);
+  const [policyMsg, setPolicyMsg] = useState('');
+
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [error, setError] = useState('');
+  const [resettingId, setResettingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRequirePin(space.requireParticipantPin);
+  }, [space.requireParticipantPin]);
+
+  const savePolicy = async () => {
+    setSavingPolicy(true);
+    setPolicyMsg('');
+    try {
+      const res = await api<{ space: Space }>(`/api/spaces/${space.id}/participant-policy`, {
+        method: 'PATCH',
+        adminKey,
+        body: { requireParticipantPin: requirePin },
+      });
+      onUpdateSpace(res.space);
+      setPolicyMsg('Gespeichert ✓');
+      setTimeout(() => setPolicyMsg(''), 1800);
+    } catch (err) {
+      setPolicyMsg(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    } finally {
+      setSavingPolicy(false);
+    }
+  };
+
+  const loadParticipants = async () => {
+    setStatus('loading');
+    setError('');
+    try {
+      const res = await api<{ participants: Participant[] }>(
+        `/api/spaces/${space.id}/participants`,
+        { adminKey },
+      );
+      setParticipants(res.participants);
+      setStatus('ready');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Laden fehlgeschlagen.');
+      setStatus('error');
+    }
+  };
+
+  const toggleOpen = () => {
+    setOpen((o) => {
+      const next = !o;
+      if (next && status === 'idle') void loadParticipants();
+      return next;
+    });
+  };
+
+  const resetPin = async (p: Participant) => {
+    if (!confirm(`Code von „${p.name}“ zurücksetzen? Die Person kann danach einen neuen festlegen.`))
+      return;
+    setResettingId(p.id);
+    try {
+      const res = await api<{ participant: Participant }>(
+        `/api/spaces/${space.id}/participants/${p.id}/reset-pin`,
+        { method: 'POST', adminKey },
+      );
+      setParticipants((prev) => prev.map((x) => (x.id === p.id ? res.participant : x)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Zurücksetzen fehlgeschlagen.');
+    } finally {
+      setResettingId(null);
+    }
+  };
+
+  return (
+    <div className="admin-module-panel">
+      <div className="admin-module-title">Wer bist du? &amp; Code (PIN)</div>
+      <label className="checkbox-line">
+        <input type="checkbox" checked={requirePin} onChange={(e) => setRequirePin(e.target.checked)} />
+        Code für neue Identitäten in diesem Bereich zur Pflicht machen
+      </label>
+      <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 10 }}>
+        <button
+          className="btn btn-sm btn-primary"
+          disabled={savingPolicy || requirePin === space.requireParticipantPin}
+          onClick={savePolicy}
+        >
+          {savingPolicy ? 'Speichere…' : 'Einstellung speichern'}
+        </button>
+        {policyMsg && <span className="muted" style={{ fontSize: 13 }}>{policyMsg}</span>}
+      </div>
+
+      <div className="access-panel" style={{ marginTop: 14 }}>
+        <button type="button" className="access-toggle" onClick={toggleOpen}>
+          <span className={`chevron${open ? ' open' : ''}`}>▸</span>
+          <span className="grow">Personen &amp; Codes verwalten</span>
+          {participants.length > 0 && <span className="tag">{participants.length}</span>}
+        </button>
+
+        {open && (
+          <div className="access-body">
+            {status === 'loading' ? (
+              <div className="row" style={{ padding: '10px 0' }}>
+                <span className="spinner" /> <span className="muted">Lade Personen…</span>
+              </div>
+            ) : status === 'error' ? (
+              <div className="error-box">{error}</div>
+            ) : participants.length === 0 ? (
+              <div className="faint" style={{ fontSize: 13, padding: '8px 0' }}>
+                Noch keine Person hat sich in diesem Bereich angelegt.
+              </div>
+            ) : (
+              <ul className="admin-participant-list">
+                {participants.map((p) => (
+                  <li key={p.id} className="admin-participant-row">
+                    <span className="avatar sm" style={{ background: p.color || colorForName(p.name) }}>
+                      {initialsOf(p.name)}
+                    </span>
+                    <span className="grow">
+                      {p.name}
+                      {p.archived && (
+                        <span className="tag" style={{ marginLeft: 6 }}>
+                          archiviert
+                        </span>
+                      )}
+                    </span>
+                    {p.hasPin ? (
+                      <button
+                        className="btn btn-sm btn-danger"
+                        disabled={resettingId === p.id}
+                        onClick={() => void resetPin(p)}
+                        title="Code entfernen, damit die Person einen neuen festlegen kann"
+                      >
+                        {resettingId === p.id ? 'Setze zurück…' : 'Code zurücksetzen'}
+                      </button>
+                    ) : (
+                      <span className="faint" style={{ fontSize: 13 }}>
+                        kein Code gesetzt
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

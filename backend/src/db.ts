@@ -18,11 +18,12 @@ export function initDb(): Database.Database {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS spaces (
-      id            TEXT PRIMARY KEY,
-      slug          TEXT NOT NULL UNIQUE,
-      name          TEXT NOT NULL,
-      password_hash TEXT,
-      created_at    TEXT NOT NULL
+      id                       TEXT PRIMARY KEY,
+      slug                     TEXT NOT NULL UNIQUE,
+      name                     TEXT NOT NULL,
+      password_hash            TEXT,
+      require_participant_pin  INTEGER NOT NULL DEFAULT 0,
+      created_at               TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS items (
@@ -388,6 +389,18 @@ function migrate(database: Database.Database) {
   const participantCols = columnsOf('participants');
   addColumn('participants', participantCols, 'pin_hash', `pin_hash TEXT`);
   addColumn('participants', participantCols, 'pin_updated_at', `pin_updated_at TEXT`);
+
+  // Bereichsweite Pflicht für den Teilnehmer-Code (PIN): ist sie aktiv, muss
+  // beim Anlegen einer neuen Identität (oder beim erneuten Auswählen einer
+  // Identität ohne Code, z. B. nach einem Admin-Reset) ein Code vergeben
+  // werden. Nachträglich ergänzt, daher per Migration statt im CREATE TABLE.
+  const spaceCols = columnsOf('spaces');
+  addColumn(
+    'spaces',
+    spaceCols,
+    'require_participant_pin',
+    `require_participant_pin INTEGER NOT NULL DEFAULT 0`,
+  );
 }
 
 export function getDb(): Database.Database {
@@ -400,6 +413,8 @@ export interface SpaceRow {
   slug: string;
   name: string;
   password_hash: string | null;
+  /** Ist der Teilnehmer-Code (PIN) in diesem Bereich Pflicht? 0 = nein, 1 = ja. */
+  require_participant_pin: number;
   created_at: string;
 }
 

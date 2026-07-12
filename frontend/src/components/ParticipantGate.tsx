@@ -3,25 +3,32 @@ import { Participant } from '../api/client';
 import { colorForName, initialsOf } from '../lib/avatar';
 
 /**
- * „Wer bist du?" – Auswahl der eigenen Teilnehmer-Identität in einem Bereich.
- * Bestehende Teilnehmer können gewählt oder ein neuer angelegt werden. Der
- * Name wird mit dem bestehenden Uploader-Namen vorbelegt.
+ * „Wer bist du?" – Auswahl der eigenen Identität für den gesamten Bereich.
+ * Erscheint einmal pro Gerät, sobald ein beliebiger Link des Bereichs zum
+ * ersten Mal geöffnet wird (siehe SpaceLayout). Bestehende Identitäten können
+ * gewählt oder eine neue kann angelegt werden. Der Name wird mit dem
+ * bestehenden Anzeigenamen vorbelegt.
  *
  * Kein echtes Login: Wer eine Person mit hinterlegtem Code (PIN) auswählt,
  * muss diesen zuerst eingeben. Ohne Code gelingt die Auswahl wie bisher
- * sofort – bewusstes Vertrauensmodell für Familie & Freunde.
+ * sofort – bewusstes Vertrauensmodell für Familie & Freunde. Ist der Code für
+ * diesen Bereich Pflicht (requirePin), muss beim Anlegen einer neuen
+ * Identität zwingend einer vergeben werden.
  */
 export default function ParticipantGate({
   participants,
   prefillName,
+  requirePin = false,
   onSelect,
   onCreate,
   onVerifyPin,
   title = 'Wer bist du?',
-  hint = 'Wähle dich aus oder lege dich neu an – so werden Ausgaben richtig zugeordnet.',
+  hint = 'Wähle dich aus oder lege dich neu an – so werden Beiträge richtig zugeordnet.',
 }: {
   participants: Participant[];
   prefillName?: string;
+  /** Ist ein Code in diesem Bereich Pflicht? Erzwingt das PIN-Feld beim Anlegen. */
+  requirePin?: boolean;
   onSelect: (id: string) => void;
   onCreate: (name: string, pin?: string) => Promise<unknown>;
   /** Prüft einen eingegebenen Code gegen den Server, bevor ausgewählt wird. */
@@ -32,7 +39,7 @@ export default function ParticipantGate({
   const active = participants.filter((p) => !p.archived);
   const [newName, setNewName] = useState(prefillName ?? '');
   const [newPin, setNewPin] = useState('');
-  const [showPinField, setShowPinField] = useState(false);
+  const [showPinField, setShowPinField] = useState(requirePin);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -41,11 +48,16 @@ export default function ParticipantGate({
   const [pinValue, setPinValue] = useState('');
   const [pinError, setPinError] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = newName.trim();
     if (!name) return;
+    if (requirePin && !newPin.trim()) {
+      setError('In diesem Bereich ist ein Code (PIN) Pflicht – bitte einen vergeben.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -65,6 +77,7 @@ export default function ParticipantGate({
     setPinTarget(p);
     setPinValue('');
     setPinError('');
+    setShowForgot(false);
   };
 
   const confirmPin = async (e: React.FormEvent) => {
@@ -127,6 +140,22 @@ export default function ParticipantGate({
               </button>
             </div>
           </form>
+          {!showForgot ? (
+            <button
+              type="button"
+              className="link-btn"
+              style={{ marginTop: 14, display: 'inline-block' }}
+              onClick={() => setShowForgot(true)}
+            >
+              Code vergessen?
+            </button>
+          ) : (
+            <p className="hint" style={{ marginTop: 14 }}>
+              Bitte wende dich an die Administratorin oder den Administrator dieses Bereichs. Sie/Er
+              kann deinen Code im Adminbereich zurücksetzen – danach kannst du beim Auswählen deines
+              Namens sofort einen neuen Code festlegen.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -170,7 +199,9 @@ export default function ParticipantGate({
           </div>
           {showPinField ? (
             <div className="field" style={{ marginBottom: 8 }}>
-              <label className="label">Code (4–8 Ziffern, optional)</label>
+              <label className="label">
+                {requirePin ? 'Code (4–8 Ziffern, Pflicht)' : 'Code (4–8 Ziffern, optional)'}
+              </label>
               <input
                 className="input"
                 type="password"
@@ -179,7 +210,28 @@ export default function ParticipantGate({
                 placeholder="Nur für dich, damit niemand sonst deinen Namen wählt"
                 value={newPin}
                 onChange={(e) => setNewPin(e.target.value)}
+                required={requirePin}
               />
+              {requirePin && (
+                <p className="hint" style={{ marginTop: 6 }}>
+                  In diesem Bereich ist der Code Pflicht. Nur so kann später jemand deinen Namen auf
+                  einem weiteren Gerät wieder verwenden. Solltest du ihn einmal vergessen, kann er im
+                  Adminbereich zurückgesetzt werden.
+                </p>
+              )}
+              {!requirePin && (
+                <button
+                  type="button"
+                  className="link-btn"
+                  style={{ marginTop: 6, display: 'inline-block' }}
+                  onClick={() => {
+                    setShowPinField(false);
+                    setNewPin('');
+                  }}
+                >
+                  Ohne Code anlegen
+                </button>
+              )}
             </div>
           ) : (
             <button
@@ -192,7 +244,10 @@ export default function ParticipantGate({
             </button>
           )}
           {error && <div className="error-box">{error}</div>}
-          <button className="btn btn-primary" disabled={busy || !newName.trim()}>
+          <button
+            className="btn btn-primary"
+            disabled={busy || !newName.trim() || (requirePin && !newPin.trim())}
+          >
             {busy ? 'Lege an…' : 'Als neue Person starten'}
           </button>
         </form>

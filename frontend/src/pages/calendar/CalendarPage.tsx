@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from 'react';
 import { api, CalendarEvent } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { useModuleData } from '../../lib/useModuleData';
-import { useParticipants } from '../../lib/useParticipants';
 import { calendarViewStore, CalendarViewMode } from '../../lib/storage';
 import EventForm from './EventForm';
 import {
@@ -27,8 +26,8 @@ const MONTH_CHIP_LIMIT = 2;
 const WEEK_CHIP_LIMIT = 4;
 
 export default function CalendarPage() {
-  const { slug, token } = useSpaceSessionContext();
-  const { currentId } = useParticipants(slug, token);
+  const { token, identity } = useSpaceSessionContext();
+  const { currentId } = identity;
   const participantId = currentId ?? undefined;
 
   const today = todayKey();

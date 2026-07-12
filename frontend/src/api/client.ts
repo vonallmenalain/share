@@ -100,6 +100,8 @@ export interface Space {
   modules: ModuleKey[];
   /** Abrechnungswährung, falls das Finanzmodul aktiv ist. */
   financeCurrency?: string | null;
+  /** Ist ein Code (PIN) für Teilnehmer-Identitäten in diesem Bereich Pflicht? */
+  requireParticipantPin: boolean;
   itemCount?: number;
   deletedCount?: number;
   accessCount?: number;

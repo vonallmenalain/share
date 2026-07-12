@@ -5,6 +5,9 @@ import Dropdown from '../components/Dropdown';
 import UserIcon from '../components/UserIcon';
 import ShareIcon from '../components/ShareIcon';
 import ModuleNavigation from '../components/ModuleNavigation';
+import ParticipantGate from '../components/ParticipantGate';
+import ParticipantPinSetup from '../components/ParticipantPinSetup';
+import ParticipantPinManager from '../components/ParticipantPinManager';
 import { setSpaceManifest, resetManifest } from '../lib/pwaManifest';
 import { colorForName, initialsOf } from '../lib/avatar';
 import {
@@ -23,12 +26,24 @@ export default function SpaceLayout() {
 }
 
 function SpaceShell() {
-  const { slug, phase, space, name, setName, gate, enter, chromeHidden, setChromeHidden, visitedSpaces } =
-    useSpaceSessionContext();
+  const {
+    slug,
+    phase,
+    space,
+    name,
+    setName,
+    gate,
+    enter,
+    chromeHidden,
+    setChromeHidden,
+    visitedSpaces,
+    identity,
+  } = useSpaceSessionContext();
   const location = useLocation();
   // Modul-Navigation ist standardmässig eingeklappt (kein permanenter
   // Platzverbrauch) und öffnet sich nur über den Hamburger-Button oben links.
   const [navOpen, setNavOpen] = useState(false);
+  const [showPinManager, setShowPinManager] = useState(false);
 
   // PWA-Manifest auf den aktuellen Bereich zeigen lassen (wie bisher).
   useEffect(() => {
@@ -123,6 +138,16 @@ function SpaceShell() {
   const modules = space?.modules ?? ['photos'];
   const showNav = modules.length > 1;
   const otherSpaces = visitedSpaces.filter((s) => s.slug !== slug);
+
+  // „Wer bist du?" – einmal pro Bereich und Gerät, unabhängig vom zuerst
+  // geöffneten Link/Modul. Erst danach wird der eigentliche Inhalt gezeigt.
+  const needsIdentity = !identity.loading && !identity.current;
+  // Ist der Code (PIN) in diesem Bereich Pflicht, aber die aktuelle Person
+  // hat (noch) keinen – z. B. frisch angelegt ohne Code (sollte nicht
+  // vorkommen) oder weil der Administrator ihn zurückgesetzt hat („Code
+  // vergessen?") – muss zuerst ein neuer Code vergeben werden.
+  const needsPinSetup =
+    !identity.loading && !!identity.current && identity.requirePin && !identity.current.hasPin;
 
   const changeName = () => {
     const n = (window.prompt('Dein Name:', name) || '').trim();
@@ -220,13 +245,53 @@ function SpaceShell() {
                   <ShareIcon size={16} />
                   Bereich teilen
                 </button>
+                {identity.current && !needsIdentity && !needsPinSetup && (
+                  <>
+                    <div className="dropdown-divider" />
+                    <div className="dropdown-label">Deine Identität</div>
+                    <div className="dropdown-name">
+                      <span
+                        className="avatar sm"
+                        style={{ background: identity.current.color || colorForName(identity.current.name) }}
+                      >
+                        {initialsOf(identity.current.name)}
+                      </span>
+                      <strong>{identity.current.name}</strong>
+                      {identity.current.hasPin && (
+                        <span className="participant-choice-lock" title="Mit Code geschützt">
+                          🔒
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="dropdown-item"
+                      onClick={() => {
+                        close();
+                        setShowPinManager(true);
+                      }}
+                    >
+                      {identity.current.hasPin ? 'Code ändern' : 'Code einrichten'}
+                    </button>
+                    <button
+                      type="button"
+                      className="dropdown-item"
+                      onClick={() => {
+                        close();
+                        identity.switchIdentity();
+                      }}
+                    >
+                      Person wechseln
+                    </button>
+                  </>
+                )}
               </>
             )}
           </Dropdown>
         </div>
       </TopBar>
 
-      {showNav && (
+      {showNav && !identity.loading && !needsIdentity && !needsPinSetup && (
         <ModuleNavigation
           slug={slug}
           modules={modules}
@@ -237,8 +302,40 @@ function SpaceShell() {
       )}
 
       <div className={`space-shell${showNav ? ' has-nav' : ''}`}>
-        <Outlet />
+        {identity.loading ? (
+          <div className="center-page" style={{ minHeight: 240 }}>
+            <span className="spinner lg" />
+          </div>
+        ) : needsIdentity ? (
+          <div className="container module-page">
+            <ParticipantGate
+              participants={identity.participants}
+              prefillName={name}
+              requirePin={identity.requirePin}
+              onSelect={identity.select}
+              onCreate={identity.create}
+              onVerifyPin={identity.verifyPin}
+            />
+          </div>
+        ) : needsPinSetup && identity.current ? (
+          <div className="container module-page">
+            <ParticipantPinSetup
+              participant={identity.current}
+              onSetPin={(opts) => identity.setPin(identity.current!.id, opts)}
+            />
+          </div>
+        ) : (
+          <Outlet />
+        )}
       </div>
+
+      {showPinManager && identity.current && (
+        <ParticipantPinManager
+          participant={identity.current}
+          onSetPin={(opts) => identity.setPin(identity.current!.id, opts)}
+          onClose={() => setShowPinManager(false)}
+        />
+      )}
     </>
   );
 }

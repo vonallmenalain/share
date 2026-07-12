@@ -1,16 +1,17 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { AccessLogRow, getDb, ItemRow, SpaceRow } from '../db';
+import { AccessLogRow, getDb, ItemRow, ParticipantRow, SpaceRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireAdmin, requireSpace } from '../middleware/auth';
-import { accessLimiter, adminLimiter } from '../middleware/rateLimit';
+import { accessLimiter, adminLimiter, pinLimiter } from '../middleware/rateLimit';
 import { newId, newSlug, slugifyName } from '../lib/ids';
 import { signAccessToken } from '../lib/auth';
 import { deleteAllVariants, deleteSpaceStorage } from '../lib/media';
 import { logAccess } from '../lib/access';
 import { publicItem } from './items';
 import { getEnabledModules, isModuleKey, setEnabledModules } from '../lib/modules';
-import { normalizeCurrency } from '../lib/validation';
+import { publicParticipant } from '../lib/participants';
+import { normalizeCurrency, toBool } from '../lib/validation';
 import { ModuleKey } from '../db';
 
 const router = Router();
@@ -62,6 +63,8 @@ function publicSpace(space: SpaceRow) {
     createdAt: space.created_at,
     modules,
     financeCurrency: modules.includes('finance') ? financeCurrencyOf(space.id) : null,
+    // Ist in diesem Bereich ein Code (PIN) für Teilnehmer-Identitäten Pflicht?
+    requireParticipantPin: space.require_participant_pin === 1,
   };
 }
 
@@ -85,6 +88,10 @@ router.post(
     const currency = modules.includes('finance')
       ? normalizeCurrency(req.body?.financeCurrency, 'CHF')
       : 'CHF';
+    // Beim Anlegen festlegen, ob ein Code (PIN) für Teilnehmer-Identitäten in
+    // diesem Bereich Pflicht ist. Als Option (freiwilliger Code) gibt es sie
+    // immer – hier wird nur bestimmt, ob sie beim Anlegen erzwungen wird.
+    const requireParticipantPin = toBool(req.body?.requireParticipantPin);
 
     const db = getDb();
     // Slug aus Name + kurzem Zufallsteil, garantiert eindeutig.
@@ -106,8 +113,9 @@ router.post(
     // Space, Module und (falls nötig) Finanzkonfiguration in einer Transaktion.
     const create = db.transaction(() => {
       db.prepare(
-        'INSERT INTO spaces (id, slug, name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)',
-      ).run(id, slug, name, passwordHash, createdAt);
+        `INSERT INTO spaces (id, slug, name, password_hash, require_participant_pin, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(id, slug, name, passwordHash, requireParticipantPin ? 1 : 0, createdAt);
       setEnabledModules(id, modules, db);
       if (modules.includes('finance')) {
         db.prepare(
@@ -390,6 +398,81 @@ router.patch(
       modules: getEnabledModules(space.id),
       financeCurrency: financeCurrencyOf(space.id),
     });
+  }),
+);
+
+/**
+ * Admin: legt fest, ob ein Code (PIN) für Teilnehmer-Identitäten in diesem
+ * Bereich Pflicht ist. Als Option (freiwilliger Schutz-Code) steht der Code
+ * unabhängig davon immer zur Verfügung – diese Einstellung erzwingt ihn nur
+ * beim Anlegen einer neuen Identität bzw. beim erneuten Auswählen einer
+ * Identität ohne Code (z. B. nach einem Zurücksetzen durch den Admin).
+ */
+router.patch(
+  '/:id/participant-policy',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.params.id) as
+      | SpaceRow
+      | undefined;
+    if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
+    const requireParticipantPin = toBool(req.body?.requireParticipantPin);
+    db.prepare('UPDATE spaces SET require_participant_pin = ? WHERE id = ?').run(
+      requireParticipantPin ? 1 : 0,
+      space.id,
+    );
+    const updated = db.prepare('SELECT * FROM spaces WHERE id = ?').get(space.id) as SpaceRow;
+    res.json({ space: publicSpace(updated) });
+  }),
+);
+
+/**
+ * Admin: alle Teilnehmer-Identitäten eines Bereichs auflisten (inkl.
+ * archivierter), damit von jeder Person der Code zurückgesetzt werden kann.
+ */
+router.get(
+  '/:id/participants',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const space = db.prepare('SELECT id FROM spaces WHERE id = ?').get(req.params.id) as
+      | { id: string }
+      | undefined;
+    if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
+    const rows = db
+      .prepare(
+        'SELECT * FROM participants WHERE space_id = ? ORDER BY archived ASC, name COLLATE NOCASE ASC',
+      )
+      .all(space.id) as ParticipantRow[];
+    res.json({ participants: rows.map(publicParticipant) });
+  }),
+);
+
+/**
+ * Admin: den Code (PIN) einer Teilnehmer-Identität zurücksetzen (löschen).
+ * Damit kann die betroffene Person beim nächsten Auswählen ihres Namens
+ * einen neuen Code vergeben – gedacht für den Fall "Code vergessen": die
+ * Person wendet sich an den Administrator, der den Code hier entfernt.
+ */
+router.post(
+  '/:id/participants/:participantId/reset-pin',
+  pinLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT * FROM participants WHERE id = ? AND space_id = ?')
+      .get(req.params.participantId, req.params.id) as ParticipantRow | undefined;
+    if (!row) throw new ApiError(404, 'Teilnehmer nicht gefunden.');
+    db.prepare('UPDATE participants SET pin_hash = NULL, pin_updated_at = NULL, updated_at = ? WHERE id = ?').run(
+      new Date().toISOString(),
+      row.id,
+    );
+    const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(row.id) as ParticipantRow;
+    res.json({ participant: publicParticipant(updated) });
   }),
 );
 

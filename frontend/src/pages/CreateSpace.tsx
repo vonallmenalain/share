@@ -26,6 +26,7 @@ export default function CreateSpace() {
   const [adminKey, setAdminKey] = useState(adminKeyStore.get());
   const [modules, setModules] = useState<Set<ModuleKey>>(new Set());
   const [currency, setCurrency] = useState('CHF');
+  const [requireParticipantPin, setRequireParticipantPin] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState<Space | null>(null);
@@ -55,6 +56,7 @@ export default function CreateSpace() {
           password: password || undefined,
           modules: Array.from(modules),
           financeCurrency: modules.has('finance') ? currency : undefined,
+          requireParticipantPin,
         },
       });
       adminKeyStore.set(adminKey);
@@ -153,6 +155,25 @@ export default function CreateSpace() {
                       );
                     })}
                   </div>
+                </div>
+
+                <div className="field">
+                  <label className="checkbox-line">
+                    <input
+                      type="checkbox"
+                      checked={requireParticipantPin}
+                      onChange={(e) => setRequireParticipantPin(e.target.checked)}
+                    />
+                    Code (PIN) für „Wer bist du?" zur Pflicht machen
+                  </label>
+                  <p className="hint" style={{ marginTop: 6 }}>
+                    Beim ersten Öffnen dieses Bereichs wählt jede Person einmal ihren Namen (oder legt
+                    sich neu an). Mit dieser Option muss dabei zusätzlich ein Code (4–8 Ziffern)
+                    vergeben werden – nur so lässt sich derselbe Name später auch auf einem weiteren
+                    Gerät sicher wieder verwenden. Der Code wird auf dem Gerät gespeichert und muss
+                    normalerweise nur einmal eingegeben werden. Ohne diese Option bleibt der Code
+                    weiterhin als freiwilliger Schutz verfügbar.
+                  </p>
                 </div>
 
                 {modules.has('finance') && (
