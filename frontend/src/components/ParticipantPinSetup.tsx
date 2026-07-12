@@ -55,7 +55,6 @@ export default function ParticipantPinSetup({
               type="password"
               inputMode="numeric"
               autoComplete="off"
-              placeholder="••••"
               value={pin}
               onChange={(e) => setPinValue(e.target.value)}
               autoFocus
@@ -68,7 +67,6 @@ export default function ParticipantPinSetup({
               type="password"
               inputMode="numeric"
               autoComplete="off"
-              placeholder="••••"
               value={confirmPin}
               onChange={(e) => setConfirmPin(e.target.value)}
             />

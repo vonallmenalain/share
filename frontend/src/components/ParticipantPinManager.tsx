@@ -93,7 +93,6 @@ export default function ParticipantPinManager({
                 type="password"
                 inputMode="numeric"
                 autoComplete="off"
-                placeholder="••••"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 autoFocus={!participant.hasPin}

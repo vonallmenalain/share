@@ -119,7 +119,6 @@ export default function ParticipantGate({
                 type="password"
                 inputMode="numeric"
                 autoComplete="off"
-                placeholder="••••"
                 value={pinValue}
                 onChange={(e) => setPinValue(e.target.value)}
                 autoFocus
