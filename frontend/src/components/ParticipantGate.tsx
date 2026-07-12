@@ -212,11 +212,15 @@ export default function ParticipantGate({
                 onChange={(e) => setNewPin(e.target.value)}
                 required={requirePin}
               />
-              {requirePin && (
+              {requirePin ? (
                 <p className="hint" style={{ marginTop: 6 }}>
-                  In diesem Bereich ist der Code Pflicht. Nur so kann später jemand deinen Namen auf
-                  einem weiteren Gerät wieder verwenden. Solltest du ihn einmal vergessen, kann er im
-                  Adminbereich zurückgesetzt werden.
+                  Mit dem Code kannst nur du Änderungen in deinem Namen vornehmen. Solltest du ihn
+                  einmal vergessen, kann er im Adminbereich zurückgesetzt werden.
+                </p>
+              ) : (
+                <p className="hint" style={{ marginTop: 6 }}>
+                  Du kannst deinen Namen mit einem Code schützen, damit nur du unter deinem Namen
+                  Änderungen vornehmen kannst.
                 </p>
               )}
               {!requirePin && (
