@@ -10,7 +10,6 @@ import { api, fileUrl, Item } from '../api/client';
 import { useUploads } from '../context/Uploads';
 import { useSpaceSessionContext } from '../context/SpaceSessionContext';
 import { nameStore } from '../lib/storage';
-import { colorForName, initialsOf } from '../lib/avatar';
 import { dayKey, formatDayHeading } from '../lib/format';
 
 type View = 'gallery' | 'favorites' | 'people' | 'time';
@@ -540,9 +539,6 @@ export default function Space() {
                     onClick={() => togglePersonExpanded(person)}
                     aria-expanded={open}
                   >
-                    <span className="avatar" style={{ background: colorForName(person) }}>
-                      {initialsOf(person)}
-                    </span>
                     <h2>{person}</h2>
                     <span className="count">{arr.length}</span>
                     <span className={`chevron${open ? ' open' : ''}`}>▸</span>

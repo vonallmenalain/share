@@ -504,11 +504,6 @@ button {
   background: var(--line);
   margin: 4px 2px;
 }
-.avatar.sm {
-  width: 24px;
-  height: 24px;
-  font-size: 11px;
-}
 
 @media (max-width: 640px) {
   .toolbar {
@@ -618,17 +613,6 @@ button {
   background: var(--brand-soft);
   border-color: var(--brand);
   color: var(--brand);
-}
-.avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
 }
 
 .grid {
