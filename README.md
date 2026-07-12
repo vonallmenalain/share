@@ -86,7 +86,11 @@ Alle Metadaten (auch der neuen Module) bleiben in derselben lokalen
 - **Download** einzeln oder als **ZIP** (mehrere/alle Originale auf einmal).
 - **Adminbereich**: aufklappbare Bereiche mit allen Medien aller Personen,
   inklusive der gelöschten – mit der Möglichkeit, wiederherzustellen oder
-  Fotos/Videos endgültig zu löschen.
+  Fotos/Videos endgültig zu löschen. Ausserdem lassen sich pro Bereich die
+  **Identitäten** verwalten: den Schutz-Code (PIN) einer Person zurücksetzen,
+  eine Identität **archivieren** (überall ausblenden, Finanzdaten bleiben
+  erhalten) oder – wenn sie in keinen Finanzdaten mehr verankert ist –
+  **endgültig löschen**.
 - **Zugriffsstatistik (nur Admin)**: Pro Bereich lässt sich nach dem Ausklappen
   ein Protokoll aller Zugriffe einsehen – mit Zeitpunkt, Person, IP und
   **Standort** (Stadt/Region/Land, wo verfügbar). Die Liste ist sortierbar und
