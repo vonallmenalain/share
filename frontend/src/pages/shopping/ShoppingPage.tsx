@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { api, ShoppingItem } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { useModuleData } from '../../lib/useModuleData';
-import { useParticipants, participantName } from '../../lib/useParticipants';
+import { participantName } from '../../lib/useParticipants';
 import { formatShortDateTime } from '../../lib/format';
 import { shoppingSortStore, ShoppingSortMode } from '../../lib/storage';
 import { useReorderList } from '../../lib/useReorderList';
@@ -17,8 +17,8 @@ function sortByRecency(items: ShoppingItem[], byField: 'createdAt' | 'checkedAt'
 }
 
 export default function ShoppingPage() {
-  const { slug, token } = useSpaceSessionContext();
-  const { participants, currentId } = useParticipants(slug, token);
+  const { slug, token, identity } = useSpaceSessionContext();
+  const { participants, currentId } = identity;
   const participantId = currentId ?? undefined;
 
   const [text, setText] = useState('');

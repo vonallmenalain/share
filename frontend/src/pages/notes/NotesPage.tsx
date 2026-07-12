@@ -3,13 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { api, fileUrl, Note, NoteType } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { useModuleData } from '../../lib/useModuleData';
-import { useParticipants } from '../../lib/useParticipants';
 import { formatDate } from '../../lib/format';
 
 export default function NotesPage() {
-  const { slug, token } = useSpaceSessionContext();
+  const { slug, token, identity } = useSpaceSessionContext();
   const navigate = useNavigate();
-  const { currentId } = useParticipants(slug, token);
+  const { currentId } = identity;
   const participantId = currentId ?? undefined;
   const [creating, setCreating] = useState(false);
 

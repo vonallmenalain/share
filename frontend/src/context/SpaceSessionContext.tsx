@@ -7,10 +7,32 @@ import {
   useState,
   ReactNode,
 } from 'react';
-import { api, ApiError, ModuleKey, Space as SpaceType } from '../api/client';
+import { api, ApiError, ModuleKey, Participant, Space as SpaceType } from '../api/client';
 import { nameStore, tokenStore, visitedSpacesStore, VisitedSpace } from '../lib/storage';
+import { useParticipants } from '../lib/useParticipants';
 
 export type SessionPhase = 'loading' | 'gate' | 'ready' | 'notfound';
+
+/**
+ * „Wer bist du?" – die für den gesamten Bereich gewählte Identität. Wird
+ * zentral hier verwaltet (statt pro Modul einzeln), damit die Abfrage nur
+ * einmal pro Bereich und Gerät erscheint – unabhängig davon, welchen Link
+ * (welches Modul) man als erstes öffnet.
+ */
+export interface IdentityValue {
+  participants: Participant[];
+  current: Participant | null;
+  currentId: string | null;
+  loading: boolean;
+  error: string | null;
+  /** Ist in diesem Bereich ein Code (PIN) für Identitäten Pflicht? */
+  requirePin: boolean;
+  select: (id: string) => void;
+  create: (name: string, pin?: string) => Promise<Participant>;
+  verifyPin: (id: string, pin: string) => Promise<boolean>;
+  setPin: (id: string, opts: { pin: string | null; currentPin?: string }) => Promise<Participant>;
+  switchIdentity: () => void;
+}
 
 export interface SpaceSessionValue {
   slug: string;
@@ -31,6 +53,7 @@ export interface SpaceSessionValue {
   setChromeHidden: (v: boolean) => void;
   visitedSpaces: VisitedSpace[];
   hasModule: (key: ModuleKey) => boolean;
+  identity: IdentityValue;
 }
 
 const SpaceSessionContext = createContext<SpaceSessionValue | null>(null);
@@ -59,6 +82,11 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
   const [gateError, setGateError] = useState('');
   const [gateBusy, setGateBusy] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
+
+  // „Wer bist du?" – zentral für den ganzen Bereich (alle Module), damit die
+  // Auswahl nur einmal pro Gerät nötig ist, unabhängig vom zuerst geöffneten
+  // Link/Modul.
+  const participantState = useParticipants(slug, token);
 
   const setName = useCallback((n: string) => {
     setNameState(n);
@@ -141,6 +169,35 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
     [space],
   );
 
+  const identity = useMemo<IdentityValue>(
+    () => ({
+      participants: participantState.participants,
+      current: participantState.current,
+      currentId: participantState.currentId,
+      loading: participantState.loading,
+      error: participantState.error,
+      requirePin: !!space?.requireParticipantPin,
+      select: participantState.select,
+      create: participantState.create,
+      verifyPin: participantState.verifyPin,
+      setPin: participantState.setPin,
+      switchIdentity: participantState.switchIdentity,
+    }),
+    [
+      participantState.participants,
+      participantState.current,
+      participantState.currentId,
+      participantState.loading,
+      participantState.error,
+      participantState.select,
+      participantState.create,
+      participantState.verifyPin,
+      participantState.setPin,
+      participantState.switchIdentity,
+      space?.requireParticipantPin,
+    ],
+  );
+
   const value = useMemo<SpaceSessionValue>(
     () => ({
       slug,
@@ -155,6 +212,7 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       setChromeHidden,
       visitedSpaces,
       hasModule,
+      identity,
     }),
     [
       slug,
@@ -170,6 +228,7 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       chromeHidden,
       visitedSpaces,
       hasModule,
+      identity,
     ],
   );
 

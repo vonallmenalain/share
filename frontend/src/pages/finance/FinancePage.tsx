@@ -7,11 +7,9 @@ import {
 } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { useModuleData } from '../../lib/useModuleData';
-import { useParticipants, participantName } from '../../lib/useParticipants';
+import { participantName } from '../../lib/useParticipants';
 import { formatDate, formatMoney } from '../../lib/format';
 import { colorForName, initialsOf } from '../../lib/avatar';
-import ParticipantGate from '../../components/ParticipantGate';
-import ParticipantPinManager from '../../components/ParticipantPinManager';
 import ExpenseForm from './ExpenseForm';
 import SettlementView from './SettlementView';
 
@@ -22,24 +20,13 @@ interface FinanceData {
 }
 
 export default function FinancePage() {
-  const { slug, token, space, name } = useSpaceSessionContext();
-  const {
-    participants,
-    current,
-    currentId,
-    loading: pLoading,
-    select,
-    create,
-    verifyPin,
-    setPin,
-    switchIdentity,
-  } = useParticipants(slug, token);
+  const { token, space, identity } = useSpaceSessionContext();
+  const { participants, currentId } = identity;
   const participantId = currentId ?? undefined;
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [settling, setSettling] = useState(false);
-  const [showPinManager, setShowPinManager] = useState(false);
 
   const load = useCallback(
     async (signal: AbortSignal): Promise<FinanceData> => {
@@ -104,24 +91,6 @@ export default function FinancePage() {
     }
   };
 
-  // „Wer bist du?" – Auswahl der Identität, bevor Finanzen bedient werden.
-  if (!pLoading && !current) {
-    return (
-      <div className="container module-page">
-        <div className="module-head">
-          <h1 className="space-title">Finanzen</h1>
-        </div>
-        <ParticipantGate
-          participants={participants}
-          prefillName={name}
-          onSelect={select}
-          onCreate={create}
-          onVerifyPin={verifyPin}
-        />
-      </div>
-    );
-  }
-
   const summary = data?.summary;
   const openExpenses = (data?.expenses ?? []).filter((e) => e.status === 'open');
   const settledExpenses = (data?.expenses ?? []).filter((e) => e.status === 'settled');
@@ -131,24 +100,6 @@ export default function FinancePage() {
       <div className="module-head finance-head">
         <h1 className="space-title">Finanzen</h1>
         <span className="module-badge">{currency}</span>
-        <div className="spacer" />
-        <div className="finance-identity">
-          <span className="muted">
-            Aktiv als <strong>{current?.name}</strong>
-            {current?.hasPin && (
-              <span className="participant-choice-lock" title="Dein Name ist mit einem Code geschützt">
-                {' '}
-                🔒
-              </span>
-            )}
-          </span>
-          <button className="btn btn-sm btn-ghost" onClick={() => setShowPinManager(true)}>
-            {current?.hasPin ? 'Code ändern' : 'Code einrichten'}
-          </button>
-          <button className="btn btn-sm btn-ghost" onClick={switchIdentity}>
-            Person wechseln
-          </button>
-        </div>
       </div>
 
       {loading && !data ? (
@@ -301,13 +252,6 @@ export default function FinancePage() {
         />
       )}
 
-      {showPinManager && current && (
-        <ParticipantPinManager
-          participant={current}
-          onSetPin={(opts) => setPin(current.id, opts)}
-          onClose={() => setShowPinManager(false)}
-        />
-      )}
     </div>
   );
 }
