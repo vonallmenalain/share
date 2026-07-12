@@ -472,6 +472,33 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.dropdown-space-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.dropdown-space-row .dropdown-space-link {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dropdown-space-remove {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  cursor: pointer;
+}
+.dropdown-space-remove:hover {
+  background: #eef0f3;
+  color: var(--ink);
+}
 .dropdown-divider {
   height: 1px;
   background: var(--line);

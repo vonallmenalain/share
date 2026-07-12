@@ -37,13 +37,14 @@ function SpaceShell() {
     chromeHidden,
     setChromeHidden,
     visitedSpaces,
+    removeVisitedSpace,
     identity,
   } = useSpaceSessionContext();
   const location = useLocation();
   // Modul-Navigation ist standardmässig eingeklappt (kein permanenter
   // Platzverbrauch) und öffnet sich nur über den Hamburger-Button oben links.
   const [navOpen, setNavOpen] = useState(false);
-  const [showPinManager, setShowPinManager] = useState(false);
+  const [showIdentityManager, setShowIdentityManager] = useState(false);
 
   // PWA-Manifest auf den aktuellen Bereich zeigen lassen (wie bisher).
   useEffect(() => {
@@ -94,15 +95,15 @@ function SpaceShell() {
   }
 
   if (phase === 'gate') {
+    const pinHint = space?.requireParticipantPin
+      ? 'Mit dem Code kannst nur du Änderungen in deinem Namen vornehmen.'
+      : 'Du kannst deinen Namen mit einem Code schützen, damit nur du unter deinem Namen Änderungen vornehmen kannst.';
     return (
       <div className="center-page">
         <div className="panel">
           <span className="hero-badge">{space?.name ?? 'Bereich'}</span>
           <h1>Bereich betreten</h1>
-          <p className="sub">
-            Gib deinen Namen ein, damit alle sehen, von wem die Beiträge stammen
-            {space?.hasPassword ? ' – und das Passwort des Bereichs.' : '.'}
-          </p>
+          <p className="sub">Gib deinen Namen ein, damit alle sehen, von wem die Beiträge stammen.</p>
           {gate.error && <div className="error-box">{gate.error}</div>}
           <form onSubmit={enter}>
             <div className="field">
@@ -113,6 +114,7 @@ function SpaceShell() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
+                required
               />
             </div>
             {space?.hasPassword && (
@@ -124,8 +126,29 @@ function SpaceShell() {
                   value={gate.password}
                   onChange={(e) => gate.setPassword(e.target.value)}
                 />
+                <p className="hint" style={{ marginTop: 6 }}>
+                  Auf den Bereich kann nur mit einem Passwort des Erstellers zugegriffen werden.
+                </p>
               </div>
             )}
+            <div className="field">
+              <label className="label">
+                {space?.requireParticipantPin ? 'Code (4–8 Ziffern, Pflicht)' : 'Code (4–8 Ziffern, optional)'}
+              </label>
+              <input
+                className="input"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="••••"
+                value={gate.pin}
+                onChange={(e) => gate.setPin(e.target.value)}
+                required={space?.requireParticipantPin}
+              />
+              <p className="hint" style={{ marginTop: 6 }}>
+                {pinHint}
+              </p>
+            </div>
             <button className="btn btn-primary" style={{ width: '100%' }} disabled={gate.busy}>
               {gate.busy ? 'Öffne…' : 'Bereich betreten'}
             </button>
@@ -141,18 +164,15 @@ function SpaceShell() {
 
   // „Wer bist du?" – einmal pro Bereich und Gerät, unabhängig vom zuerst
   // geöffneten Link/Modul. Erst danach wird der eigentliche Inhalt gezeigt.
-  const needsIdentity = !identity.loading && !identity.current;
+  // Während die beim Betreten erfasste Identität im Hintergrund angelegt wird
+  // (identity.creating), soll diese Abfrage nicht kurz aufblitzen.
+  const needsIdentity = !identity.loading && !identity.current && !identity.creating;
   // Ist der Code (PIN) in diesem Bereich Pflicht, aber die aktuelle Person
   // hat (noch) keinen – z. B. frisch angelegt ohne Code (sollte nicht
   // vorkommen) oder weil der Administrator ihn zurückgesetzt hat („Code
   // vergessen?") – muss zuerst ein neuer Code vergeben werden.
   const needsPinSetup =
     !identity.loading && !!identity.current && identity.requirePin && !identity.current.hasPin;
-
-  const changeName = () => {
-    const n = (window.prompt('Dein Name:', name) || '').trim();
-    if (n) setName(n);
-  };
 
   const shareSpaceLink = async () => {
     const url = `${window.location.origin}/s/${slug}`;
@@ -184,56 +204,45 @@ function SpaceShell() {
         <div className="topbar-actions">
           <Dropdown
             align="end"
-            ariaLabel="Name & Konto"
-            title={name || 'Gast'}
+            ariaLabel="Bereich & Identität"
+            title={identity.current?.name || name || 'Gast'}
             triggerClassName="btn icon-btn"
             label={<UserIcon size={19} />}
           >
             {(close) => (
               <>
-                <div className="dropdown-label">Aktueller Bereich</div>
+                <div className="dropdown-label">Bereich</div>
                 <div className="dropdown-current-space">
                   <span className="dropdown-space-dot" aria-hidden="true" />
                   <strong>{space?.name || slug}</strong>
                 </div>
-                {otherSpaces.length > 0 && (
-                  <>
-                    <div className="dropdown-label">Bereich wechseln</div>
-                    {otherSpaces.map((s) => (
-                      <Link
-                        key={s.slug}
-                        to={`/s/${s.slug}`}
-                        className="dropdown-item"
-                        onClick={() => close()}
-                        title={`Zu „${s.name}" wechseln`}
-                      >
-                        <span className="avatar sm" style={{ background: colorForName(s.name) }}>
-                          {initialsOf(s.name)}
-                        </span>
-                        <span className="dropdown-item-text">{s.name}</span>
-                      </Link>
-                    ))}
-                  </>
-                )}
-                <div className="dropdown-divider" />
-                <div className="dropdown-label">Dein Name</div>
-                <div className="dropdown-name">
-                  <span className="avatar sm" style={{ background: colorForName(name || 'Gast') }}>
-                    {initialsOf(name || 'Gast')}
-                  </span>
-                  <strong>{name || 'Gast'}</strong>
-                </div>
-                <div className="dropdown-divider" />
-                <button
-                  type="button"
-                  className="dropdown-item"
-                  onClick={() => {
-                    close();
-                    changeName();
-                  }}
-                >
-                  Name ändern
-                </button>
+                {otherSpaces.map((s) => (
+                  <div key={s.slug} className="dropdown-space-row">
+                    <Link
+                      to={`/s/${s.slug}`}
+                      className="dropdown-item dropdown-space-link"
+                      onClick={() => close()}
+                      title={`Zu „${s.name}" wechseln`}
+                    >
+                      <span className="avatar sm" style={{ background: colorForName(s.name) }}>
+                        {initialsOf(s.name)}
+                      </span>
+                      <span className="dropdown-item-text">{s.name}</span>
+                    </Link>
+                    <button
+                      type="button"
+                      className="dropdown-space-remove"
+                      title={`„${s.name}" verlassen (aus dieser Liste entfernen)`}
+                      aria-label={`„${s.name}" verlassen`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeVisitedSpace(s.slug);
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
                 <button
                   type="button"
                   className="dropdown-item"
@@ -268,20 +277,10 @@ function SpaceShell() {
                       className="dropdown-item"
                       onClick={() => {
                         close();
-                        setShowPinManager(true);
+                        setShowIdentityManager(true);
                       }}
                     >
-                      {identity.current.hasPin ? 'Code ändern' : 'Code einrichten'}
-                    </button>
-                    <button
-                      type="button"
-                      className="dropdown-item"
-                      onClick={() => {
-                        close();
-                        identity.switchIdentity();
-                      }}
-                    >
-                      Person wechseln
+                      Identität ändern
                     </button>
                   </>
                 )}
@@ -302,12 +301,17 @@ function SpaceShell() {
       )}
 
       <div className={`space-shell${showNav ? ' has-nav' : ''}`}>
-        {identity.loading ? (
+        {identity.loading || identity.creating ? (
           <div className="center-page" style={{ minHeight: 240 }}>
             <span className="spinner lg" />
           </div>
         ) : needsIdentity ? (
           <div className="container module-page">
+            {identity.createError && (
+              <div className="error-box" style={{ maxWidth: 480, margin: '0 auto 12px' }}>
+                {identity.createError}
+              </div>
+            )}
             <ParticipantGate
               participants={identity.participants}
               prefillName={name}
@@ -329,11 +333,15 @@ function SpaceShell() {
         )}
       </div>
 
-      {showPinManager && identity.current && (
+      {showIdentityManager && identity.current && (
         <ParticipantPinManager
           participant={identity.current}
           onSetPin={(opts) => identity.setPin(identity.current!.id, opts)}
-          onClose={() => setShowPinManager(false)}
+          onClose={() => setShowIdentityManager(false)}
+          onSwitchIdentity={() => {
+            setShowIdentityManager(false);
+            identity.switchIdentity();
+          }}
         />
       )}
     </>
