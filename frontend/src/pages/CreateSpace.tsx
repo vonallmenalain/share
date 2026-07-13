@@ -5,13 +5,14 @@ import { api, ModuleKey, Space } from '../api/client';
 import { adminKeyStore } from '../lib/storage';
 
 interface ModuleOption {
-  key: Exclude<ModuleKey, 'photos'>;
+  key: ModuleKey;
   label: string;
   icon: string;
   desc: string;
 }
 
-const OPTIONAL_MODULES: ModuleOption[] = [
+const MODULE_OPTIONS: ModuleOption[] = [
+  { key: 'photos', label: 'Fotos & Videos', icon: '🖼️', desc: 'Gemeinsame Galerie zum Hoch- und Herunterladen.' },
   { key: 'finance', label: 'Finanzen', icon: '💰', desc: 'Ausgaben erfassen, aufteilen und fair abrechnen.' },
   { key: 'shopping', label: 'Einkaufsliste', icon: '🛒', desc: 'Gemeinsame Liste – abhaken, was erledigt ist.' },
   { key: 'notes', label: 'Notizen', icon: '📝', desc: 'Text- und Checklisten-Notizen, auch mit Bildern.' },
@@ -24,7 +25,7 @@ export default function CreateSpace() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [adminKey, setAdminKey] = useState(adminKeyStore.get());
-  const [modules, setModules] = useState<Set<ModuleKey>>(new Set());
+  const [modules, setModules] = useState<Set<ModuleKey>>(new Set(['photos']));
   const [currency, setCurrency] = useState('CHF');
   const [requireParticipantPin, setRequireParticipantPin] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -46,6 +47,10 @@ export default function CreateSpace() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (modules.size === 0) {
+      setError('Bitte mindestens ein Modul auswählen.');
+      return;
+    }
     setBusy(true);
     try {
       const res = await api<{ space: Space }>('/api/spaces', {
@@ -123,19 +128,13 @@ export default function CreateSpace() {
                 <div className="field">
                   <label className="label">Module</label>
                   <p className="hint" style={{ marginTop: 0, marginBottom: 10 }}>
-                    Fotos &amp; Videos sind immer dabei. Aktiviere, was ihr sonst noch braucht –
-                    das lässt sich später jederzeit ändern.
+                    Wähle, was dieser Bereich enthalten soll – das lässt sich später jederzeit
+                    ändern. Es muss mindestens ein Modul aktiv sein; die Galerie (Fotos &amp;
+                    Videos) ist dabei kein Sonderfall mehr und kann z.&nbsp;B. für einen reinen
+                    Finanz-Bereich abgewählt werden.
                   </p>
                   <div className="module-picker">
-                    <div className="module-option locked">
-                      <span className="module-option-icon">🖼️</span>
-                      <div className="module-option-text">
-                        <strong>Fotos &amp; Videos</strong>
-                        <span className="hint">Immer aktiviert.</span>
-                      </div>
-                      <span className="module-option-check">✓</span>
-                    </div>
-                    {OPTIONAL_MODULES.map((m) => {
+                    {MODULE_OPTIONS.map((m) => {
                       const active = modules.has(m.key);
                       return (
                         <button
@@ -155,6 +154,11 @@ export default function CreateSpace() {
                       );
                     })}
                   </div>
+                  {modules.size === 0 && (
+                    <p className="hint" style={{ marginTop: 6, color: 'var(--danger)' }}>
+                      Bitte mindestens ein Modul auswählen.
+                    </p>
+                  )}
                 </div>
 
                 <div className="field">
@@ -207,7 +211,11 @@ export default function CreateSpace() {
                     required
                   />
                 </div>
-                <button className="btn btn-primary" style={{ width: '100%' }} disabled={busy}>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%' }}
+                  disabled={busy || modules.size === 0}
+                >
                   {busy ? 'Erstelle…' : 'Bereich erstellen'}
                 </button>
               </form>

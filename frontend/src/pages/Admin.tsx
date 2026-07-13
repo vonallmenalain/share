@@ -376,7 +376,8 @@ export default function Admin() {
   );
 }
 
-const MODULE_META: { key: Exclude<ModuleKey, 'photos'>; label: string; icon: string }[] = [
+const MODULE_META: { key: ModuleKey; label: string; icon: string }[] = [
+  { key: 'photos', label: 'Fotos & Videos', icon: '🖼️' },
   { key: 'finance', label: 'Finanzen', icon: '💰' },
   { key: 'shopping', label: 'Einkaufsliste', icon: '🛒' },
   { key: 'notes', label: 'Notizen', icon: '📝' },
@@ -496,7 +497,6 @@ function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: st
   }, [spaceId, adminKey]);
 
   const toggle = (key: ModuleKey) => {
-    if (key === 'photos') return;
     setModules((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -506,6 +506,10 @@ function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: st
   };
 
   const save = async () => {
+    if (modules.size === 0) {
+      setMsg('Bitte mindestens ein Modul auswählen.');
+      return;
+    }
     setSaving(true);
     setMsg('');
     try {
@@ -543,7 +547,6 @@ function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: st
     <div className="admin-module-panel">
       <div className="admin-module-title">Module</div>
       <div className="admin-module-row">
-        <span className="tag">🖼️ Fotos &amp; Videos (immer aktiv)</span>
         {MODULE_META.map((m) => (
           <button
             key={m.key}
@@ -556,6 +559,11 @@ function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: st
           </button>
         ))}
       </div>
+      {modules.size === 0 && (
+        <p className="hint" style={{ marginTop: 6, color: 'var(--danger)' }}>
+          Bitte mindestens ein Modul auswählen.
+        </p>
+      )}
       {modules.has('finance') && (
         <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 8 }}>
           <span className="muted" style={{ fontSize: 13 }}>
@@ -571,7 +579,7 @@ function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: st
         </div>
       )}
       <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 10 }}>
-        <button className="btn btn-sm btn-primary" disabled={saving} onClick={save}>
+        <button className="btn btn-sm btn-primary" disabled={saving || modules.size === 0} onClick={save}>
           {saving ? 'Speichere…' : 'Module speichern'}
         </button>
         {msg && <span className="muted" style={{ fontSize: 13 }}>{msg}</span>}

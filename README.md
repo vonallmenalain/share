@@ -107,9 +107,10 @@ Alle Metadaten (auch der neuen Module) bleiben in derselben lokalen
 ## Module (optional pro Bereich)
 
 Beim Erstellen eines Bereichs (und später im Adminbereich) lässt sich auswählen,
-welche Module aktiv sind. **Fotos &amp; Videos** sind immer aktiviert und können
-nicht deaktiviert werden. Ein deaktiviertes Modul wird nur ausgeblendet –
-vorhandene Daten bleiben erhalten.
+welche Module aktiv sind – auch **Fotos &amp; Videos** sind dabei ein Modul wie
+jedes andere und lassen sich abwählen (z.&nbsp;B. für einen reinen
+Finanz-Bereich). Es muss aber immer mindestens ein Modul aktiv bleiben. Ein
+deaktiviertes Modul wird nur ausgeblendet – vorhandene Daten bleiben erhalten.
 
 - **Finanzen** – Gemeinsame Ausgaben erfassen, **gleichmässig** (unter allen
   oder ausgewählten Personen) oder mit **manuellen Beträgen** aufteilen und mit

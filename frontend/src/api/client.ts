@@ -96,7 +96,7 @@ export interface Space {
   name: string;
   hasPassword: boolean;
   createdAt: string;
-  /** Aktivierte Module dieses Bereichs (photos ist immer dabei). */
+  /** Aktivierte Module dieses Bereichs (mind. eines, photos ist optional). */
   modules: ModuleKey[];
   /** Abrechnungswährung, falls das Finanzmodul aktiv ist. */
   financeCurrency?: string | null;

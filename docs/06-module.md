@@ -1,15 +1,15 @@
 # Module: Finanzen, Einkaufsliste, Notizen &amp; Kalender
 
 Aus der Foto-Share-App ist eine allgemeine Ferien- und Gruppen-App geworden.
-Ein Bereich kann neben **Fotos &amp; Videos** (immer aktiv) optional weitere
-Module aktivieren. Alle Daten bleiben in derselben lokalen **SQLite-Datei** auf
-dem QNAP – es kommt **keine** zweite Datenbank und kein Firebase hinzu.
+Ein Bereich kann eines oder mehrere der folgenden Module aktivieren. Alle
+Daten bleiben in derselben lokalen **SQLite-Datei** auf dem QNAP – es kommt
+**keine** zweite Datenbank und kein Firebase hinzu.
 
 ## Übersicht der Module
 
 | Modul | Schlüssel | Zweck |
 | --- | --- | --- |
-| Fotos &amp; Videos | `photos` | Bestehende Galerie (immer aktiv, unveränderbar) |
+| Fotos &amp; Videos | `photos` | Gemeinsame Galerie |
 | Finanzen | `finance` | Ausgaben erfassen, aufteilen, abrechnen |
 | Einkaufsliste | `shopping` | Gemeinsame Liste zum Abhaken |
 | Notizen | `notes` | Text-/Checklisten-Notizen mit Bildanhängen |
@@ -17,8 +17,15 @@ dem QNAP – es kommt **keine** zweite Datenbank und kein Firebase hinzu.
 
 Module werden beim **Erstellen** eines Bereichs gewählt und im **Adminbereich**
 (Bereich aufklappen → „Module“) geändert. Ein deaktiviertes Modul wird nur
-ausgeblendet – vorhandene Daten bleiben erhalten. `photos` kann nie deaktiviert
-werden.
+ausgeblendet – vorhandene Daten bleiben erhalten. **Fotos &amp; Videos
+(Galerie) sind seit Einführung der Modulauswahl ein Modul wie jedes andere und
+können ebenfalls abgewählt werden** – z. B. für einen reinen Finanz-Bereich.
+Es muss aber immer **mindestens ein Modul** aktiv bleiben. Ist die Galerie
+nicht aktiviert, öffnet ein Bereich direkt beim ersten aktivierten anderen
+Modul statt bei der (nicht existierenden) Galerie. Bereiche, die von **vor**
+der Modul-Einführung stammen und noch keinen `space_modules`-Eintrag für
+`photos` haben, bleiben aus Kompatibilitätsgründen weiterhin mit aktiver
+Galerie.
 
 ## Datenbankmigration
 

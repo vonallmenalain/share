@@ -79,11 +79,15 @@ router.post(
     if (!name) throw new ApiError(400, 'Bitte einen Namen für den Bereich angeben.');
     if (name.length > 80) throw new ApiError(400, 'Der Name ist zu lang.');
 
-    // Modulauswahl: photos ist immer aktiv. Weitere Module optional.
+    // Modulauswahl: Fotos & Videos (Galerie) sind ein Modul wie jedes andere
+    // und können abgewählt werden – z. B. für einen reinen Finanz-Bereich.
     const requestedModules = Array.isArray(req.body?.modules)
       ? (req.body.modules.filter(isModuleKey) as ModuleKey[])
       : [];
-    const modules: ModuleKey[] = Array.from(new Set<ModuleKey>(['photos', ...requestedModules]));
+    const modules: ModuleKey[] = Array.from(new Set<ModuleKey>(requestedModules));
+    if (modules.length === 0) {
+      throw new ApiError(400, 'Bitte mindestens ein Modul auswählen.');
+    }
     // Abrechnungswährung nur relevant, wenn Finanzen aktiviert sind.
     const currency = modules.includes('finance')
       ? normalizeCurrency(req.body?.financeCurrency, 'CHF')
@@ -386,8 +390,9 @@ router.get(
 );
 
 /**
- * Admin: aktivierte Module eines Bereichs ändern. Das Fotomodul kann nicht
- * deaktiviert werden. Deaktivierte Module blenden nur aus – Daten bleiben
+ * Admin: aktivierte Module eines Bereichs ändern (inkl. Fotos & Videos, die
+ * wie jedes andere Modul abgewählt werden können – mindestens ein Modul
+ * muss aktiv bleiben). Deaktivierte Module blenden nur aus – Daten bleiben
  * erhalten. Optional lässt sich die Abrechnungswährung setzen (nur solange
  * noch keine Ausgaben existieren, um Inkonsistenzen zu vermeiden).
  */
@@ -405,7 +410,10 @@ router.patch(
     const requested = Array.isArray(req.body?.modules)
       ? (req.body.modules.filter(isModuleKey) as ModuleKey[])
       : [];
-    const modules: ModuleKey[] = Array.from(new Set<ModuleKey>(['photos', ...requested]));
+    const modules: ModuleKey[] = Array.from(new Set<ModuleKey>(requested));
+    if (modules.length === 0) {
+      throw new ApiError(400, 'Bitte mindestens ein Modul auswählen.');
+    }
 
     const wantCurrency =
       req.body?.financeCurrency !== undefined

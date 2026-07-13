@@ -3,7 +3,7 @@ import Landing from './pages/Landing';
 import CreateSpace from './pages/CreateSpace';
 import Admin from './pages/Admin';
 import SpaceLayout from './layout/SpaceLayout';
-import Space from './pages/Space';
+import SpaceIndex from './pages/SpaceIndex';
 import UploadPage from './pages/Upload';
 import FinancePage from './pages/finance/FinancePage';
 import ShoppingPage from './pages/shopping/ShoppingPage';
@@ -18,7 +18,7 @@ export default function App() {
       <Route path="/new" element={<CreateSpace />} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/s/:slug" element={<SpaceLayout />}>
-        <Route index element={<Space />} />
+        <Route index element={<SpaceIndex />} />
         <Route path="upload" element={<UploadPage />} />
         <Route path="finance" element={<FinancePage />} />
         <Route path="shopping" element={<ShoppingPage />} />
