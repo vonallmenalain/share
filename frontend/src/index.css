@@ -2804,10 +2804,6 @@ button {
   border-color: var(--brand);
   background: var(--brand-soft);
 }
-.module-option.locked {
-  cursor: default;
-  opacity: 0.85;
-}
 .module-option-icon {
   font-size: 22px;
 }

@@ -86,11 +86,13 @@ Alle Metadaten (auch der neuen Module) bleiben in derselben lokalen
 - **Download** einzeln oder als **ZIP** (mehrere/alle Originale auf einmal).
 - **Adminbereich**: aufklappbare Bereiche mit allen Medien aller Personen,
   inklusive der gelöschten – mit der Möglichkeit, wiederherzustellen oder
-  Fotos/Videos endgültig zu löschen. Ausserdem lassen sich pro Bereich die
-  **Identitäten** verwalten: den Schutz-Code (PIN) einer Person zurücksetzen,
-  eine Identität **archivieren** (überall ausblenden, Finanzdaten bleiben
-  erhalten) oder – wenn sie in keinen Finanzdaten mehr verankert ist –
-  **endgültig löschen**.
+  Fotos/Videos endgültig zu löschen. Bereiche lassen sich hier auch
+  **umbenennen** (der Link wird dabei aus dem neuen Namen neu erzeugt, der
+  bisherige Link funktioniert danach nicht mehr). Ausserdem lassen sich pro
+  Bereich die **Identitäten** verwalten: den Schutz-Code (PIN) einer Person
+  zurücksetzen, eine Identität **archivieren** (überall ausblenden,
+  Finanzdaten bleiben erhalten) oder – wenn sie in keinen Finanzdaten mehr
+  verankert ist – **endgültig löschen**.
 - **Zugriffsstatistik (nur Admin)**: Pro Bereich lässt sich nach dem Ausklappen
   ein Protokoll aller Zugriffe einsehen – mit Zeitpunkt, Person, IP und
   **Standort** (Stadt/Region/Land, wo verfügbar). Die Liste ist sortierbar und
@@ -105,9 +107,10 @@ Alle Metadaten (auch der neuen Module) bleiben in derselben lokalen
 ## Module (optional pro Bereich)
 
 Beim Erstellen eines Bereichs (und später im Adminbereich) lässt sich auswählen,
-welche Module aktiv sind. **Fotos &amp; Videos** sind immer aktiviert und können
-nicht deaktiviert werden. Ein deaktiviertes Modul wird nur ausgeblendet –
-vorhandene Daten bleiben erhalten.
+welche Module aktiv sind – auch **Fotos &amp; Videos** sind dabei ein Modul wie
+jedes andere und lassen sich abwählen (z.&nbsp;B. für einen reinen
+Finanz-Bereich). Es muss aber immer mindestens ein Modul aktiv bleiben. Ein
+deaktiviertes Modul wird nur ausgeblendet – vorhandene Daten bleiben erhalten.
 
 - **Finanzen** – Gemeinsame Ausgaben erfassen, **gleichmässig** (unter allen
   oder ausgewählten Personen) oder mit **manuellen Beträgen** aufteilen und mit

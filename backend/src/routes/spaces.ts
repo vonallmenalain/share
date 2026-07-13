@@ -79,11 +79,15 @@ router.post(
     if (!name) throw new ApiError(400, 'Bitte einen Namen für den Bereich angeben.');
     if (name.length > 80) throw new ApiError(400, 'Der Name ist zu lang.');
 
-    // Modulauswahl: photos ist immer aktiv. Weitere Module optional.
+    // Modulauswahl: Fotos & Videos (Galerie) sind ein Modul wie jedes andere
+    // und können abgewählt werden – z. B. für einen reinen Finanz-Bereich.
     const requestedModules = Array.isArray(req.body?.modules)
       ? (req.body.modules.filter(isModuleKey) as ModuleKey[])
       : [];
-    const modules: ModuleKey[] = Array.from(new Set<ModuleKey>(['photos', ...requestedModules]));
+    const modules: ModuleKey[] = Array.from(new Set<ModuleKey>(requestedModules));
+    if (modules.length === 0) {
+      throw new ApiError(400, 'Bitte mindestens ein Modul auswählen.');
+    }
     // Abrechnungswährung nur relevant, wenn Finanzen aktiviert sind.
     const currency = modules.includes('finance')
       ? normalizeCurrency(req.body?.financeCurrency, 'CHF')
@@ -129,6 +133,46 @@ router.post(
 
     const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(id) as SpaceRow;
     res.status(201).json({ space: publicSpace(space), accessToken: signAccessToken(id) });
+  }),
+);
+
+/**
+ * Admin: einen Bereich umbenennen. Der Link (Slug) wird dabei aus dem neuen
+ * Namen neu erzeugt – bestehende Links auf den alten Namen funktionieren
+ * danach nicht mehr, das ist bei einer Umbenennung so gewollt.
+ */
+router.patch(
+  '/:id/name',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.params.id) as
+      | SpaceRow
+      | undefined;
+    if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
+
+    const name = String(req.body?.name ?? '').trim();
+    if (!name) throw new ApiError(400, 'Bitte einen Namen für den Bereich angeben.');
+    if (name.length > 80) throw new ApiError(400, 'Der Name ist zu lang.');
+
+    // Neuen, eindeutigen Slug aus dem neuen Namen erzeugen (wie beim Anlegen).
+    let slug = '';
+    for (let i = 0; i < 6; i++) {
+      const candidate = [slugifyName(name), newSlug()].filter(Boolean).join('-');
+      const exists = db
+        .prepare('SELECT 1 FROM spaces WHERE slug = ? AND id != ?')
+        .get(candidate, space.id);
+      if (!exists) {
+        slug = candidate;
+        break;
+      }
+    }
+    if (!slug) slug = newSlug();
+
+    db.prepare('UPDATE spaces SET name = ?, slug = ? WHERE id = ?').run(name, slug, space.id);
+    const updated = db.prepare('SELECT * FROM spaces WHERE id = ?').get(space.id) as SpaceRow;
+    res.json({ space: publicSpace(updated) });
   }),
 );
 
@@ -346,8 +390,9 @@ router.get(
 );
 
 /**
- * Admin: aktivierte Module eines Bereichs ändern. Das Fotomodul kann nicht
- * deaktiviert werden. Deaktivierte Module blenden nur aus – Daten bleiben
+ * Admin: aktivierte Module eines Bereichs ändern (inkl. Fotos & Videos, die
+ * wie jedes andere Modul abgewählt werden können – mindestens ein Modul
+ * muss aktiv bleiben). Deaktivierte Module blenden nur aus – Daten bleiben
  * erhalten. Optional lässt sich die Abrechnungswährung setzen (nur solange
  * noch keine Ausgaben existieren, um Inkonsistenzen zu vermeiden).
  */
@@ -365,7 +410,10 @@ router.patch(
     const requested = Array.isArray(req.body?.modules)
       ? (req.body.modules.filter(isModuleKey) as ModuleKey[])
       : [];
-    const modules: ModuleKey[] = Array.from(new Set<ModuleKey>(['photos', ...requested]));
+    const modules: ModuleKey[] = Array.from(new Set<ModuleKey>(requested));
+    if (modules.length === 0) {
+      throw new ApiError(400, 'Bitte mindestens ein Modul auswählen.');
+    }
 
     const wantCurrency =
       req.body?.financeCurrency !== undefined

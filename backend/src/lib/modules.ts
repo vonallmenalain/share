@@ -3,22 +3,31 @@ import { getDb, ModuleKey, SpaceModuleRow } from '../db';
 
 export const MODULE_KEYS: ModuleKey[] = ['photos', 'finance', 'shopping', 'notes', 'calendar'];
 
-/** Immer aktivierte Module, die nicht deaktiviert werden dürfen. */
-export const ALWAYS_ON: ModuleKey[] = ['photos'];
+/**
+ * Immer aktivierte Module, die nicht deaktiviert werden dürfen. Fotos &
+ * Videos (Galerie) sind seit Einführung der Modulauswahl beim Anlegen
+ * optional – ein Bereich kann z. B. auch nur aus dem Finanzmodul bestehen.
+ */
+export const ALWAYS_ON: ModuleKey[] = [];
 
 export function isModuleKey(value: unknown): value is ModuleKey {
   return typeof value === 'string' && (MODULE_KEYS as string[]).includes(value);
 }
 
-/** Liefert die aktivierten Modul-Schlüssel eines Bereichs (photos immer dabei). */
+/**
+ * Liefert die aktivierten Modul-Schlüssel eines Bereichs. Fotos & Videos
+ * (Galerie) ist wie jedes andere Modul optional; nur wenn für einen Bereich
+ * noch gar kein Eintrag existiert (Bereiche von vor der Modul-Einführung),
+ * bleibt die Galerie aus Kompatibilitätsgründen aktiv.
+ */
 export function getEnabledModules(spaceId: string, db: Database.Database = getDb()): ModuleKey[] {
   const rows = db
     .prepare('SELECT module_key, enabled FROM space_modules WHERE space_id = ?')
     .all(spaceId) as Pick<SpaceModuleRow, 'module_key' | 'enabled'>[];
+  const rowKeys = new Set(rows.map((r) => r.module_key));
   const enabled = new Set<ModuleKey>();
   for (const r of rows) if (r.enabled) enabled.add(r.module_key);
-  // photos ist unabhängig vom Eintrag stets aktiv (Rückwärtskompatibilität).
-  enabled.add('photos');
+  if (!rowKeys.has('photos')) enabled.add('photos');
   // In stabiler Reihenfolge zurückgeben.
   return MODULE_KEYS.filter((k) => enabled.has(k));
 }
@@ -28,18 +37,18 @@ export function isModuleEnabled(
   moduleKey: ModuleKey,
   db: Database.Database = getDb(),
 ): boolean {
-  if (moduleKey === 'photos') return true;
   const row = db
     .prepare('SELECT enabled FROM space_modules WHERE space_id = ? AND module_key = ?')
     .get(spaceId, moduleKey) as { enabled: number } | undefined;
-  return !!row && !!row.enabled;
+  if (!row) return moduleKey === 'photos';
+  return !!row.enabled;
 }
 
 /**
- * Setzt die aktivierten Module eines Bereichs (photos bleibt immer aktiv).
- * Bereits deaktivierte Module werden nur ausgeblendet – vorhandene Daten
- * bleiben erhalten. Muss innerhalb einer bestehenden Transaktion aufgerufen
- * werden können; die Aufrufer sorgen dafür.
+ * Setzt die aktivierten Module eines Bereichs. Bereits deaktivierte Module
+ * werden nur ausgeblendet – vorhandene Daten bleiben erhalten. Muss
+ * innerhalb einer bestehenden Transaktion aufgerufen werden können; die
+ * Aufrufer sorgen dafür.
  */
 export function setEnabledModules(
   spaceId: string,

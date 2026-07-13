@@ -82,6 +82,13 @@ router.post(
 
     const db = getDb();
 
+    // Galerie-Uploads verlangen, dass die Galerie (Fotos & Videos) für diesen
+    // Bereich aktiviert ist – sie ist seit Einführung der Modulauswahl
+    // optional und kann z. B. für einen reinen Finanz-Bereich fehlen.
+    if (scope === 'gallery' && !isModuleEnabled(req.spaceId!, 'photos')) {
+      throw new ApiError(403, 'Die Galerie ist in diesem Bereich nicht aktiviert.');
+    }
+
     // Notiz-Uploads verlangen ein aktiviertes Notiz-Modul und eine gültige,
     // zum Bereich gehörende Notiz-ID (Schutz gegen fremde IDs).
     if (scope === 'note') {

@@ -43,10 +43,11 @@ export default function ModuleNavigation({
   open?: boolean;
   onClose?: () => void;
 }) {
-  const enabled = new Set<ModuleKey>(['photos', ...modules]);
+  const enabled = new Set<ModuleKey>(modules);
   const items = ITEMS.filter((i) => enabled.has(i.key));
-  // Bei nur einem Modul (reine Fotogalerie) keine Navigation anzeigen –
-  // dann verhält sich die App wie bisher.
+  // Bei nur einem aktiven Modul keine Navigation anzeigen – dann verhält
+  // sich die App wie bisher (egal ob dieses eine Modul die Galerie ist oder
+  // z. B. nur Finanzen).
   if (items.length <= 1) return null;
 
   return (

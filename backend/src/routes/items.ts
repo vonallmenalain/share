@@ -2,6 +2,7 @@ import { Router, raw } from 'express';
 import { getDb, ItemRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireSpace } from '../middleware/auth';
+import { requireEnabledModule } from '../middleware/module';
 import {
   fileExists,
   variantPath,
@@ -10,6 +11,10 @@ import {
 } from '../lib/media';
 
 const router = Router();
+
+// Alle Routen hier betreffen ausschliesslich die Galerie (Fotos & Videos) –
+// ist dieses Modul für den Bereich abgewählt, gibt es hier nichts zu tun.
+router.use(requireSpace, requireEnabledModule('photos'));
 
 export function publicItem(item: ItemRow) {
   const hasPreview =
@@ -69,7 +74,6 @@ function getOwnItem(id: string, spaceId: string): ItemRow {
 /** Liste aller aktiven Medien eines Bereichs (in benutzerdefinierter Reihenfolge). */
 router.get(
   '/',
-  requireSpace,
   asyncHandler(async (req, res) => {
     const db = getDb();
     const rows = db
@@ -85,7 +89,6 @@ router.get(
 /** Status einzelner Items (zum Pollen während der Verarbeitung). */
 router.get(
   '/status',
-  requireSpace,
   asyncHandler(async (req, res) => {
     const ids = String(req.query.ids ?? '')
       .split(',')
@@ -109,7 +112,6 @@ router.get(
  */
 router.patch(
   '/order',
-  requireSpace,
   asyncHandler(async (req, res) => {
     const order = req.body?.order;
     if (!Array.isArray(order)) throw new ApiError(400, 'Ungültige Reihenfolge.');
@@ -129,7 +131,6 @@ router.patch(
  */
 router.post(
   '/:id/favorite',
-  requireSpace,
   asyncHandler(async (req, res) => {
     const item = getOwnItem(req.params.id, req.spaceId!);
     const value = req.body?.favorite === false ? 0 : 1;
@@ -145,7 +146,6 @@ router.post(
  */
 router.post(
   '/:id/thumb',
-  requireSpace,
   raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: 20 * 1024 * 1024 }),
   asyncHandler(async (req, res) => {
     const item = getOwnItem(req.params.id, req.spaceId!);
@@ -178,7 +178,6 @@ router.post(
  */
 router.delete(
   '/:id/thumb',
-  requireSpace,
   asyncHandler(async (req, res) => {
     const item = getOwnItem(req.params.id, req.spaceId!);
     if (item.kind !== 'photo') {
@@ -210,7 +209,6 @@ router.delete(
  */
 router.post(
   '/:id/delete',
-  requireSpace,
   asyncHandler(async (req, res) => {
     const item = getOwnItem(req.params.id, req.spaceId!);
     // Wer gelöscht hat, wird – sofern ein Name bekannt ist – festgehalten. Ein
