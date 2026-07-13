@@ -505,6 +505,9 @@ function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: st
  * jeder Person zurückgesetzt werden – die Antwort auf „Code vergessen?": die
  * Person wendet sich an den Administrator, der den Code hier entfernt, damit
  * sie beim nächsten Auswählen ihres Namens einen neuen festlegen kann.
+ * Zusätzlich lassen sich Identitäten hier archivieren (überall ausblenden,
+ * Finanzdaten bleiben erhalten) oder endgültig löschen – Letzteres nur, wenn
+ * die Person nicht in Finanzdaten (Ausgaben/Abrechnungen) verankert ist.
  */
 function AdminParticipantsPanel({
   space,
@@ -524,6 +527,7 @@ function AdminParticipantsPanel({
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [error, setError] = useState('');
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     setRequirePin(space.requireParticipantPin);
@@ -589,6 +593,41 @@ function AdminParticipantsPanel({
     }
   };
 
+  const setArchived = async (p: Participant, archived: boolean) => {
+    setBusyId(p.id);
+    try {
+      const res = await api<{ participant: Participant }>(
+        `/api/spaces/${space.id}/participants/${p.id}/archive`,
+        { method: 'POST', adminKey, body: { archived } },
+      );
+      setParticipants((prev) => prev.map((x) => (x.id === p.id ? res.participant : x)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Aktion fehlgeschlagen.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const removeParticipant = async (p: Participant) => {
+    if (
+      !confirm(
+        `Identität „${p.name}“ endgültig und unwiderruflich löschen?\n\n` +
+          'Ist die Person noch in Finanzdaten (Ausgaben/Abrechnungen) verankert, ' +
+          'ist nur Archivieren möglich.',
+      )
+    )
+      return;
+    setBusyId(p.id);
+    try {
+      await api(`/api/spaces/${space.id}/participants/${p.id}`, { method: 'DELETE', adminKey });
+      setParticipants((prev) => prev.filter((x) => x.id !== p.id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Löschen fehlgeschlagen.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="admin-module-panel">
       <div className="admin-module-title">Wer bist du? &amp; Code (PIN)</div>
@@ -640,8 +679,8 @@ function AdminParticipantsPanel({
                     </span>
                     {p.hasPin ? (
                       <button
-                        className="btn btn-sm btn-danger"
-                        disabled={resettingId === p.id}
+                        className="btn btn-sm"
+                        disabled={resettingId === p.id || busyId === p.id}
                         onClick={() => void resetPin(p)}
                         title="Code entfernen, damit die Person einen neuen festlegen kann"
                       >
@@ -652,6 +691,26 @@ function AdminParticipantsPanel({
                         kein Code gesetzt
                       </span>
                     )}
+                    <button
+                      className="btn btn-sm"
+                      disabled={busyId === p.id || resettingId === p.id}
+                      onClick={() => void setArchived(p, !p.archived)}
+                      title={
+                        p.archived
+                          ? 'Wieder aktivieren, damit die Person wieder auswählbar ist'
+                          : 'Person überall ausblenden, Finanzdaten bleiben erhalten'
+                      }
+                    >
+                      {busyId === p.id ? '…' : p.archived ? 'Aktivieren' : 'Archivieren'}
+                    </button>
+                    <button
+                      className="btn btn-sm btn-danger"
+                      disabled={busyId === p.id || resettingId === p.id}
+                      onClick={() => void removeParticipant(p)}
+                      title="Identität endgültig löschen (nur möglich, wenn nicht in Finanzdaten verankert)"
+                    >
+                      Löschen
+                    </button>
                   </li>
                 ))}
               </ul>

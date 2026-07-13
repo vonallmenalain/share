@@ -84,6 +84,26 @@ Danach hat die Identität wieder keinen Code – die betroffene Person legt beim
 nächsten Öffnen des Bereichs (erzwungen, falls der Code Pflicht ist) einfach
 einen neuen fest.
 
+**Identitäten verwalten (archivieren / löschen).** Im selben Bereich
+(„Personen &amp; Codes verwalten“) kann der Administrator eine Identität nicht
+nur beim Code verwalten, sondern auch:
+
+- **Archivieren** (`POST /api/spaces/:id/participants/:participantId/archive`,
+  Body `{ "archived": true | false }`) – die Person wird überall ausgeblendet
+  (nicht mehr auswählbar, nicht mehr in Finanzlisten), **alle Finanzdaten
+  bleiben aber erhalten und korrekt**. Über denselben Endpunkt mit
+  `archived: false` lässt sie sich wieder aktivieren.
+- **Endgültig löschen** (`DELETE
+  /api/spaces/:id/participants/:participantId`) – entfernt den Datensatz
+  unwiderruflich. Das gelingt **nur, wenn die Person nicht in Finanzdaten
+  verankert ist** (weder als Zahler:in oder Ersteller:in einer Ausgabe, noch in
+  einem Ausgaben-Anteil oder einer Ausgleichszahlung). Ist sie es doch, wird das
+  Löschen mit `409` abgelehnt – dort würde die Abrechnung sonst nicht mehr
+  stimmen; in diesem Fall bleibt das Archivieren als sichere Alternative. Lose
+  Verweise ohne echte Verankerung (z. B. „erstellt von“ in Einkaufsliste,
+  Notizen, Kalender oder Abrechnungs-Stapeln) werden beim Löschen automatisch
+  gelöst.
+
 ## Finanzberechnung
 
 Die gesamte Logik liegt als reine, getestete Funktionen in
@@ -186,6 +206,11 @@ eingeschränkt. Modulrouten prüfen zusätzlich, ob das Modul aktiviert ist
   (inkl. archivierter).
 - `POST /api/spaces/:id/participants/:participantId/reset-pin` – Code einer
   Identität entfernen (Antwort auf „Code vergessen?“).
+- `POST /api/spaces/:id/participants/:participantId/archive` – Identität
+  archivieren (`{ "archived": true }`) oder wieder aktivieren
+  (`{ "archived": false }`).
+- `DELETE /api/spaces/:id/participants/:participantId` – Identität endgültig
+  löschen (nur, wenn sie nicht in Finanzdaten verankert ist; sonst `409`).
 
 ## Umgebungsvariablen
 

@@ -476,6 +476,109 @@ router.post(
   }),
 );
 
+/**
+ * Admin: eine Teilnehmer-Identität archivieren oder wieder aktivieren.
+ * Archivieren blendet die Person überall aus, lässt aber alle Finanzdaten
+ * unangetastet – die sichere Alternative zum endgültigen Löschen, wenn die
+ * Person noch in Ausgaben oder Abrechnungen vorkommt.
+ */
+router.post(
+  '/:id/participants/:participantId/archive',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT * FROM participants WHERE id = ? AND space_id = ?')
+      .get(req.params.participantId, req.params.id) as ParticipantRow | undefined;
+    if (!row) throw new ApiError(404, 'Teilnehmer nicht gefunden.');
+    const archived = req.body?.archived === false ? 0 : 1;
+    db.prepare('UPDATE participants SET archived = ?, updated_at = ? WHERE id = ?').run(
+      archived,
+      new Date().toISOString(),
+      row.id,
+    );
+    const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(row.id) as ParticipantRow;
+    res.json({ participant: publicParticipant(updated) });
+  }),
+);
+
+/**
+ * Zählt, in wie vielen Finanzdaten eine Identität fest verankert ist. Genau
+ * diese Verweise sind per Fremdschlüssel geschützt und würden ein endgültiges
+ * Löschen der Identität verhindern bzw. die Abrechnung verfälschen.
+ */
+function financeReferenceCount(db: ReturnType<typeof getDb>, participantId: string): number {
+  const row = db
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM finance_expenses
+            WHERE paid_by_participant_id = @id OR created_by_participant_id = @id) +
+         (SELECT COUNT(*) FROM finance_expense_splits WHERE participant_id = @id) +
+         (SELECT COUNT(*) FROM finance_settlement_transfers
+            WHERE from_participant_id = @id OR to_participant_id = @id) AS n`,
+    )
+    .get({ id: participantId }) as { n: number } | undefined;
+  return row?.n ?? 0;
+}
+
+/**
+ * Admin: eine Teilnehmer-Identität endgültig löschen. Anders als das
+ * Archivieren (das die Person nur ausblendet, damit Finanzdaten stimmen)
+ * entfernt dies den Datensatz unwiderruflich. Ist die Person noch in
+ * Finanzdaten verankert (Ausgaben, Anteile oder Ausgleichszahlungen), wird
+ * das Löschen verweigert – dort würde die Abrechnung sonst nicht mehr stimmen;
+ * in diesem Fall bleibt nur das Archivieren. Verweise ohne echte Verankerung
+ * (z. B. „erstellt von" in Einkaufsliste, Notizen, Kalender oder
+ * Abrechnungs-Stapeln) werden beim Löschen gelöst.
+ */
+router.delete(
+  '/:id/participants/:participantId',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT * FROM participants WHERE id = ? AND space_id = ?')
+      .get(req.params.participantId, req.params.id) as ParticipantRow | undefined;
+    if (!row) throw new ApiError(404, 'Teilnehmer nicht gefunden.');
+
+    if (financeReferenceCount(db, row.id) > 0) {
+      throw new ApiError(
+        409,
+        'Diese Person ist in Finanzdaten (Ausgaben oder Abrechnungen) verankert und kann ' +
+          'nicht endgültig gelöscht werden, ohne die Abrechnung zu verfälschen. Du kannst sie ' +
+          'stattdessen archivieren – dann verschwindet sie überall, die Finanzdaten bleiben ' +
+          'aber korrekt.',
+      );
+    }
+
+    const remove = db.transaction((participantId: string) => {
+      // Lose Verweise ohne Fremdschlüssel lösen, damit nichts auf eine nicht
+      // mehr existierende Identität zeigt.
+      db.prepare(
+        'UPDATE shopping_items SET checked_by_participant_id = NULL WHERE checked_by_participant_id = ?',
+      ).run(participantId);
+      db.prepare(
+        'UPDATE shopping_items SET created_by_participant_id = NULL WHERE created_by_participant_id = ?',
+      ).run(participantId);
+      db.prepare('UPDATE notes SET created_by_participant_id = NULL WHERE created_by_participant_id = ?').run(
+        participantId,
+      );
+      db.prepare(
+        'UPDATE calendar_events SET created_by_participant_id = NULL WHERE created_by_participant_id = ?',
+      ).run(participantId);
+      db.prepare(
+        'UPDATE finance_settlement_batches SET created_by_participant_id = NULL WHERE created_by_participant_id = ?',
+      ).run(participantId);
+      db.prepare('DELETE FROM participants WHERE id = ?').run(participantId);
+    });
+    remove(row.id);
+
+    res.json({ ok: true, id: row.id });
+  }),
+);
+
 /** Öffentlich: Basis-Infos zu einem Bereich (per Slug) – ob Passwort nötig ist. */
 router.get(
   '/by-slug/:slug',
