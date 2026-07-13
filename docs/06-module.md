@@ -198,6 +198,9 @@ eingeschränkt. Modulrouten prüfen zusätzlich, ob das Modul aktiviert ist
 
 **Adminbereich (Module &amp; Teilnehmer)**
 
+- `PATCH /api/spaces/:id/name` – Bereich umbenennen (`{ "name": "..." }`); der
+  Link (Slug) wird dabei aus dem neuen Namen neu erzeugt, bestehende Links auf
+  den alten Namen funktionieren danach nicht mehr.
 - `GET /api/spaces/:id/modules`
 - `PATCH /api/spaces/:id/modules`
 - `PATCH /api/spaces/:id/participant-policy` – Code (PIN) für neue Identitäten

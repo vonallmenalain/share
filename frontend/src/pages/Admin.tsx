@@ -335,6 +335,8 @@ export default function Admin() {
                         </button>
                       </div>
 
+                      <AdminRenamePanel space={s} adminKey={adminKey} onUpdateSpace={updateSpace} />
+
                       <AdminModulePanel spaceId={s.id} adminKey={adminKey} />
 
                       <AdminParticipantsPanel
@@ -382,6 +384,85 @@ const MODULE_META: { key: Exclude<ModuleKey, 'photos'>; label: string; icon: str
 ];
 
 const MODULE_CURRENCIES = ['CHF', 'EUR', 'USD', 'GBP'];
+
+/**
+ * Adminbereich: einen Bereich umbenennen. Der Link (Slug) wird dabei aus dem
+ * neuen Namen neu erzeugt – ein bewusster Trade-off, damit der Link weiterhin
+ * zum aktuellen Namen passt. Bereits geteilte Links funktionieren nach dem
+ * Umbenennen nicht mehr.
+ */
+function AdminRenamePanel({
+  space,
+  adminKey,
+  onUpdateSpace,
+}: {
+  space: Space;
+  adminKey: string;
+  onUpdateSpace: (space: Space) => void;
+}) {
+  const [name, setName] = useState(space.name);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    setName(space.name);
+  }, [space.name]);
+
+  const trimmed = name.trim();
+  const unchanged = trimmed === space.name;
+
+  const rename = async () => {
+    if (!trimmed || unchanged) return;
+    if (
+      !confirm(
+        `Bereich in „${trimmed}“ umbenennen?\n\nDer Link ändert sich dabei – der bisherige Link ` +
+          '(/s/' +
+          space.slug +
+          ') funktioniert danach nicht mehr.',
+      )
+    )
+      return;
+    setSaving(true);
+    setMsg('');
+    try {
+      const res = await api<{ space: Space }>(`/api/spaces/${space.id}/name`, {
+        method: 'PATCH',
+        adminKey,
+        body: { name: trimmed },
+      });
+      onUpdateSpace(res.space);
+      setMsg('Umbenannt ✓');
+      setTimeout(() => setMsg(''), 1800);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Fehler beim Umbenennen.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="admin-module-panel">
+      <div className="admin-module-title">Name &amp; Link</div>
+      <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+        <input
+          className="input"
+          style={{ maxWidth: 320, flex: '1 1 220px' }}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={80}
+        />
+        <button className="btn btn-sm btn-primary" disabled={saving || !trimmed || unchanged} onClick={rename}>
+          {saving ? 'Speichere…' : 'Umbenennen'}
+        </button>
+        {msg && <span className="muted" style={{ fontSize: 13 }}>{msg}</span>}
+      </div>
+      <p className="hint" style={{ marginTop: 6 }}>
+        Aktueller Link: /s/{space.slug} – beim Umbenennen wird ein neuer Link erzeugt, der alte
+        funktioniert danach nicht mehr.
+      </p>
+    </div>
+  );
+}
 
 /** Adminbereich: aktivierte Module eines Bereichs anzeigen und ändern. */
 function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: string }) {
