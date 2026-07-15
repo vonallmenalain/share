@@ -115,6 +115,24 @@ export function isExpenseEditable(status: string): boolean {
 }
 
 /**
+ * Prüft, ob die anfragende Person eine Ausgabe bearbeiten oder löschen darf.
+ * Grundregel: Nur wer eine Ausgabe erfasst hat, darf sie verändern – eine
+ * fremde Person darf sie nicht bearbeiten. Das ist besonders im Modus mit
+ * Code-Pflicht (PIN) relevant, wo jede Identität geschützt ist.
+ *
+ * Ausgaben ohne hinterlegten Ersteller (Altbestand, der vor Einführung dieser
+ * Regel erfasst wurde) bleiben für alle bearbeitbar, damit alte Einträge nicht
+ * dauerhaft gesperrt und weder korrigier- noch löschbar sind.
+ */
+export function canModifyExpense(
+  createdByParticipantId: string | null | undefined,
+  requesterParticipantId: string | null | undefined,
+): boolean {
+  if (!createdByParticipantId) return true; // kein Ersteller hinterlegt (Altbestand)
+  return createdByParticipantId === requesterParticipantId;
+}
+
+/**
  * Berechnet die Salden aller Teilnehmer über die offenen Ausgaben. Der Zahler
  * bekommt den vollen Betrag gutgeschrieben, jedem beteiligten Teilnehmer wird
  * sein Anteil belastet. Die Summe aller Salden ergibt exakt null.

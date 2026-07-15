@@ -21,6 +21,7 @@ import {
 } from '../lib/validation';
 import {
   Balance,
+  canModifyExpense,
   computeBalances,
   computeEqualShares,
   computeSettlement,
@@ -253,13 +254,29 @@ router.post(
   }),
 );
 
-function getEditableExpense(id: string, spaceId: string): FinanceExpenseRow {
+/**
+ * Lädt eine veränderbare Ausgabe und stellt sicher, dass die anfragende Person
+ * sie überhaupt bearbeiten/löschen darf: Sie muss zum Bereich gehören, darf
+ * nicht abgerechnet sein und nur der Ersteller darf sie verändern (fremde
+ * Ausgaben sind gesperrt – siehe canModifyExpense).
+ */
+function getEditableExpense(
+  id: string,
+  spaceId: string,
+  requesterParticipantId: string | undefined,
+): FinanceExpenseRow {
   const row = getDb()
     .prepare('SELECT * FROM finance_expenses WHERE id = ? AND space_id = ? AND deleted_at IS NULL')
     .get(id, spaceId) as FinanceExpenseRow | undefined;
   if (!row) throw new ApiError(404, 'Ausgabe nicht gefunden.');
   if (row.status === 'settled') {
     throw new ApiError(409, 'Eine bereits abgerechnete Ausgabe kann nicht verändert werden.');
+  }
+  if (!canModifyExpense(row.created_by_participant_id, requesterParticipantId)) {
+    throw new ApiError(
+      403,
+      'Diese Ausgabe wurde von einer anderen Person erfasst und kann nur von dieser bearbeitet werden.',
+    );
   }
   return row;
 }
@@ -268,7 +285,7 @@ router.patch(
   '/expenses/:id',
   asyncHandler(async (req, res) => {
     const spaceId = req.spaceId!;
-    const existing = getEditableExpense(req.params.id, spaceId);
+    const existing = getEditableExpense(req.params.id, spaceId, req.participantId);
     const currency = financeCurrency(spaceId);
     const title = req.body?.title === undefined ? existing.title : requireString(req.body.title, 'Titel', { max: 200 });
     const amountCents = req.body?.amountCents === undefined ? existing.amount_cents : requireAmountCents(req.body.amountCents);
@@ -322,7 +339,7 @@ router.patch(
 router.delete(
   '/expenses/:id',
   asyncHandler(async (req, res) => {
-    const existing = getEditableExpense(req.params.id, req.spaceId!);
+    const existing = getEditableExpense(req.params.id, req.spaceId!, req.participantId);
     getDb()
       .prepare('UPDATE finance_expenses SET deleted_at = ?, updated_at = ? WHERE id = ?')
       .run(new Date().toISOString(), new Date().toISOString(), existing.id);
