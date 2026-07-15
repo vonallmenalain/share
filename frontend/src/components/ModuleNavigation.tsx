@@ -23,11 +23,11 @@ const ITEMS: NavItem[] = [
  *
  * Auf dem Smartphone als untere Navigationsleiste (per CSS) – `hidden` blendet
  * sie in der Galerie beim Herunterscrollen aus. Auf grösseren Bildschirmen
- * gibt es KEINE permanente Seitenleiste mehr: sie liegt als schmales
- * Überlagerungsmenü ("Drawer") ausserhalb des sichtbaren Bereichs und wird
- * nur eingeblendet, wenn `open` gesetzt ist (Hamburger-Button oben links in
- * der TopBar). Ein Klick auf den Hintergrund oder einen Menüpunkt schliesst
- * sie wieder (`onClose`).
+ * gibt es KEINE permanente Seitenleiste mehr: sie erscheint als kompaktes,
+ * schwebendes Überlagerungsmenü (Popover) oben links und wird nur
+ * eingeblendet, wenn `open` gesetzt ist (Hamburger-Button in der TopBar). Ein
+ * Klick auf den Hintergrund oder einen Menüpunkt schliesst sie wieder
+ * (`onClose`).
  */
 export default function ModuleNavigation({
   slug,
@@ -61,6 +61,7 @@ export default function ModuleNavigation({
         className={`module-nav${hidden ? ' module-nav-hidden' : ''}${open ? ' module-nav-open' : ''}`}
         aria-label="Bereichs-Navigation"
       >
+        <span className="module-nav-heading">Bereiche</span>
         {items.map((item) => {
           const to = item.path ? `/s/${slug}/${item.path}` : `/s/${slug}`;
           return (

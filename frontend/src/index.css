@@ -1804,14 +1804,19 @@ button {
 }
 
 /* ---- Gemeinsame Navigation ------------------------------------------------
-   Keine permanente Seitenleiste: Sie liegt ausserhalb des sichtbaren
-   Bereichs (translateX) und wird nur über den Hamburger-Button (siehe TopBar)
-   als Überlagerungsmenü eingeblendet. So bleibt auf grossen Bildschirmen der
-   volle Platz für Fotos/Finanzen/etc. erhalten. ---------------------------- */
+   Keine permanente Seitenleiste. Auf grossen Bildschirmen erscheint die
+   Bereichs-Navigation als kompaktes, schwebendes Überlagerungsmenü (Popover)
+   oben links – bewusst KEIN vollhoher, weisser Balken mehr, sondern eine
+   kleine Karte mit Milchglas-Hintergrund, die sich sanft ein- und ausblendet.
+   Auf dem Smartphone (Media-Query weiter unten) bleibt es unverändert die
+   gewohnte untere Navigationsleiste. Hier stehen nur die geteilten
+   Grundregeln; das jeweilige Aussehen definieren die beiden Media-Queries. -- */
 .module-nav-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.35);
+  /* Nur ein Hauch Abdunklung: Das Popover ist klein, ein starker Dimmer würde
+     unnötig „modal" und auffällig wirken. */
+  background: rgba(15, 23, 42, 0.08);
   z-index: 40;
   opacity: 0;
   pointer-events: none;
@@ -1822,25 +1827,16 @@ button {
   pointer-events: auto;
 }
 .module-nav {
-  position: fixed;
-  top: var(--topbar-h);
-  left: 0;
-  bottom: 0;
-  width: 240px;
-  background: var(--bg-elevated);
-  border-right: 1px solid var(--line);
-  padding: 14px 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  background: var(--bg-elevated);
   z-index: 45;
   overflow-y: auto;
-  transform: translateX(-100%);
-  transition: transform 0.24s ease;
-  box-shadow: 8px 0 28px rgba(15, 23, 42, 0.14);
 }
-.module-nav.module-nav-open {
-  transform: translateX(0);
+.module-nav-heading {
+  /* Kleiner Titel „Bereiche" – nur im Desktop-Popover sichtbar. */
+  display: none;
 }
 .module-nav-item {
   display: flex;
@@ -1867,6 +1863,79 @@ button {
   line-height: 1;
   width: 24px;
   text-align: center;
+}
+
+/* ---- Desktop: schwebendes Popover statt Vollhöhe-Balken ------------------- */
+@media (min-width: 901px) {
+  .module-nav {
+    position: fixed;
+    top: calc(var(--topbar-h) + 8px);
+    /* Linke Kante mit dem Seiteninhalt (und damit dem Hamburger) ausrichten. */
+    left: max(20px, calc(50vw - var(--maxw) / 2 + 20px));
+    width: 234px;
+    max-height: calc(100vh - var(--topbar-h) - 24px);
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.86);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    backdrop-filter: saturate(180%) blur(16px);
+    box-shadow: var(--shadow-md);
+    transform-origin: top left;
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease,
+      transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
+  }
+  .module-nav.module-nav-open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .module-nav-heading {
+    display: block;
+    padding: 4px 12px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  /* Einträge blenden sich sanft und leicht gestaffelt ein (nur beim Öffnen). */
+  .module-nav-item {
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease,
+      color 0.15s ease;
+  }
+  .module-nav.module-nav-open .module-nav-item {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .module-nav.module-nav-open .module-nav-item:nth-of-type(2) {
+    transition-delay: 0.03s;
+  }
+  .module-nav.module-nav-open .module-nav-item:nth-of-type(3) {
+    transition-delay: 0.06s;
+  }
+  .module-nav.module-nav-open .module-nav-item:nth-of-type(4) {
+    transition-delay: 0.09s;
+  }
+  .module-nav.module-nav-open .module-nav-item:nth-of-type(5) {
+    transition-delay: 0.12s;
+  }
+}
+
+/* Wer reduzierte Bewegung bevorzugt, bekommt keine Ein-/Ausblend-Animation. */
+@media (prefers-reduced-motion: reduce) {
+  .module-nav,
+  .module-nav-item {
+    transition-duration: 0.01ms;
+    transform: none;
+  }
 }
 
 @media (max-width: 900px) {
