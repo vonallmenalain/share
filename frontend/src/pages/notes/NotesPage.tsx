@@ -1,13 +1,14 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, fileUrl, Note, NoteType } from '../../api/client';
+import { api, fileUrl, Item, Note, NoteType } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { useModuleData } from '../../lib/useModuleData';
 import { formatDate } from '../../lib/format';
 import { linkify } from '../../lib/linkify';
+import Lightbox from '../../components/Lightbox';
 
 export default function NotesPage() {
-  const { slug, token, identity } = useSpaceSessionContext();
+  const { slug, token, name, identity } = useSpaceSessionContext();
   const navigate = useNavigate();
   const { currentId } = identity;
   const participantId = currentId ?? undefined;
@@ -16,9 +17,21 @@ export default function NotesPage() {
   // aufgeklappte Notiz klappt sie wieder ein; Klick auf eine andere klappt die
   // vorherige automatisch ein.
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Für die vergrösserte Bildansicht: Bilder der geöffneten Notiz und der Index
+  // des aktuell angezeigten Bilds. `null` = keine Lightbox offen.
+  const [lightbox, setLightbox] = useState<{ items: Item[]; index: number } | null>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
+  };
+
+  const downloadOriginal = (item: Item) => {
+    const a = document.createElement('a');
+    a.href = fileUrl(`/files/original/${item.id}`, token);
+    a.download = item.filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   const load = useCallback(
@@ -118,13 +131,25 @@ export default function NotesPage() {
                 )}
                 {n.attachments.length > 0 && (
                   <div className="note-card-thumbs">
-                    {(expanded ? n.attachments : n.attachments.slice(0, 4)).map((a) => (
-                      <img
+                    {(expanded ? n.attachments : n.attachments.slice(0, 4)).map((a, i) => (
+                      <button
                         key={a.id}
-                        src={fileUrl(`/files/thumb/${a.id}`, token)}
-                        alt=""
-                        loading="lazy"
-                      />
+                        type="button"
+                        className="note-card-thumb"
+                        title="Bild vergrössern"
+                        onClick={(e) => {
+                          // Klick auf ein Bild öffnet die vergrösserte Ansicht und
+                          // darf die Karte nicht auf-/zuklappen.
+                          e.stopPropagation();
+                          setLightbox({ items: n.attachments, index: i });
+                        }}
+                      >
+                        <img
+                          src={fileUrl(`/files/thumb/${a.id}`, token)}
+                          alt={a.filename}
+                          loading="lazy"
+                        />
+                      </button>
                     ))}
                   </div>
                 )}
@@ -146,6 +171,18 @@ export default function NotesPage() {
             );
           })}
         </div>
+      )}
+
+      {lightbox && (
+        <Lightbox
+          items={lightbox.items}
+          index={lightbox.index}
+          token={token}
+          currentName={name}
+          onClose={() => setLightbox(null)}
+          onNavigate={(i) => setLightbox((prev) => (prev ? { ...prev, index: i } : prev))}
+          onDownload={downloadOriginal}
+        />
       )}
     </div>
   );
