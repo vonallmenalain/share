@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  canModifyExpense,
   computeBalances,
   computeEqualShares,
   computeSettlement,
@@ -157,6 +158,21 @@ test('11: participant from a foreign space is rejected', () => {
 test('12: settled expense cannot be edited', () => {
   assert.equal(isExpenseEditable('open'), true);
   assert.equal(isExpenseEditable('settled'), false);
+});
+
+// 13. Nur der Ersteller darf eine Ausgabe bearbeiten/löschen.
+test('13: only the creator may modify an expense', () => {
+  // Ersteller selbst darf.
+  assert.equal(canModifyExpense('a', 'a'), true);
+  // Fremde Person darf nicht.
+  assert.equal(canModifyExpense('a', 'b'), false);
+  // Ohne Identität (kein X-Participant-Id) darf man fremde Ausgaben nicht ändern.
+  assert.equal(canModifyExpense('a', undefined), false);
+  assert.equal(canModifyExpense('a', null), false);
+  // Altbestand ohne hinterlegten Ersteller bleibt für alle bearbeitbar.
+  assert.equal(canModifyExpense(null, 'a'), true);
+  assert.equal(canModifyExpense(null, undefined), true);
+  assert.equal(canModifyExpense(undefined, 'a'), true);
 });
 
 // Zusätzliche Prüfungen zur Validierung

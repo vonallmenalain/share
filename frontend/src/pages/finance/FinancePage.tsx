@@ -90,6 +90,12 @@ export default function FinancePage() {
     }
   };
 
+  // Nur der Ersteller einer Ausgabe darf sie bearbeiten/löschen (der Server
+  // erzwingt dies verbindlich – hier nur zur Anzeige). Ausgaben ohne
+  // hinterlegten Ersteller (Altbestand) bleiben für alle bearbeitbar.
+  const canEdit = (e: Expense) =>
+    e.createdByParticipantId == null || e.createdByParticipantId === currentId;
+
   const summary = data?.summary;
   const openExpenses = (data?.expenses ?? []).filter((e) => e.status === 'open');
   const settledExpenses = (data?.expenses ?? []).filter((e) => e.status === 'settled');
@@ -175,20 +181,30 @@ export default function FinancePage() {
                     </div>
                     <div className="expense-side">
                       <span className="expense-amount">{formatMoney(e.amountCents, currency)}</span>
-                      <span className="expense-actions">
-                        <button
-                          className="btn btn-sm btn-ghost"
-                          onClick={() => {
-                            setEditing(e);
-                            setShowForm(true);
-                          }}
+                      {canEdit(e) ? (
+                        <span className="expense-actions">
+                          <button
+                            className="btn btn-sm btn-ghost"
+                            onClick={() => {
+                              setEditing(e);
+                              setShowForm(true);
+                            }}
+                          >
+                            ✎
+                          </button>
+                          <button className="btn btn-sm btn-ghost" onClick={() => deleteExpense(e)}>
+                            ✕
+                          </button>
+                        </span>
+                      ) : (
+                        <span
+                          className="expense-actions muted"
+                          title={`Nur ${nameOf(e.createdByParticipantId)} kann diese Ausgabe bearbeiten.`}
+                          aria-label={`Von ${nameOf(e.createdByParticipantId)} erfasst – nur diese Person kann sie bearbeiten.`}
                         >
-                          ✎
-                        </button>
-                        <button className="btn btn-sm btn-ghost" onClick={() => deleteExpense(e)}>
-                          ✕
-                        </button>
-                      </span>
+                          🔒
+                        </span>
+                      )}
                     </div>
                   </li>
                 ))}
