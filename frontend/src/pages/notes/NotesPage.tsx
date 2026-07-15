@@ -4,6 +4,7 @@ import { api, fileUrl, Note, NoteType } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { useModuleData } from '../../lib/useModuleData';
 import { formatDate } from '../../lib/format';
+import { linkify } from '../../lib/linkify';
 
 export default function NotesPage() {
   const { slug, token, identity } = useSpaceSessionContext();
@@ -99,7 +100,7 @@ export default function NotesPage() {
                       {n.checklist.map((c) => (
                         <li key={c.id} className={c.checked ? 'checked' : ''}>
                           <span className="note-card-check">{c.checked ? '☑' : '☐'}</span>
-                          <span>{c.text}</span>
+                          <span>{linkify(c.text)}</span>
                         </li>
                       ))}
                     </ul>
@@ -111,7 +112,7 @@ export default function NotesPage() {
                 ) : (
                   n.body && (
                     <div className={`note-card-preview${expanded ? ' expanded' : ''}`}>
-                      {expanded ? n.body : n.body.slice(0, 140)}
+                      {linkify(expanded ? n.body : n.body.slice(0, 140))}
                     </div>
                   )
                 )}

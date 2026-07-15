@@ -2552,6 +2552,13 @@ button {
   max-height: 60px;
   overflow: hidden;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* Links in der Notiz-Anzeige klar erkennbar und lange URLs umbrechbar. */
+.note-card-preview a,
+.note-card-checklist a {
+  text-decoration: underline;
+  overflow-wrap: anywhere;
 }
 .note-card-thumbs {
   display: flex;
