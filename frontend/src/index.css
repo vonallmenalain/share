@@ -2563,12 +2563,22 @@ button {
 .note-card-thumbs {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+}
+.note-card-thumb {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+  line-height: 0;
+  border-radius: 8px;
 }
 .note-card-thumbs img {
   width: 46px;
   height: 46px;
   object-fit: cover;
   border-radius: 8px;
+  display: block;
 }
 .note-card-foot {
   font-size: 12px;
