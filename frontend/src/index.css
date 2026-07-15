@@ -2495,10 +2495,45 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Eingeklappt haben alle Notizen eine feste Grösse; überstehender Inhalt
+     wird abgeschnitten. Ein Klick klappt die Notiz auf (siehe .expanded). */
+  height: 190px;
+  overflow: hidden;
   transition: box-shadow 0.15s ease, transform 0.05s ease;
 }
 .note-card:hover {
   box-shadow: var(--shadow-md);
+}
+.note-card.expanded {
+  height: auto;
+  overflow: visible;
+  box-shadow: var(--shadow-md);
+  /* Über die volle Breite des Rasters, damit lange Notizen genug Platz haben. */
+  grid-column: 1 / -1;
+}
+.note-card.expanded .note-card-preview {
+  max-height: none;
+}
+.note-card-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+}
+.note-card-checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.note-card-checklist li.checked span:last-child {
+  text-decoration: line-through;
+  color: var(--ink-soft);
+}
+.note-card-check {
+  flex: none;
 }
 .note-card-head {
   display: flex;
@@ -2530,6 +2565,11 @@ button {
 }
 .note-card-foot {
   font-size: 12px;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .note-title-input {
   font-size: 20px;

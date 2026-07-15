@@ -87,7 +87,10 @@ router.get(
          ORDER BY pinned DESC, updated_at DESC`,
       )
       .all(spaceId) as NoteRow[];
-    res.json({ notes: rows.map((r) => publicNote(r, spaceId)) });
+    // full: true, damit die Übersicht Notizen direkt vollständig aufklappen
+    // kann (kompletter Text + alle Checklistenpunkte), ohne pro Notiz noch
+    // einmal einzeln nachladen zu müssen.
+    res.json({ notes: rows.map((r) => publicNote(r, spaceId, { full: true })) });
   }),
 );
 
