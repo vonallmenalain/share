@@ -12,7 +12,7 @@ import { requireSpace } from '../middleware/auth';
 import { requireEnabledModule } from '../middleware/module';
 import { resolveParticipant } from '../middleware/participant';
 import { newId } from '../lib/ids';
-import { publicParticipant } from '../lib/participants';
+import { canonicalId, loadMergeMap, publicParticipant } from '../lib/participants';
 import {
   optionalString,
   requireAmountCents,
@@ -22,6 +22,7 @@ import {
 import {
   Balance,
   canModifyExpense,
+  canonicalizeExpenses,
   computeBalances,
   computeEqualShares,
   computeSettlement,
@@ -68,10 +69,26 @@ function publicExpense(row: FinanceExpenseRow) {
   };
 }
 
-function activeParticipants(spaceId: string): ParticipantRow[] {
+/**
+ * Aktive Finanz-Teilnehmer, d. h. die eigenständigen bzw. „primären"
+ * Identitäten (merged_into IS NULL). Zusammengeführte (sekundäre) Identitäten
+ * erscheinen im Finanzbereich NICHT als eigene Zeile – sie zählen über die
+ * Kanonisierung zu ihrer primären Identität. So werden z. B. Alain und Annina
+ * als eine Person angezeigt und beim gleichmässigen Aufteilen einmal gezählt.
+ */
+function financeParticipants(spaceId: string): ParticipantRow[] {
   return getDb()
-    .prepare('SELECT * FROM participants WHERE space_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE')
+    .prepare(
+      `SELECT * FROM participants
+       WHERE space_id = ? AND archived = 0 AND merged_into IS NULL
+       ORDER BY name COLLATE NOCASE`,
+    )
     .all(spaceId) as ParticipantRow[];
+}
+
+/** Zusammenführungs-Abbildung dieses Bereichs (ID → kanonische Wurzel-ID). */
+function mergeMapOf(spaceId: string): Map<string, string> {
+  return loadMergeMap(spaceId, getDb());
 }
 
 function assertParticipantInSpace(id: string, spaceId: string): ParticipantRow {
@@ -95,19 +112,29 @@ function buildSplits(body: unknown, amountCents: number, spaceId: string): Split
     splits?: unknown;
   };
   const mode = b.splitMode === 'manual' ? 'manual' : 'equal';
+  const merge = mergeMapOf(spaceId);
+  // Alle beteiligten IDs auf ihre kanonische (primäre) Identität abbilden, damit
+  // zusammengeführte Personen (z. B. Alain & Annina) als eine Person zählen und
+  // die gespeicherten Anteile direkt auf die primäre Identität lauten.
+  const canon = (id: string) => canonicalId(merge, id);
 
   if (mode === 'equal') {
     const ids = Array.isArray(b.participantIds) ? b.participantIds.map((x) => String(x)) : [];
     if (ids.length === 0) throw new ApiError(400, 'Mindestens eine Person muss beteiligt sein.');
     for (const id of ids) assertParticipantInSpace(id, spaceId);
-    const shares = computeEqualShares(amountCents, ids);
-    return shares;
+    // Kanonisieren und Duplikate entfernen: eine zusammengeführte Person wird
+    // beim gleichmässigen Aufteilen genau einmal berücksichtigt.
+    const canonicalIds = [...new Set(ids.map(canon))];
+    return computeEqualShares(amountCents, canonicalIds);
   }
 
   // manual
   const raw = Array.isArray(b.splits) ? b.splits : [];
   if (raw.length === 0) throw new ApiError(400, 'Mindestens eine Person muss beteiligt sein.');
-  const splits: SplitShare[] = raw.map((s) => {
+  // Anteile je kanonischer Identität aufsummieren (zusammengeführte Personen
+  // fallen zu einem gemeinsamen Anteil zusammen).
+  const byCanonical = new Map<string, number>();
+  for (const s of raw) {
     const obj = s as { participantId?: unknown; shareCents?: unknown };
     const participantId = String(obj.participantId ?? '');
     const shareCents = typeof obj.shareCents === 'number' ? obj.shareCents : Number(obj.shareCents);
@@ -115,15 +142,25 @@ function buildSplits(body: unknown, amountCents: number, spaceId: string): Split
     if (!Number.isInteger(shareCents) || shareCents < 0) {
       throw new ApiError(400, 'Anteile müssen ganzzahlige, nicht negative Rappen sein.');
     }
-    return { participantId, shareCents };
-  });
-  for (const s of splits) assertParticipantInSpace(s.participantId, spaceId);
+    assertParticipantInSpace(participantId, spaceId);
+    const id = canon(participantId);
+    byCanonical.set(id, (byCanonical.get(id) ?? 0) + shareCents);
+  }
+  const splits: SplitShare[] = [...byCanonical.entries()].map(([participantId, shareCents]) => ({
+    participantId,
+    shareCents,
+  }));
   const check = validateSplits(amountCents, splits);
   if (!check.ok) throw new ApiError(400, check.error ?? 'Ungültige Aufteilung.');
   return splits;
 }
 
-/** Lädt die offenen (nicht gelöschten) Ausgaben eines Bereichs inkl. Splits. */
+/**
+ * Lädt die offenen (nicht gelöschten) Ausgaben eines Bereichs inkl. Splits.
+ * `forBalance` ist bereits kanonisiert – zusammengeführte Identitäten sind auf
+ * ihre primäre Identität abgebildet, sodass die Salden sie als eine Person
+ * behandeln (auch für Ausgaben, die vor der Zusammenführung erfasst wurden).
+ */
 function loadOpenExpenses(spaceId: string): { rows: FinanceExpenseRow[]; forBalance: ExpenseForBalance[] } {
   const rows = getDb()
     .prepare(
@@ -132,21 +169,24 @@ function loadOpenExpenses(spaceId: string): { rows: FinanceExpenseRow[]; forBala
        ORDER BY expense_date DESC, created_at DESC`,
     )
     .all(spaceId) as FinanceExpenseRow[];
-  const forBalance: ExpenseForBalance[] = rows.map((r) => ({
+  const merge = mergeMapOf(spaceId);
+  const raw: ExpenseForBalance[] = rows.map((r) => ({
     paidByParticipantId: r.paid_by_participant_id,
     amountCents: r.amount_cents,
     splits: splitsOf(r.id),
   }));
+  const forBalance = canonicalizeExpenses(raw, (id) => canonicalId(merge, id));
   return { rows, forBalance };
 }
 
 /** Salden über die offenen Ausgaben – für alle beteiligten & aktiven Teilnehmer. */
 function openBalances(spaceId: string): Balance[] {
-  const active = activeParticipants(spaceId).map((p) => p.id);
+  // Aktive Finanz-Teilnehmer sind bereits die primären Identitäten.
+  const active = financeParticipants(spaceId).map((p) => p.id);
   const { forBalance } = loadOpenExpenses(spaceId);
   // Alle Teilnehmer berücksichtigen, die entweder aktiv sind oder in einer
-  // offenen Ausgabe vorkommen (Zahler oder Split), damit keine Schulden
-  // "verschwinden", wenn jemand zwischenzeitlich archiviert wurde.
+  // offenen (kanonisierten) Ausgabe vorkommen (Zahler oder Split), damit keine
+  // Schulden "verschwinden", wenn jemand zwischenzeitlich archiviert wurde.
   const ids = new Set<string>(active);
   for (const e of forBalance) {
     ids.add(e.paidByParticipantId);
@@ -162,7 +202,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const spaceId = req.spaceId!;
     const currency = financeCurrency(spaceId);
-    const participants = activeParticipants(spaceId);
+    const participants = financeParticipants(spaceId);
     const { rows } = loadOpenExpenses(spaceId);
     const totalOpenCents = rows.reduce((s, r) => s + r.amount_cents, 0);
     const balances = openBalances(spaceId);
@@ -218,6 +258,9 @@ router.post(
     const expenseDate = requireLocalDate(req.body?.expenseDate);
     const notes = optionalString(req.body?.notes, 1000);
     const paidBy = assertParticipantInSpace(String(req.body?.paidByParticipantId ?? ''), spaceId);
+    // Zahler auf die kanonische (primäre) Identität abbilden – eine
+    // zusammengeführte Person zahlt als Gruppe.
+    const paidById = canonicalId(mergeMapOf(spaceId), paidBy.id);
     const splitMode = req.body?.splitMode === 'manual' ? 'manual' : 'equal';
     const splits = buildSplits(req.body, amountCents, spaceId);
 
@@ -235,7 +278,7 @@ router.post(
         title,
         amountCents,
         currency,
-        paidBy.id,
+        paidById,
         expenseDate,
         notes,
         splitMode,
@@ -294,7 +337,10 @@ router.patch(
     const paidBy =
       req.body?.paidByParticipantId === undefined
         ? existing.paid_by_participant_id
-        : assertParticipantInSpace(String(req.body.paidByParticipantId), spaceId).id;
+        : canonicalId(
+            mergeMapOf(spaceId),
+            assertParticipantInSpace(String(req.body.paidByParticipantId), spaceId).id,
+          );
 
     // Splits nur neu berechnen, wenn Aufteilung oder Betrag mitgeschickt wurde.
     const splitProvided =
@@ -426,11 +472,15 @@ router.post(
       if (rows.length === 0) {
         throw new ApiError(400, 'Es gibt keine offenen Ausgaben zum Abrechnen.');
       }
-      const forBalance: ExpenseForBalance[] = rows.map((r) => ({
-        paidByParticipantId: r.paid_by_participant_id,
-        amountCents: r.amount_cents,
-        splits: splitsOf(r.id),
-      }));
+      const merge = mergeMapOf(spaceId);
+      const forBalance: ExpenseForBalance[] = canonicalizeExpenses(
+        rows.map((r) => ({
+          paidByParticipantId: r.paid_by_participant_id,
+          amountCents: r.amount_cents,
+          splits: splitsOf(r.id),
+        })),
+        (id) => canonicalId(merge, id),
+      );
       const ids = new Set<string>();
       for (const e of forBalance) {
         ids.add(e.paidByParticipantId);

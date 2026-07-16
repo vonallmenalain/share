@@ -552,6 +552,76 @@ router.post(
 );
 
 /**
+ * Admin: zwei Identitäten im Finanzbereich zusammenführen – oder eine
+ * bestehende Zusammenführung wieder auflösen. Nach dem Zusammenführen erscheinen
+ * z. B. Alain und Annina als eine Person: Ihre Ausgaben, Anteile und Salden
+ * werden gemeinsam gerechnet, und beim gleichmässigen Aufteilen zählen sie
+ * einmal. Die Zusammenführung ist umkehrbar und verändert die gespeicherten
+ * Finanzdaten NICHT – sie wirkt nur über die Kanonisierung bei der Berechnung.
+ *
+ * Body: `{ "into": "<primäre Teilnehmer-ID>" }` führt die Identität in die
+ * genannte (eigenständige) Identität ein; `{ "into": null }` löst die
+ * Zusammenführung wieder auf. Um Ketten zu vermeiden, muss das Ziel selbst
+ * eigenständig sein (nicht bereits zusammengeführt); bereits auf die Quelle
+ * zeigende Identitäten werden dabei mit auf das Ziel umgehängt.
+ */
+router.post(
+  '/:id/participants/:participantId/merge',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const source = db
+      .prepare('SELECT * FROM participants WHERE id = ? AND space_id = ?')
+      .get(req.params.participantId, req.params.id) as ParticipantRow | undefined;
+    if (!source) throw new ApiError(404, 'Teilnehmer nicht gefunden.');
+
+    const intoRaw = req.body?.into;
+    const now = new Date().toISOString();
+
+    // into = null/leer -> Zusammenführung auflösen.
+    if (intoRaw === null || intoRaw === undefined || intoRaw === '') {
+      db.prepare('UPDATE participants SET merged_into = NULL, updated_at = ? WHERE id = ?').run(
+        now,
+        source.id,
+      );
+      const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(source.id) as ParticipantRow;
+      return res.json({ participant: publicParticipant(updated) });
+    }
+
+    const targetId = String(intoRaw);
+    if (targetId === source.id) {
+      throw new ApiError(400, 'Eine Identität kann nicht mit sich selbst zusammengeführt werden.');
+    }
+    const target = db
+      .prepare('SELECT * FROM participants WHERE id = ? AND space_id = ?')
+      .get(targetId, req.params.id) as ParticipantRow | undefined;
+    if (!target) throw new ApiError(400, 'Die Ziel-Identität gehört nicht zu diesem Bereich.');
+    if (target.merged_into) {
+      throw new ApiError(
+        400,
+        'Die Ziel-Identität ist bereits mit einer anderen Person zusammengeführt. ' +
+          'Bitte die primäre (eigenständige) Identität als Ziel wählen.',
+      );
+    }
+
+    const merge = db.transaction(() => {
+      // Quelle UND alle bisher auf die Quelle zeigenden (sekundären)
+      // Identitäten auf das Ziel umhängen – so bleibt es immer bei maximal
+      // einer Ebene ohne Ketten oder Zyklen.
+      db.prepare(
+        `UPDATE participants SET merged_into = ?, updated_at = ?
+         WHERE space_id = ? AND (id = ? OR merged_into = ?)`,
+      ).run(target.id, now, req.params.id, source.id, source.id);
+    });
+    merge();
+
+    const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(source.id) as ParticipantRow;
+    res.json({ participant: publicParticipant(updated) });
+  }),
+);
+
+/**
  * Zählt, in wie vielen Finanzdaten eine Identität fest verankert ist. Genau
  * diese Verweise sind per Fremdschlüssel geschützt und würden ein endgültiges
  * Löschen der Identität verhindern bzw. die Abrechnung verfälschen.
@@ -619,6 +689,10 @@ router.delete(
       db.prepare(
         'UPDATE finance_settlement_batches SET created_by_participant_id = NULL WHERE created_by_participant_id = ?',
       ).run(participantId);
+      // War diese Identität eine primäre Identität einer Zusammenführung, die
+      // darauf zeigenden (sekundären) Identitäten wieder eigenständig machen –
+      // sonst würde der Fremdschlüssel merged_into ins Leere zeigen.
+      db.prepare('UPDATE participants SET merged_into = NULL WHERE merged_into = ?').run(participantId);
       db.prepare('DELETE FROM participants WHERE id = ?').run(participantId);
     });
     remove(row.id);

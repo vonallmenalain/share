@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   canModifyExpense,
+  canonicalizeExpenses,
   computeBalances,
   computeEqualShares,
   computeSettlement,
@@ -183,6 +184,54 @@ test('extra: equal split with single participant gets full amount', () => {
 test('extra: validateSplits rejects zero amount and empty splits', () => {
   assert.equal(validateSplits(0, [{ participantId: 'a', shareCents: 0 }]).ok, false);
   assert.equal(validateSplits(100, []).ok, false);
+});
+
+// 14. Zusammengeführte Identitäten zählen als eine Person.
+test('14: merged identities count as one person in balances', () => {
+  // Annina (b) ist mit Alain (a) zusammengeführt -> kanonisch beide "a".
+  const canon = (id: string) => (id === 'b' ? 'a' : id);
+  // Alain bezahlt 9000, gleichmässig auf Alain, Annina und Peter (c) verteilt.
+  // Als zusammengeführte Person zählen a+b nur einmal -> Aufteilung auf 2
+  // Gruppen (a, c) je 4500. Da die Rohdaten aber noch a,b,c enthalten, prüfen
+  // wir die Kanonisierung separat mit bereits gruppierter Aufteilung.
+  const raw: ExpenseForBalance[] = [
+    {
+      paidByParticipantId: 'a',
+      amountCents: 9000,
+      splits: [
+        { participantId: 'a', shareCents: 3000 },
+        { participantId: 'b', shareCents: 3000 },
+        { participantId: 'c', shareCents: 3000 },
+      ],
+    },
+  ];
+  const canonical = canonicalizeExpenses(raw, canon);
+  // a und b sind zu einem Anteil von 6000 verschmolzen.
+  assert.deepEqual(canonical[0].splits, [
+    { participantId: 'a', shareCents: 6000 },
+    { participantId: 'c', shareCents: 3000 },
+  ]);
+  const balances = computeBalances(canonical, ['a', 'c']);
+  const byId = Object.fromEntries(balances.map((x) => [x.participantId, x.balanceCents]));
+  assert.equal(byId.a, 3000); // bezahlt 9000, Gruppenanteil 6000
+  assert.equal(byId.c, -3000);
+  assert.equal(sum(balances.map((x) => x.balanceCents)), 0);
+});
+
+// 15. Kanonisierung bildet Zahler und leere Zusammenführungen korrekt ab.
+test('15: canonicalization maps payer and is a no-op without merges', () => {
+  const identity = (id: string) => id;
+  const raw: ExpenseForBalance[] = [
+    { paidByParticipantId: 'a', amountCents: 100, splits: [{ participantId: 'a', shareCents: 100 }] },
+  ];
+  assert.deepEqual(canonicalizeExpenses(raw, identity), raw);
+  // Zahler wird ebenfalls kanonisiert.
+  const merged = canonicalizeExpenses(
+    [{ paidByParticipantId: 'b', amountCents: 100, splits: [{ participantId: 'b', shareCents: 100 }] }],
+    (id) => (id === 'b' ? 'a' : id),
+  );
+  assert.equal(merged[0].paidByParticipantId, 'a');
+  assert.deepEqual(merged[0].splits, [{ participantId: 'a', shareCents: 100 }]);
 });
 
 // Hilfsfunktion: wendet Transfers auf die Salden an – danach müssen alle 0 sein.

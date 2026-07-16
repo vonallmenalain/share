@@ -92,7 +92,11 @@ Alle Metadaten (auch der neuen Module) bleiben in derselben lokalen
   Bereich die **Identitäten** verwalten: den Schutz-Code (PIN) einer Person
   zurücksetzen, eine Identität **archivieren** (überall ausblenden,
   Finanzdaten bleiben erhalten) oder – wenn sie in keinen Finanzdaten mehr
-  verankert ist – **endgültig löschen**.
+  verankert ist – **endgültig löschen**. Zwei Identitäten lassen sich hier
+  ausserdem **zusammenführen**: Sind z. B. Alain und Annina eine Einheit,
+  erscheinen sie im Finanzbereich als **eine Person** (gemeinsame Salden, beim
+  gleichmässigen Aufteilen einmal gezählt) – umkehrbar und ohne Verlust von
+  Finanzdaten.
 - **Zugriffsstatistik (nur Admin)**: Pro Bereich lässt sich nach dem Ausklappen
   ein Protokoll aller Zugriffe einsehen – mit Zeitpunkt, Person, IP und
   **Standort** (Stadt/Region/Land, wo verfügbar). Die Liste ist sortierbar und

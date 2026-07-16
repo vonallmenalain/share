@@ -1,6 +1,6 @@
 import { Participant, Settlement, Transfer } from '../../api/client';
 import { formatDate, formatMoney } from '../../lib/format';
-import { participantName } from '../../lib/useParticipants';
+import { groupLabel } from '../../lib/useParticipants';
 
 /** Zeigt die Abrechnungsvorschau und die abgeschlossenen Abrechnungen. */
 export default function SettlementView({
@@ -24,7 +24,7 @@ export default function SettlementView({
   onToggleTransfer: (batchId: string, transferId: string, paid: boolean) => void;
   onReopen: (batchId: string) => void;
 }) {
-  const nameOf = (id: string | null | undefined) => participantName(participants, id);
+  const nameOf = (id: string | null | undefined) => groupLabel(participants, id);
 
   return (
     <div className="finance-settlements">

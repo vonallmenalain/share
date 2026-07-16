@@ -717,6 +717,31 @@ function AdminParticipantsPanel({
     }
   };
 
+  const nameById = (id: string | null | undefined) =>
+    participants.find((x) => x.id === id)?.name ?? 'Unbekannt';
+  // Die (aktiven) sekundären Identitäten, die mit dieser primären Identität
+  // zusammengeführt sind.
+  const membersOf = (id: string) => participants.filter((x) => !x.archived && x.mergedInto === id);
+
+  // Zwei Identitäten im Finanzbereich zu einer Person zusammenführen bzw. eine
+  // Zusammenführung wieder auflösen. Danach die ganze Liste neu laden, da sich
+  // dabei mehrere Zeilen ändern können (auch bereits zugeordnete Personen).
+  const mergeInto = async (p: Participant, into: string | null) => {
+    setBusyId(p.id);
+    try {
+      await api(`/api/spaces/${space.id}/participants/${p.id}/merge`, {
+        method: 'POST',
+        adminKey,
+        body: { into },
+      });
+      await loadParticipants();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Zusammenführen fehlgeschlagen.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="admin-module-panel">
       <div className="admin-module-title">Wer bist du? &amp; Code (PIN)</div>
@@ -755,8 +780,21 @@ function AdminParticipantsPanel({
                 Noch keine Person hat sich in diesem Bereich angelegt.
               </div>
             ) : (
+              <>
+              <p className="hint" style={{ margin: '2px 0 10px' }}>
+                Mit „Zusammenführen mit…“ lassen sich zwei Identitäten (z. B. Alain und Annina)
+                im Finanzbereich als <strong>eine Person</strong> behandeln: Ihre Salden werden
+                gemeinsam gerechnet und beim gleichmässigen Aufteilen zählen sie einmal. Umkehrbar
+                über „Zusammenführung auflösen“ – es gehen keine Finanzdaten verloren.
+              </p>
               <ul className="admin-participant-list">
-                {participants.map((p) => (
+                {participants.map((p) => {
+                  const members = membersOf(p.id);
+                  // Mögliche Ziele: andere aktive, eigenständige Identitäten.
+                  const mergeTargets = participants.filter(
+                    (x) => x.id !== p.id && !x.mergedInto && !x.archived,
+                  );
+                  return (
                   <li key={p.id} className="admin-participant-row">
                     <span className="grow">
                       {p.name}
@@ -765,7 +803,64 @@ function AdminParticipantsPanel({
                           archiviert
                         </span>
                       )}
+                      {p.mergedInto && (
+                        <span
+                          className="tag"
+                          style={{ marginLeft: 6 }}
+                          title="Im Finanzbereich als eine Person mit dieser Identität"
+                        >
+                          ↳ mit {nameById(p.mergedInto)}
+                        </span>
+                      )}
+                      {members.length > 0 && (
+                        <span
+                          className="tag"
+                          style={{ marginLeft: 6 }}
+                          title="Diese Personen werden im Finanzbereich als eine Person gezählt"
+                        >
+                          ＋ {members.map((m) => m.name).join(', ')}
+                        </span>
+                      )}
                     </span>
+                    {p.mergedInto ? (
+                      <button
+                        className="btn btn-sm"
+                        disabled={busyId === p.id || resettingId === p.id}
+                        onClick={() => void mergeInto(p, null)}
+                        title="Zusammenführung auflösen – die Person ist danach wieder eigenständig"
+                      >
+                        {busyId === p.id ? '…' : 'Zusammenführung auflösen'}
+                      </button>
+                    ) : (
+                      mergeTargets.length > 0 && (
+                        <select
+                          className="input"
+                          style={{ width: 'auto' }}
+                          value=""
+                          disabled={busyId === p.id || resettingId === p.id}
+                          onChange={(e) => {
+                            const t = e.target.value;
+                            e.target.value = '';
+                            if (!t) return;
+                            if (
+                              confirm(
+                                `„${p.name}“ mit „${nameById(t)}“ im Finanzbereich zu einer ` +
+                                  'Person zusammenführen?',
+                              )
+                            )
+                              void mergeInto(p, t);
+                          }}
+                          title="Diese Identität mit einer anderen zu einer Person zusammenführen"
+                        >
+                          <option value="">Zusammenführen mit…</option>
+                          {mergeTargets.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      )
+                    )}
                     {p.hasPin ? (
                       <button
                         className="btn btn-sm"
@@ -801,8 +896,10 @@ function AdminParticipantsPanel({
                       Löschen
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
+              </>
             )}
           </div>
         )}

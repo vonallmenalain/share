@@ -7,7 +7,7 @@ import {
 } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { useModuleData } from '../../lib/useModuleData';
-import { participantName } from '../../lib/useParticipants';
+import { groupLabel, participantName } from '../../lib/useParticipants';
 import { formatDate, formatMoney } from '../../lib/format';
 import ExpenseForm from './ExpenseForm';
 import SettlementView from './SettlementView';
@@ -43,6 +43,9 @@ export default function FinancePage() {
 
   const currency = data?.summary.currency ?? space?.financeCurrency ?? 'CHF';
   const nameOf = (id: string | null | undefined) => participantName(participants, id);
+  // Anzeigename einer Finanz-„Gruppe" (zusammengeführte Personen als eine
+  // Person, z. B. „Alain + Annina").
+  const groupOf = (id: string | null | undefined) => groupLabel(participants, id);
 
   const settleNow = async () => {
     if (!confirm('Offene Ausgaben jetzt abrechnen?')) return;
@@ -134,7 +137,7 @@ export default function FinancePage() {
                 {summary.balances
                   .filter((b) => b.balanceCents !== 0 || participants.some((p) => p.id === b.participantId && !p.archived))
                   .map((b) => {
-                    const nm = nameOf(b.participantId);
+                    const nm = groupOf(b.participantId);
                     return (
                       <li key={b.participantId} className="balance-row">
                         <span className="balance-name">{nm}</span>
@@ -174,7 +177,7 @@ export default function FinancePage() {
                     <div className="expense-main">
                       <strong>{e.title}</strong>
                       <span className="muted">
-                        {nameOf(e.paidByParticipantId)} · {formatDate(e.expenseDate)} ·{' '}
+                        {groupOf(e.paidByParticipantId)} · {formatDate(e.expenseDate)} ·{' '}
                         {e.splitMode === 'equal' ? 'gleichmässig' : 'manuell'} · {e.splits.length} Pers.
                       </span>
                       {e.notes && <span className="expense-notes">{e.notes}</span>}
@@ -235,7 +238,7 @@ export default function FinancePage() {
                     <div className="expense-main">
                       <strong>{e.title}</strong>
                       <span className="muted">
-                        {nameOf(e.paidByParticipantId)} · {formatDate(e.expenseDate)}
+                        {groupOf(e.paidByParticipantId)} · {formatDate(e.expenseDate)}
                       </span>
                     </div>
                     <span className="expense-amount">{formatMoney(e.amountCents, currency)}</span>

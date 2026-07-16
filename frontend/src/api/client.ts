@@ -174,6 +174,12 @@ export interface Participant {
   archived: boolean;
   /** Ob diese Identität mit einem Code (PIN) geschützt ist. */
   hasPin: boolean;
+  /**
+   * ID der „primären" Identität, mit der diese Identität im Finanzbereich als
+   * eine Person zusammengeführt ist – oder null für eine eigenständige
+   * Identität.
+   */
+  mergedInto: string | null;
   createdAt: string;
 }
 
