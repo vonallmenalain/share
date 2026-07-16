@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api, Expense, Participant, SplitMode } from '../../api/client';
 import { centsToInput, formatMoney, parseMoneyToCents } from '../../lib/format';
+import { canonicalParticipantId, financeGroups, groupLabel } from '../../lib/useParticipants';
 
 /** Gleichmässige Verteilung (nur für die Live-Vorschau; Server rechnet verbindlich). */
 function previewEqualShares(amountCents: number, ids: string[]): Record<string, number> {
@@ -40,19 +41,27 @@ export default function ExpenseForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const active = participants.filter((p) => !p.archived);
+  // Im Finanzbereich zählen zusammengeführte Identitäten als eine Person: Es
+  // werden nur die „Gruppen" (eigenständige/primäre Identitäten) angezeigt und
+  // aufgeteilt. Referenzen auf sekundäre Identitäten werden auf die primäre
+  // Identität kanonisiert.
+  const active = financeGroups(participants);
+  const canon = (id: string | null | undefined) => canonicalParticipantId(participants, id);
   const [title, setTitle] = useState(editing?.title ?? '');
   const [amountInput, setAmountInput] = useState(editing ? centsToInput(editing.amountCents) : '');
-  const [paidBy, setPaidBy] = useState(
-    editing?.paidByParticipantId ?? participantId ?? active[0]?.id ?? '',
-  );
+  const [paidBy, setPaidBy] = useState(() => {
+    const preferred = canon(editing?.paidByParticipantId ?? participantId);
+    return preferred && active.some((p) => p.id === preferred)
+      ? preferred
+      : active[0]?.id ?? '';
+  });
   const [date, setDate] = useState(editing?.expenseDate ?? todayLocal());
   const [notes, setNotes] = useState(editing?.notes ?? '');
   const [splitMode, setSplitMode] = useState<SplitMode>(editing?.splitMode ?? 'equal');
 
-  // Beteiligte: bei „gleichmässig" per Checkbox, standardmässig alle aktiven.
+  // Beteiligte: bei „gleichmässig" per Checkbox, standardmässig alle Gruppen.
   const initialSelected = editing
-    ? new Set(editing.splits.map((s) => s.participantId))
+    ? new Set(editing.splits.map((s) => canon(s.participantId) ?? s.participantId))
     : new Set(active.map((p) => p.id));
   const [selected, setSelected] = useState<Set<string>>(initialSelected);
 
@@ -192,7 +201,7 @@ export default function ExpenseForm({
             <select className="input" value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
               {active.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {groupLabel(participants, p.id)}
                 </option>
               ))}
             </select>
@@ -238,7 +247,7 @@ export default function ExpenseForm({
                         checked={isSel}
                         onChange={() => toggleParticipant(p.id)}
                       />
-                      {p.name}
+                      {groupLabel(participants, p.id)}
                     </label>
                     {splitMode === 'equal' ? (
                       <span className="split-amount muted">

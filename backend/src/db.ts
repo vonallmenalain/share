@@ -390,6 +390,18 @@ function migrate(database: Database.Database) {
   addColumn('participants', participantCols, 'pin_hash', `pin_hash TEXT`);
   addColumn('participants', participantCols, 'pin_updated_at', `pin_updated_at TEXT`);
 
+  // Zusammengeführte Identitäten (nachträglich ergänzt): zeigt eine Identität
+  // auf eine andere („primäre") Identität, wird sie im Finanzbereich mit dieser
+  // als EINE Person behandelt – z. B. Alain und Annina als ein gemeinsamer
+  // Haushalt. Der Zeiger ist bewusst umkehrbar (Auflösen setzt ihn wieder auf
+  // NULL); es gehen dabei keine Finanzdaten verloren. NULL = eigenständige
+  // Identität. Die Kanonisierung (Zusammenführung auf die Wurzel) geschieht bei
+  // der Berechnung/Anzeige, nicht durch Umschreiben der gespeicherten Daten.
+  addColumn('participants', participantCols, 'merged_into', `merged_into TEXT REFERENCES participants(id)`);
+  database.exec(
+    `CREATE INDEX IF NOT EXISTS idx_participants_merged ON participants(space_id, merged_into)`,
+  );
+
   // Bereichsweite Pflicht für den Teilnehmer-Code (PIN): ist sie aktiv, muss
   // beim Anlegen einer neuen Identität (oder beim erneuten Auswählen einer
   // Identität ohne Code, z. B. nach einem Admin-Reset) ein Code vergeben
@@ -509,6 +521,12 @@ export interface ParticipantRow {
   /** Bcrypt-Hash des optionalen Schutz-Codes (PIN), oder null = kein Schutz. */
   pin_hash: string | null;
   pin_updated_at: string | null;
+  /**
+   * ID der „primären" Identität, mit der diese Identität im Finanzbereich als
+   * eine Person zusammengeführt ist – oder null für eine eigenständige
+   * Identität. Umkehrbar (Auflösen setzt wieder null).
+   */
+  merged_into: string | null;
   created_at: string;
   updated_at: string;
 }

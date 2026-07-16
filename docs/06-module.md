@@ -109,7 +109,38 @@ nur beim Code verwalten, sondern auch:
   stimmen; in diesem Fall bleibt das Archivieren als sichere Alternative. Lose
   Verweise ohne echte Verankerung (z. B. „erstellt von“ in Einkaufsliste,
   Notizen, Kalender oder Abrechnungs-Stapeln) werden beim Löschen automatisch
-  gelöst.
+  gelöst. Zeigen andere (zusammengeführte) Identitäten auf diese Person, werden
+  sie dabei wieder eigenständig.
+
+### Identitäten zusammenführen (im Finanzbereich als eine Person)
+
+Zwei Identitäten desselben Bereichs lassen sich im Adminbereich („Personen &amp;
+Codes verwalten“ → „Zusammenführen mit…“) zu **einer Person** zusammenführen –
+z. B. **Alain** und **Annina** als gemeinsamer Haushalt. Danach:
+
+- erscheinen sie im Finanzbereich als **eine Instanz** (Anzeige „Alain +
+  Annina“) statt als zwei getrennte Personen;
+- werden ihre **Salden gemeinsam** gerechnet: Was die eine bezahlt und die
+  andere schuldet, verrechnet sich innerhalb der Gruppe;
+- zählen sie beim **gleichmässigen Aufteilen genau einmal** (der Betrag wird
+  durch die Zahl der Gruppen geteilt, nicht der Einzelpersonen).
+
+Technisch trägt die sekundäre Identität einen Zeiger `participants.merged_into`
+auf die **primäre** Identität. Die Zusammenführung wirkt ausschliesslich über
+eine **Kanonisierung** bei Berechnung und Anzeige (`loadMergeMap` /
+`canonicalizeExpenses`) – die gespeicherten Ausgaben, Anteile und
+Ausgleichszahlungen werden **nicht** umgeschrieben. Neu erfasste Ausgaben werden
+serverseitig direkt auf die primäre Identität kanonisiert; bereits vor der
+Zusammenführung erfasste Ausgaben werden bei der Berechnung mit einbezogen. Die
+Zusammenführung ist **umkehrbar** („Zusammenführung auflösen“, `into: null`) und
+verliert dabei **keine Finanzdaten**. Um Ketten zu vermeiden, muss das Ziel eine
+eigenständige (nicht bereits zusammengeführte) Identität sein; bisher auf die
+Quelle zeigende Identitäten werden mit auf das Ziel umgehängt (maximal eine
+Ebene).
+
+Der Endpunkt dafür ist `POST
+/api/spaces/:id/participants/:participantId/merge` mit Body
+`{ "into": "<primäre Teilnehmer-ID>" }` (bzw. `{ "into": null }` zum Auflösen).
 
 ## Finanzberechnung
 
@@ -219,6 +250,9 @@ eingeschränkt. Modulrouten prüfen zusätzlich, ob das Modul aktiviert ist
 - `POST /api/spaces/:id/participants/:participantId/archive` – Identität
   archivieren (`{ "archived": true }`) oder wieder aktivieren
   (`{ "archived": false }`).
+- `POST /api/spaces/:id/participants/:participantId/merge` – Identität mit einer
+  primären Identität zusammenführen (`{ "into": "<id>" }`) oder die
+  Zusammenführung auflösen (`{ "into": null }`).
 - `DELETE /api/spaces/:id/participants/:participantId` – Identität endgültig
   löschen (nur, wenn sie nicht in Finanzdaten verankert ist; sonst `409`).
 

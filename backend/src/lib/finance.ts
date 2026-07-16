@@ -133,6 +133,36 @@ export function canModifyExpense(
 }
 
 /**
+ * Wendet eine Zusammenführungs-Abbildung (Teilnehmer-ID → kanonische ID) auf
+ * eine Liste von Ausgaben an: Zahler und alle Anteils-Teilnehmer werden auf
+ * ihre kanonische (primäre) Identität abgebildet. Fallen dadurch mehrere
+ * Anteile einer Ausgabe auf dieselbe Person (z. B. wenn Alain und Annina beide
+ * beteiligt waren und nun eine Person sind), werden deren Anteile summiert – so
+ * zählt die zusammengeführte Person in jeder Ausgabe genau einmal. Rein und
+ * seiteneffektfrei; verändert die übergebenen Ausgaben nicht.
+ */
+export function canonicalizeExpenses(
+  expenses: ExpenseForBalance[],
+  canonical: (id: string) => string,
+): ExpenseForBalance[] {
+  return expenses.map((exp) => {
+    const merged = new Map<string, number>();
+    for (const split of exp.splits) {
+      const id = canonical(split.participantId);
+      merged.set(id, (merged.get(id) ?? 0) + split.shareCents);
+    }
+    return {
+      paidByParticipantId: canonical(exp.paidByParticipantId),
+      amountCents: exp.amountCents,
+      splits: [...merged.entries()].map(([participantId, shareCents]) => ({
+        participantId,
+        shareCents,
+      })),
+    };
+  });
+}
+
+/**
  * Berechnet die Salden aller Teilnehmer über die offenen Ausgaben. Der Zahler
  * bekommt den vollen Betrag gutgeschrieben, jedem beteiligten Teilnehmer wird
  * sein Anteil belastet. Die Summe aller Salden ergibt exakt null.

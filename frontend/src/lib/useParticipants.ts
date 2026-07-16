@@ -292,3 +292,53 @@ export function participantName(participants: Participant[], id: string | null |
   if (!id) return 'Unbekannt';
   return participants.find((p) => p.id === id)?.name ?? 'Unbekannt';
 }
+
+/**
+ * Löst eine Teilnehmer-ID auf ihre kanonische (primäre) Identität auf, indem
+ * dem `mergedInto`-Zeiger bis zur Wurzel gefolgt wird (mit Zyklenschutz). Für
+ * eine eigenständige Identität ist das die ID selbst.
+ */
+export function canonicalParticipantId(
+  participants: Participant[],
+  id: string | null | undefined,
+): string | null {
+  if (!id) return null;
+  const seen = new Set<string>();
+  let cur = participants.find((p) => p.id === id);
+  while (cur && cur.mergedInto && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    const next = participants.find((p) => p.id === cur!.mergedInto);
+    if (!next) break;
+    cur = next;
+  }
+  return cur?.id ?? id;
+}
+
+/**
+ * Die im Finanzbereich sichtbaren „Gruppen": aktive, eigenständige Identitäten
+ * (nicht zusammengeführte). Zusammengeführte Identitäten erscheinen nicht als
+ * eigene Zeile, sondern über ihre primäre Identität.
+ */
+export function financeGroups(participants: Participant[]): Participant[] {
+  return participants.filter((p) => !p.archived && !p.mergedInto);
+}
+
+/** Die (aktiven) sekundären Identitäten, die mit `primaryId` zusammengeführt sind. */
+export function mergedMembers(participants: Participant[], primaryId: string): Participant[] {
+  return participants.filter((p) => !p.archived && p.mergedInto === primaryId);
+}
+
+/**
+ * Anzeigename einer Finanz-„Gruppe": der Name der primären Identität, ergänzt
+ * um die zusammengeführten Personen – z. B. „Alain + Annina". Für eine
+ * eigenständige Identität einfach deren Name.
+ */
+export function groupLabel(participants: Participant[], id: string | null | undefined): string {
+  const rootId = canonicalParticipantId(participants, id);
+  if (!rootId) return 'Unbekannt';
+  const root = participants.find((p) => p.id === rootId);
+  if (!root) return participantName(participants, id);
+  const members = mergedMembers(participants, rootId);
+  if (members.length === 0) return root.name;
+  return `${root.name} + ${members.map((m) => m.name).join(' + ')}`;
+}
