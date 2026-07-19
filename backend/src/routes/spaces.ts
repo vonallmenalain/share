@@ -10,7 +10,12 @@ import { deleteAllVariants, deleteSpaceStorage } from '../lib/media';
 import { logAccess } from '../lib/access';
 import { publicItem } from './items';
 import { getEnabledModules, isModuleKey, setEnabledModules } from '../lib/modules';
-import { consolidateParticipants, findParticipant, publicParticipant } from '../lib/participants';
+import {
+  consolidateParticipants,
+  findParticipant,
+  publicParticipant,
+  renameUploaderName,
+} from '../lib/participants';
 import { normalizeCurrency, optionalString, requireString, toBool } from '../lib/validation';
 import { ModuleKey } from '../db';
 
@@ -557,6 +562,9 @@ router.patch(
       new Date().toISOString(),
       row.id,
     );
+    // Bei einer Namensänderung auch die „Upload von …"-Zuschreibung bestehender
+    // Fotos/Medien mitziehen, damit sie zum neuen Namen passt.
+    renameUploaderName(req.params.id, row.name, name);
     const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(row.id) as ParticipantRow;
     res.json({ participant: publicParticipant(updated) });
   }),

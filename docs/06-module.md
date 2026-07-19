@@ -96,11 +96,14 @@ Bereich („Personen &amp; Codes verwalten“) kann der Administrator eine Ident
 nicht nur beim Code verwalten, sondern auch:
 
 - **Umbenennen** (`PATCH /api/spaces/:id/participants/:participantId`, Body
-  `{ "name": "..." }`, optional `{ "color": "..." }`) – ändert nur den
-  Anzeigenamen (pro Bereich eindeutig, sonst `409`); alle zugehörigen Daten
-  bleiben unverändert. Praktisch, um einen Tippfehler zu korrigieren, ohne dass
-  die Person selbst am Gerät sein muss (dieselbe Person kann ihren eigenen Namen
-  weiterhin über `PATCH /api/participants/:id` ändern).
+  `{ "name": "..." }`, optional `{ "color": "..." }`) – ändert den
+  Anzeigenamen (pro Bereich eindeutig, sonst `409`). Praktisch, um einen
+  Tippfehler zu korrigieren, ohne dass die Person selbst am Gerät sein muss
+  (dieselbe Person kann ihren eigenen Namen weiterhin über
+  `PATCH /api/participants/:id` ändern). Die Finanzdaten bleiben unverändert;
+  zusätzlich wird die **„Upload von …“-Zuschreibung** bestehender Fotos/Medien
+  mitgezogen, damit sie weiterhin zum aktuellen Namen passt (siehe
+  „Uploader-Name synchron halten“ unten).
 - **Archivieren** (`POST /api/spaces/:id/participants/:participantId/archive`,
   Body `{ "archived": true | false }`) – die Person wird überall ausgeblendet
   (nicht mehr auswählbar, nicht mehr in Finanzlisten), **alle Finanzdaten
@@ -174,6 +177,8 @@ gelöscht – in **einer** Transaktion (`consolidateParticipants`):
   werden entfernt.
 - **Lose Verweise** ohne Fremdschlüssel: „erledigt/erstellt von“ in
   Einkaufsliste, Notizen, Kalender und Abrechnungs-Stapeln.
+- **Fotos/Medien:** die „Upload von …“-Zuschreibung der Quelle wird auf den
+  Namen des Ziels umgeschrieben (siehe „Uploader-Name synchron halten“ unten).
 - **Finanz-Zusammenführungen** (`merged_into`), die auf die Quelle zeigten,
   werden auf das Ziel umgehängt; zeigte das Ziel selbst auf die Quelle, wird der
   Zeiger gelöst.
@@ -186,6 +191,41 @@ sich selbst oder in einen fremden Bereich wird mit `400` abgelehnt. Weil die
 Quelle vollständig entfernt wird, ist dies – anders als das reine Löschen –
 **auch dann möglich, wenn die (doppelte) Identität in Finanzdaten verankert
 ist**; ihre Daten gehen dabei nicht verloren, sondern gehen an das Ziel über.
+
+### Uploader-Name synchron halten
+
+Fotos und Videos merken sich beim Upload den Namen der hochladenden Person als
+**Freitext-Momentaufnahme** (`items.uploader_name`, angezeigt als „Upload von
+…“). Anders als die Finanzdaten sind sie **nicht** per Fremdschlüssel an die
+Identität gebunden – das Medien- und das Teilnehmer-Modul sind unabhängig.
+Damit „Upload von …“ nach einer **Umbenennung** (durch die Person selbst oder
+den Administrator) oder einem **Duplikat-Zusammenlegen** nicht auf dem alten
+Namen stehen bleibt, gleicht `renameUploaderName` (in
+`backend/src/lib/participants.ts`) die betroffenen Medien des Bereichs an:
+
+- Umgeschrieben werden alle `items` (Galerie **und** Notiz-Anhänge) sowie noch
+  **offene** `uploads`, deren `uploader_name` dem alten Namen entspricht.
+- Der Abgleich ist **case-insensitiv** (`COLLATE NOCASE`) – Teilnehmernamen
+  sind pro Bereich ohnehin eindeutig, so wird auch eine reine
+  Schreibweisen-Korrektur (z. B. „alain“ → „Alain“) übernommen.
+- Bei offenen Uploads bleibt `updated_at` **unangetastet**, damit das Aufräumen
+  verwaister Upload-Sitzungen (`cleanupStaleUploads`) nicht verzögert wird;
+  bereits **fertige** Uploads haben ihr `items`-Medium schon erzeugt und werden
+  über dieses abgedeckt.
+
+**Einmaliger Abgleich der Bestandsdaten.** Für Uploads, die vor dieser
+laufenden Synchronisierung entstanden sind, gleicht `backfillUploaderNames` den
+gesamten Bestand einmalig ab: Jeder gespeicherte Uploader-Name, der eine
+bestehende Identität desselben Bereichs **case-insensitiv** trifft, sich aber in
+der Schreibweise unterscheidet (z. B. „alain“ → „Alain“), wird auf deren
+exakten aktuellen Namen gesetzt. Namen **ohne** passende Identität (z. B.
+„Unbekannt“ oder eine vollständig umbenannte, nicht mehr existierende Person)
+bleiben unangetastet – für Letztere gibt es keine verlässliche Zuordnung. Der
+Abgleich läuft über `runUploaderNameBackfillOnce` **genau einmal** beim
+Serverstart (per `app_meta`-Flag `uploader_name_backfill_v1` abgesichert, analog
+zum EXIF-Masse-Backfill) und ist idempotent.
+
+Getestet in `backend/src/lib/participants.test.ts`.
 
 ## Finanzberechnung
 

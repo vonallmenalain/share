@@ -6,7 +6,7 @@ import { requireSpace } from '../middleware/auth';
 import { resolveParticipant } from '../middleware/participant';
 import { pinLimiter } from '../middleware/rateLimit';
 import { newId } from '../lib/ids';
-import { publicParticipant } from '../lib/participants';
+import { publicParticipant, renameUploaderName } from '../lib/participants';
 import { optionalPin, optionalString, requireString } from '../lib/validation';
 
 const router = Router();
@@ -195,6 +195,9 @@ router.patch(
       new Date().toISOString(),
       row.id,
     );
+    // Bei einer Namensänderung auch die „Upload von …"-Zuschreibung bestehender
+    // Fotos/Medien mitziehen, damit sie zum neuen Namen passt.
+    renameUploaderName(req.spaceId!, row.name, name);
     const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(row.id) as ParticipantRow;
     res.json({ participant: publicParticipant(updated) });
   }),
