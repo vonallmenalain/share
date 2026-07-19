@@ -719,9 +719,6 @@ function AdminParticipantsPanel({
 
   const nameById = (id: string | null | undefined) =>
     participants.find((x) => x.id === id)?.name ?? 'Unbekannt';
-  // Die (aktiven) sekundären Identitäten, die mit dieser primären Identität
-  // zusammengeführt sind.
-  const membersOf = (id: string) => participants.filter((x) => !x.archived && x.mergedInto === id);
 
   // Zwei Identitäten im Finanzbereich zu einer Person zusammenführen bzw. eine
   // Zusammenführung wieder auflösen. Danach die ganze Liste neu laden, da sich
@@ -737,6 +734,37 @@ function AdminParticipantsPanel({
       await loadParticipants();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Zusammenführen fehlgeschlagen.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Eine Identität umbenennen. Wirft bei Fehler weiter (die Zeile fängt ihn ab
+  // und zeigt ihn an), damit der Bearbeitungsmodus bei Erfolg geschlossen und
+  // bei einem Namenskonflikt offen gehalten werden kann.
+  const rename = async (p: Participant, name: string): Promise<void> => {
+    const res = await api<{ participant: Participant }>(
+      `/api/spaces/${space.id}/participants/${p.id}`,
+      { method: 'PATCH', adminKey, body: { name } },
+    );
+    setParticipants((prev) => prev.map((x) => (x.id === p.id ? res.participant : x)));
+  };
+
+  // Doppelte Identität endgültig bereinigen: ALLE Daten der Quelle werden in die
+  // Ziel-Identität übernommen, die Quelle danach gelöscht. Nicht umkehrbar –
+  // deshalb bewusst getrennt vom (umkehrbaren) Finanz-Zusammenführen. Danach die
+  // Liste neu laden, da eine Identität verschwindet und Zeiger sich ändern.
+  const consolidate = async (p: Participant, intoId: string) => {
+    setBusyId(p.id);
+    try {
+      await api(`/api/spaces/${space.id}/participants/${p.id}/consolidate`, {
+        method: 'POST',
+        adminKey,
+        body: { into: intoId },
+      });
+      await loadParticipants();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Zusammenlegen fehlgeschlagen.');
     } finally {
       setBusyId(null);
     }
@@ -781,123 +809,43 @@ function AdminParticipantsPanel({
               </div>
             ) : (
               <>
-              <p className="hint" style={{ margin: '2px 0 10px' }}>
-                Mit „Zusammenführen mit…“ lassen sich zwei Identitäten (z. B. Alain und Annina)
-                im Finanzbereich als <strong>eine Person</strong> behandeln: Ihre Salden werden
-                gemeinsam gerechnet und beim gleichmässigen Aufteilen zählen sie einmal. Umkehrbar
-                über „Zusammenführung auflösen“ – es gehen keine Finanzdaten verloren.
-              </p>
+              <div className="hint" style={{ margin: '2px 0 12px', display: 'grid', gap: 8 }}>
+                <div>
+                  <strong>Umbenennen:</strong> ändert nur den Anzeigenamen einer Identität
+                  (z. B. um einen Tippfehler zu korrigieren) – alle zugehörigen Daten bleiben.
+                </div>
+                <div>
+                  <strong>Finanzen: zusammen rechnen</strong> behandelt zwei <em>verschiedene</em>
+                  {' '}Personen (z. B. Alain und Annina) im Finanzbereich als <strong>eine
+                  Person</strong>: Ihre Salden werden gemeinsam gerechnet und beim gleichmässigen
+                  Aufteilen zählen sie einmal. Beide Identitäten <strong>bleiben bestehen</strong>,
+                  und es ist jederzeit <strong>umkehrbar</strong>.
+                </div>
+                <div>
+                  <strong>Duplikat zusammenlegen</strong> ist etwas anderes: Hat <em>dieselbe</em>
+                  {' '}Person <strong>versehentlich zwei Identitäten</strong> angelegt, werden hier
+                  <strong> alle Daten</strong> der einen in die andere übernommen und die doppelte
+                  Identität <strong>endgültig gelöscht</strong>. Das ist <strong>nicht
+                  umkehrbar</strong>.
+                </div>
+              </div>
               <ul className="admin-participant-list">
-                {participants.map((p) => {
-                  const members = membersOf(p.id);
-                  // Mögliche Ziele: andere aktive, eigenständige Identitäten.
-                  const mergeTargets = participants.filter(
-                    (x) => x.id !== p.id && !x.mergedInto && !x.archived,
-                  );
-                  return (
-                  <li key={p.id} className="admin-participant-row">
-                    <span className="grow">
-                      {p.name}
-                      {p.archived && (
-                        <span className="tag" style={{ marginLeft: 6 }}>
-                          archiviert
-                        </span>
-                      )}
-                      {p.mergedInto && (
-                        <span
-                          className="tag"
-                          style={{ marginLeft: 6 }}
-                          title="Im Finanzbereich als eine Person mit dieser Identität"
-                        >
-                          ↳ mit {nameById(p.mergedInto)}
-                        </span>
-                      )}
-                      {members.length > 0 && (
-                        <span
-                          className="tag"
-                          style={{ marginLeft: 6 }}
-                          title="Diese Personen werden im Finanzbereich als eine Person gezählt"
-                        >
-                          ＋ {members.map((m) => m.name).join(', ')}
-                        </span>
-                      )}
-                    </span>
-                    {p.mergedInto ? (
-                      <button
-                        className="btn btn-sm"
-                        disabled={busyId === p.id || resettingId === p.id}
-                        onClick={() => void mergeInto(p, null)}
-                        title="Zusammenführung auflösen – die Person ist danach wieder eigenständig"
-                      >
-                        {busyId === p.id ? '…' : 'Zusammenführung auflösen'}
-                      </button>
-                    ) : (
-                      mergeTargets.length > 0 && (
-                        <select
-                          className="input"
-                          style={{ width: 'auto' }}
-                          value=""
-                          disabled={busyId === p.id || resettingId === p.id}
-                          onChange={(e) => {
-                            const t = e.target.value;
-                            e.target.value = '';
-                            if (!t) return;
-                            if (
-                              confirm(
-                                `„${p.name}“ mit „${nameById(t)}“ im Finanzbereich zu einer ` +
-                                  'Person zusammenführen?',
-                              )
-                            )
-                              void mergeInto(p, t);
-                          }}
-                          title="Diese Identität mit einer anderen zu einer Person zusammenführen"
-                        >
-                          <option value="">Zusammenführen mit…</option>
-                          {mergeTargets.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
-                      )
-                    )}
-                    {p.hasPin ? (
-                      <button
-                        className="btn btn-sm"
-                        disabled={resettingId === p.id || busyId === p.id}
-                        onClick={() => void resetPin(p)}
-                        title="Code entfernen, damit die Person einen neuen festlegen kann"
-                      >
-                        {resettingId === p.id ? 'Setze zurück…' : 'Code zurücksetzen'}
-                      </button>
-                    ) : (
-                      <span className="faint" style={{ fontSize: 13 }}>
-                        kein Code gesetzt
-                      </span>
-                    )}
-                    <button
-                      className="btn btn-sm"
-                      disabled={busyId === p.id || resettingId === p.id}
-                      onClick={() => void setArchived(p, !p.archived)}
-                      title={
-                        p.archived
-                          ? 'Wieder aktivieren, damit die Person wieder auswählbar ist'
-                          : 'Person überall ausblenden, Finanzdaten bleiben erhalten'
-                      }
-                    >
-                      {busyId === p.id ? '…' : p.archived ? 'Aktivieren' : 'Archivieren'}
-                    </button>
-                    <button
-                      className="btn btn-sm btn-danger"
-                      disabled={busyId === p.id || resettingId === p.id}
-                      onClick={() => void removeParticipant(p)}
-                      title="Identität endgültig löschen (nur möglich, wenn nicht in Finanzdaten verankert)"
-                    >
-                      Löschen
-                    </button>
-                  </li>
-                  );
-                })}
+                {participants.map((p) => (
+                  <AdminParticipantRow
+                    key={p.id}
+                    p={p}
+                    participants={participants}
+                    busyId={busyId}
+                    resettingId={resettingId}
+                    nameById={nameById}
+                    onRename={rename}
+                    onMergeInto={mergeInto}
+                    onConsolidate={consolidate}
+                    onResetPin={resetPin}
+                    onSetArchived={setArchived}
+                    onRemove={removeParticipant}
+                  />
+                ))}
               </ul>
               </>
             )}
@@ -905,6 +853,248 @@ function AdminParticipantsPanel({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Eine Zeile der Identitätsverwaltung. Bündelt alle Aktionen einer Identität:
+ * Umbenennen (inline), Finanz-Zusammenführen (umkehrbar, nur Finanzen) und –
+ * davon bewusst getrennt – das endgültige Zusammenlegen einer doppelten
+ * Identität sowie Code zurücksetzen, Archivieren und Löschen.
+ */
+function AdminParticipantRow({
+  p,
+  participants,
+  busyId,
+  resettingId,
+  nameById,
+  onRename,
+  onMergeInto,
+  onConsolidate,
+  onResetPin,
+  onSetArchived,
+  onRemove,
+}: {
+  p: Participant;
+  participants: Participant[];
+  busyId: string | null;
+  resettingId: string | null;
+  nameById: (id: string | null | undefined) => string;
+  onRename: (p: Participant, name: string) => Promise<void>;
+  onMergeInto: (p: Participant, into: string | null) => void | Promise<void>;
+  onConsolidate: (p: Participant, intoId: string) => void | Promise<void>;
+  onResetPin: (p: Participant) => void | Promise<void>;
+  onSetArchived: (p: Participant, archived: boolean) => void | Promise<void>;
+  onRemove: (p: Participant) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(p.name);
+  const [savingName, setSavingName] = useState(false);
+
+  const busy = busyId === p.id || resettingId === p.id;
+
+  // Sekundäre Identitäten, die im Finanzbereich mit dieser Person zusammengeführt sind.
+  const members = participants.filter((x) => !x.archived && x.mergedInto === p.id);
+  // Finanz-Zusammenführen: Ziele sind andere aktive, eigenständige Identitäten.
+  const mergeTargets = participants.filter((x) => x.id !== p.id && !x.mergedInto && !x.archived);
+  // Duplikat zusammenlegen: jede andere Identität kommt als Ziel infrage.
+  const consolidateTargets = participants.filter((x) => x.id !== p.id);
+
+  const startEdit = () => {
+    setNameDraft(p.name);
+    setEditing(true);
+  };
+
+  const saveName = async () => {
+    const name = nameDraft.trim();
+    if (!name || name === p.name) {
+      setEditing(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      await onRename(p, name);
+      setEditing(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Umbenennen fehlgeschlagen.');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <li className="admin-participant-row">
+        <input
+          className="input"
+          style={{ flex: '1 1 160px', minWidth: 120 }}
+          value={nameDraft}
+          maxLength={60}
+          autoFocus
+          disabled={savingName}
+          onChange={(e) => setNameDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void saveName();
+            if (e.key === 'Escape') setEditing(false);
+          }}
+        />
+        <button
+          className="btn btn-sm btn-primary"
+          disabled={savingName || !nameDraft.trim()}
+          onClick={() => void saveName()}
+        >
+          {savingName ? 'Speichere…' : 'Speichern'}
+        </button>
+        <button className="btn btn-sm btn-ghost" disabled={savingName} onClick={() => setEditing(false)}>
+          Abbrechen
+        </button>
+      </li>
+    );
+  }
+
+  return (
+    <li className="admin-participant-row">
+      <span className="grow">
+        {p.name}
+        {p.archived && (
+          <span className="tag" style={{ marginLeft: 6 }}>
+            archiviert
+          </span>
+        )}
+        {p.mergedInto && (
+          <span
+            className="tag"
+            style={{ marginLeft: 6 }}
+            title="Im Finanzbereich als eine Person mit dieser Identität (umkehrbar)"
+          >
+            ↳ Finanzen mit {nameById(p.mergedInto)}
+          </span>
+        )}
+        {members.length > 0 && (
+          <span
+            className="tag"
+            style={{ marginLeft: 6 }}
+            title="Diese Personen werden im Finanzbereich als eine Person gezählt"
+          >
+            ＋ {members.map((m) => m.name).join(', ')}
+          </span>
+        )}
+      </span>
+
+      <button className="btn btn-sm" disabled={busy} onClick={startEdit} title="Anzeigenamen dieser Identität ändern">
+        Umbenennen
+      </button>
+
+      {/* Finanz-Zusammenführung: umkehrbar, betrifft nur die Finanzberechnung. */}
+      {p.mergedInto ? (
+        <button
+          className="btn btn-sm"
+          disabled={busy}
+          onClick={() => void onMergeInto(p, null)}
+          title="Finanz-Zusammenführung auflösen – die Person ist danach wieder eigenständig"
+        >
+          {busyId === p.id ? '…' : 'Finanz-Zusammenführung auflösen'}
+        </button>
+      ) : (
+        mergeTargets.length > 0 && (
+          <select
+            className="input"
+            style={{ width: 'auto' }}
+            value=""
+            disabled={busy}
+            onChange={(e) => {
+              const t = e.target.value;
+              e.target.value = '';
+              if (!t) return;
+              if (
+                confirm(
+                  `„${p.name}“ und „${nameById(t)}“ im Finanzbereich als EINE Person rechnen?\n\n` +
+                    'Beide Identitäten bleiben bestehen – nur die Finanz-Salden werden gemeinsam ' +
+                    'gerechnet. Jederzeit umkehrbar.',
+                )
+              )
+                void onMergeInto(p, t);
+            }}
+            title="Nur Finanzen: zwei Identitäten gemeinsam rechnen (umkehrbar)"
+          >
+            <option value="">Finanzen: zusammen rechnen mit…</option>
+            {mergeTargets.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )
+      )}
+
+      {/* Duplikat zusammenlegen: endgültig, überträgt ALLE Daten und löscht die Quelle. */}
+      {consolidateTargets.length > 0 && (
+        <select
+          className="input"
+          style={{ width: 'auto' }}
+          value=""
+          disabled={busy}
+          onChange={(e) => {
+            const t = e.target.value;
+            e.target.value = '';
+            if (!t) return;
+            if (
+              confirm(
+                `Doppelte Identität bereinigen:\n\n` +
+                  `Alle Daten von „${p.name}“ werden in „${nameById(t)}“ übernommen ` +
+                  '(Ausgaben, Anteile, Abrechnungen, Einkaufsliste, Notizen, Kalender). ' +
+                  `„${p.name}“ wird danach endgültig gelöscht.\n\n` +
+                  'Das ist NICHT umkehrbar. Fortfahren?',
+              )
+            )
+              void onConsolidate(p, t);
+          }}
+          title="Endgültig: diese (doppelte) Identität mit einer anderen zu einer einzigen zusammenlegen"
+        >
+          <option value="">Duplikat zusammenlegen in…</option>
+          {consolidateTargets.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {p.hasPin ? (
+        <button
+          className="btn btn-sm"
+          disabled={busy}
+          onClick={() => void onResetPin(p)}
+          title="Code entfernen, damit die Person einen neuen festlegen kann"
+        >
+          {resettingId === p.id ? 'Setze zurück…' : 'Code zurücksetzen'}
+        </button>
+      ) : (
+        <span className="faint" style={{ fontSize: 13 }}>
+          kein Code gesetzt
+        </span>
+      )}
+      <button
+        className="btn btn-sm"
+        disabled={busy}
+        onClick={() => void onSetArchived(p, !p.archived)}
+        title={
+          p.archived
+            ? 'Wieder aktivieren, damit die Person wieder auswählbar ist'
+            : 'Person überall ausblenden, Finanzdaten bleiben erhalten'
+        }
+      >
+        {busyId === p.id ? '…' : p.archived ? 'Aktivieren' : 'Archivieren'}
+      </button>
+      <button
+        className="btn btn-sm btn-danger"
+        disabled={busy}
+        onClick={() => void onRemove(p)}
+        title="Identität endgültig löschen (nur möglich, wenn nicht in Finanzdaten verankert)"
+      >
+        Löschen
+      </button>
+    </li>
   );
 }
 

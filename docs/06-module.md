@@ -91,10 +91,16 @@ Danach hat die Identität wieder keinen Code – die betroffene Person legt beim
 nächsten Öffnen des Bereichs (erzwungen, falls der Code Pflicht ist) einfach
 einen neuen fest.
 
-**Identitäten verwalten (archivieren / löschen).** Im selben Bereich
-(„Personen &amp; Codes verwalten“) kann der Administrator eine Identität nicht
-nur beim Code verwalten, sondern auch:
+**Identitäten verwalten (umbenennen / archivieren / löschen).** Im selben
+Bereich („Personen &amp; Codes verwalten“) kann der Administrator eine Identität
+nicht nur beim Code verwalten, sondern auch:
 
+- **Umbenennen** (`PATCH /api/spaces/:id/participants/:participantId`, Body
+  `{ "name": "..." }`, optional `{ "color": "..." }`) – ändert nur den
+  Anzeigenamen (pro Bereich eindeutig, sonst `409`); alle zugehörigen Daten
+  bleiben unverändert. Praktisch, um einen Tippfehler zu korrigieren, ohne dass
+  die Person selbst am Gerät sein muss (dieselbe Person kann ihren eigenen Namen
+  weiterhin über `PATCH /api/participants/:id` ändern).
 - **Archivieren** (`POST /api/spaces/:id/participants/:participantId/archive`,
   Body `{ "archived": true | false }`) – die Person wird überall ausgeblendet
   (nicht mehr auswählbar, nicht mehr in Finanzlisten), **alle Finanzdaten
@@ -141,6 +147,45 @@ Ebene).
 Der Endpunkt dafür ist `POST
 /api/spaces/:id/participants/:participantId/merge` mit Body
 `{ "into": "<primäre Teilnehmer-ID>" }` (bzw. `{ "into": null }` zum Auflösen).
+
+### Duplikat zusammenlegen (zwei Identitäten derselben Person zu einer)
+
+Das **Zusammenlegen** ist bewusst etwas **anderes** als das oben beschriebene
+Finanz-Zusammenführen – die Begriffe dürfen nicht verwechselt werden:
+
+| | Finanzen: zusammen rechnen (`/merge`) | Duplikat zusammenlegen (`/consolidate`) |
+| --- | --- | --- |
+| Zweck | zwei **verschiedene** Personen (z. B. Alain &amp; Annina) im Finanzbereich als eine Person rechnen | dieselbe Person hat **versehentlich zwei** Identitäten – bereinigen |
+| Identitäten danach | **beide bleiben** bestehen | die doppelte wird **gelöscht**, es bleibt **eine** |
+| Gespeicherte Daten | **unverändert** (nur Kanonisierung bei der Berechnung) | Verweise werden **umgeschrieben** |
+| Umkehrbar | **ja** (auflösen) | **nein** |
+| Wirkung | nur Finanzberechnung/-anzeige | **alle** Module |
+
+Beim Zusammenlegen werden **alle** Verweise der Quell-Identität (der doppelten)
+auf die Ziel-Identität (die zu behaltende) umgeschrieben und die Quelle danach
+gelöscht – in **einer** Transaktion (`consolidateParticipants`):
+
+- **Finanzen:** `finance_expenses.paid_by_participant_id` und
+  `created_by_participant_id`, `finance_expense_splits.participant_id` sowie
+  `finance_settlement_transfers.from/to_participant_id`. Haben **beide**
+  Identitäten in derselben Ausgabe einen Anteil, werden die Anteile
+  **zusammengezählt** (der PK `(expense_id, participant_id)` lässt keinen
+  doppelten Anteil zu). Dabei entstehende **Selbst-Transfers** (Ziel → Ziel)
+  werden entfernt.
+- **Lose Verweise** ohne Fremdschlüssel: „erledigt/erstellt von“ in
+  Einkaufsliste, Notizen, Kalender und Abrechnungs-Stapeln.
+- **Finanz-Zusammenführungen** (`merged_into`), die auf die Quelle zeigten,
+  werden auf das Ziel umgehängt; zeigte das Ziel selbst auf die Quelle, wird der
+  Zeiger gelöst.
+
+Der Endpunkt ist `POST
+/api/spaces/:id/participants/:participantId/consolidate` mit Body
+`{ "into": "<Ziel-Teilnehmer-ID>" }`; die Antwort enthält die aktualisierte
+Ziel-Identität und `removedId` (die gelöschte Quelle). Ein Zusammenlegen mit
+sich selbst oder in einen fremden Bereich wird mit `400` abgelehnt. Weil die
+Quelle vollständig entfernt wird, ist dies – anders als das reine Löschen –
+**auch dann möglich, wenn die (doppelte) Identität in Finanzdaten verankert
+ist**; ihre Daten gehen dabei nicht verloren, sondern gehen an das Ziel über.
 
 ## Finanzberechnung
 
@@ -245,14 +290,21 @@ eingeschränkt. Modulrouten prüfen zusätzlich, ob das Modul aktiviert ist
   zur Pflicht machen oder wieder freiwillig machen.
 - `GET /api/spaces/:id/participants` – alle Identitäten eines Bereichs
   (inkl. archivierter).
+- `PATCH /api/spaces/:id/participants/:participantId` – Identität umbenennen
+  (`{ "name": "..." }`, optional `{ "color": "..." }`); Name pro Bereich
+  eindeutig, sonst `409`.
 - `POST /api/spaces/:id/participants/:participantId/reset-pin` – Code einer
   Identität entfernen (Antwort auf „Code vergessen?“).
 - `POST /api/spaces/:id/participants/:participantId/archive` – Identität
   archivieren (`{ "archived": true }`) oder wieder aktivieren
   (`{ "archived": false }`).
-- `POST /api/spaces/:id/participants/:participantId/merge` – Identität mit einer
-  primären Identität zusammenführen (`{ "into": "<id>" }`) oder die
-  Zusammenführung auflösen (`{ "into": null }`).
+- `POST /api/spaces/:id/participants/:participantId/merge` – Identität im
+  Finanzbereich mit einer primären Identität zusammenführen (`{ "into": "<id>" }`)
+  oder die Zusammenführung auflösen (`{ "into": null }`) – **umkehrbar**, ändert
+  keine gespeicherten Daten.
+- `POST /api/spaces/:id/participants/:participantId/consolidate` – doppelte
+  Identität derselben Person **endgültig** in eine andere zusammenlegen
+  (`{ "into": "<Ziel-id>" }`); überträgt alle Daten und löscht die Quelle.
 - `DELETE /api/spaces/:id/participants/:participantId` – Identität endgültig
   löschen (nur, wenn sie nicht in Finanzdaten verankert ist; sonst `409`).
 
