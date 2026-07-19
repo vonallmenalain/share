@@ -336,6 +336,7 @@ function SpaceShell() {
         <ParticipantPinManager
           participant={identity.current}
           onSetPin={(opts) => identity.setPin(identity.current!.id, opts)}
+          onRename={(name) => identity.rename(identity.current!.id, name)}
           onClose={() => setShowIdentityManager(false)}
           onSwitchIdentity={() => {
             setShowIdentityManager(false);

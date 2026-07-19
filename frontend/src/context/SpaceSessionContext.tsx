@@ -48,6 +48,8 @@ export interface IdentityValue {
   establishPin: (pin: string) => Promise<Participant>;
   verifyPin: (id: string, pin: string) => Promise<boolean>;
   setPin: (id: string, opts: { pin: string | null; currentPin?: string }) => Promise<Participant>;
+  /** Eigenen Anzeigenamen ändern (geräteweit). */
+  rename: (id: string, name: string) => Promise<Participant>;
   switchIdentity: () => void;
 }
 
@@ -288,6 +290,7 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       establishPin: participantState.establishPin,
       verifyPin: participantState.verifyPin,
       setPin: participantState.setPin,
+      rename: participantState.rename,
       switchIdentity: participantState.switchIdentity,
     }),
     [
@@ -305,6 +308,7 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       participantState.establishPin,
       participantState.verifyPin,
       participantState.setPin,
+      participantState.rename,
       participantState.switchIdentity,
       space?.requireParticipantPin,
     ],
