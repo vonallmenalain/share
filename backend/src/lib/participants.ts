@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { getDb, ParticipantRow } from '../db';
+import { getDb, getMeta, setMeta, ParticipantRow } from '../db';
 
 export function publicParticipant(row: ParticipantRow) {
   return {
@@ -104,6 +104,77 @@ export function renameUploaderName(
     return result.changes;
   });
   return sync();
+}
+
+/**
+ * Einmaliger Abgleich der BESTANDS-Daten: bringt bereits gespeicherte
+ * „Upload von …"-Namen auf den exakten aktuellen Namen der passenden Identität.
+ * Anders als `renameUploaderName` (das eine konkrete Umbenennung nachzieht)
+ * gleicht diese Funktion den gesamten Bestand ab – gedacht als Nachtrag für
+ * Uploads, die vor Einführung der laufenden Synchronisierung entstanden sind.
+ *
+ * Abgeglichen wird ausschliesslich dort, wo der gespeicherte Name eine
+ * bestehende Identität desselben Bereichs **case-insensitiv** trifft, sich aber
+ * in der exakten Schreibweise unterscheidet (z. B. „alain" → „Alain"). Namen
+ * ohne passende Identität (z. B. „Unbekannt" oder eine vollständig umbenannte,
+ * nicht mehr existierende Person) bleiben unangetastet – für Letztere gibt es
+ * keine verlässliche Zuordnung. Der Vergleich `p.name <> …uploader_name` nutzt
+ * die (binäre) Standard-Kollation und trifft daher nur echte Abweichungen.
+ *
+ * Wie `renameUploaderName` werden `items` (Galerie und Notiz-Anhänge) sowie noch
+ * offene `uploads` berücksichtigt. Gibt die Anzahl geänderter Medien zurück.
+ */
+export function backfillUploaderNames(db: Database.Database = getDb()): number {
+  const run = db.transaction(() => {
+    const changed = db
+      .prepare(
+        `UPDATE items
+         SET uploader_name = (
+           SELECT p.name FROM participants p
+           WHERE p.space_id = items.space_id
+             AND p.name = items.uploader_name COLLATE NOCASE
+           LIMIT 1
+         )
+         WHERE EXISTS (
+           SELECT 1 FROM participants p
+           WHERE p.space_id = items.space_id
+             AND p.name = items.uploader_name COLLATE NOCASE
+             AND p.name <> items.uploader_name
+         )`,
+      )
+      .run().changes;
+    db.prepare(
+      `UPDATE uploads
+       SET uploader_name = (
+         SELECT p.name FROM participants p
+         WHERE p.space_id = uploads.space_id
+           AND p.name = uploads.uploader_name COLLATE NOCASE
+         LIMIT 1
+       )
+       WHERE status = 'open' AND EXISTS (
+         SELECT 1 FROM participants p
+         WHERE p.space_id = uploads.space_id
+           AND p.name = uploads.uploader_name COLLATE NOCASE
+           AND p.name <> uploads.uploader_name
+       )`,
+    ).run();
+    return changed;
+  });
+  return run();
+}
+
+/**
+ * Führt `backfillUploaderNames` genau EINMAL aus (per app_meta-Flag abgesichert)
+ * – für den einmaligen Abgleich der Bestandsdaten beim Deploy. Gibt die Anzahl
+ * geänderter Medien zurück (0, wenn der Abgleich bereits gelaufen ist).
+ */
+const UPLOADER_BACKFILL_KEY = 'uploader_name_backfill_v1';
+
+export function runUploaderNameBackfillOnce(): number {
+  if (getMeta(UPLOADER_BACKFILL_KEY) === 'done') return 0;
+  const changed = backfillUploaderNames();
+  setMeta(UPLOADER_BACKFILL_KEY, 'done');
+  return changed;
 }
 
 /** Lädt einen Teilnehmer, sofern er zum angegebenen Bereich gehört. */

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import { consolidateParticipants, renameUploaderName } from './participants';
+import { backfillUploaderNames, consolidateParticipants, renameUploaderName } from './participants';
 
 /**
  * Baut eine In-Memory-Datenbank mit genau den Tabellen, die eine
@@ -297,4 +297,32 @@ test('renameUploaderName: applies case-only fix and is a no-op for identical nam
     (db.prepare('SELECT uploader_name AS u FROM items WHERE id = ?').get(id) as { u: string }).u;
   assert.equal(uploaderOf('i1'), 'Annina');
   assert.equal(uploaderOf('i2'), 'Annina');
+});
+
+// B1: Einmaliger Bestands-Abgleich – gleicht Namen an bestehende Identitäten an
+//     (auch bei abweichender Schreibweise), lässt Namen ohne Identität in Ruhe
+//     und ist idempotent.
+test('backfillUploaderNames: aligns spelling to identities, leaves orphans, is idempotent', () => {
+  const db = makeDb();
+  seed(db);
+  // i1='Annina' (exakt), i2='annina' (Schreibweise), i3='Peter' (exakt) sind
+  // bereits geseedet. Zusätzlich: abweichende Grossschreibung und ein Name ohne
+  // passende Identität (darf NICHT verändert werden).
+  const it = db.prepare('INSERT INTO items (id, space_id, uploader_name) VALUES (?, ?, ?)');
+  it.run('i4', 's1', 'PETER'); // -> Peter
+  it.run('i5', 's1', 'Unbekannt'); // keine Identität -> unangetastet
+
+  const changed = backfillUploaderNames(db);
+  assert.equal(changed, 2); // i2 + i4
+
+  const uploaderOf = (id: string) =>
+    (db.prepare('SELECT uploader_name AS u FROM items WHERE id = ?').get(id) as { u: string }).u;
+  assert.equal(uploaderOf('i1'), 'Annina'); // war schon exakt
+  assert.equal(uploaderOf('i2'), 'Annina'); // Schreibweise angeglichen
+  assert.equal(uploaderOf('i3'), 'Peter');
+  assert.equal(uploaderOf('i4'), 'Peter'); // Grossschreibung angeglichen
+  assert.equal(uploaderOf('i5'), 'Unbekannt'); // ohne Identität -> unverändert
+
+  // Idempotent: ein zweiter Lauf ändert nichts mehr.
+  assert.equal(backfillUploaderNames(db), 0);
 });

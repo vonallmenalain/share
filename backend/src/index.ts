@@ -9,6 +9,7 @@ import { initDb, getDb, UploadRow } from './db';
 import { errorHandler, notFound } from './middleware/errors';
 import { checkFfmpeg } from './lib/video';
 import { requeueUnfinished, backfillOrientedDims } from './services/process';
+import { runUploaderNameBackfillOnce } from './lib/participants';
 import spacesRoutes from './routes/spaces';
 import itemsRoutes from './routes/items';
 import uploadsRoutes from './routes/uploads';
@@ -101,6 +102,14 @@ async function main() {
   }
 
   initDb();
+
+  // Einmaliger Abgleich bestehender „Upload von …"-Namen auf die aktuellen
+  // Identitätsnamen (per app_meta-Flag nur beim ersten Start nach dem Deploy).
+  const namesSynced = runUploaderNameBackfillOnce();
+  if (namesSynced > 0) {
+    // eslint-disable-next-line no-console
+    console.log(`[migrate] uploader names aligned for ${namesSynced} media item(s)`);
+  }
 
   await cleanupStaleUploads();
   setInterval(() => void cleanupStaleUploads(), 6 * 60 * 60 * 1000).unref();

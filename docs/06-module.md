@@ -213,6 +213,18 @@ Namen stehen bleibt, gleicht `renameUploaderName` (in
   bereits **fertige** Uploads haben ihr `items`-Medium schon erzeugt und werden
   über dieses abgedeckt.
 
+**Einmaliger Abgleich der Bestandsdaten.** Für Uploads, die vor dieser
+laufenden Synchronisierung entstanden sind, gleicht `backfillUploaderNames` den
+gesamten Bestand einmalig ab: Jeder gespeicherte Uploader-Name, der eine
+bestehende Identität desselben Bereichs **case-insensitiv** trifft, sich aber in
+der Schreibweise unterscheidet (z. B. „alain“ → „Alain“), wird auf deren
+exakten aktuellen Namen gesetzt. Namen **ohne** passende Identität (z. B.
+„Unbekannt“ oder eine vollständig umbenannte, nicht mehr existierende Person)
+bleiben unangetastet – für Letztere gibt es keine verlässliche Zuordnung. Der
+Abgleich läuft über `runUploaderNameBackfillOnce` **genau einmal** beim
+Serverstart (per `app_meta`-Flag `uploader_name_backfill_v1` abgesichert, analog
+zum EXIF-Masse-Backfill) und ist idempotent.
+
 Getestet in `backend/src/lib/participants.test.ts`.
 
 ## Finanzberechnung
