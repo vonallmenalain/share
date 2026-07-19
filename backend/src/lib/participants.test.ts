@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import { consolidateParticipants } from './participants';
+import { consolidateParticipants, renameUploaderName } from './participants';
 
 /**
  * Baut eine In-Memory-Datenbank mit genau den Tabellen, die eine
@@ -71,6 +71,22 @@ function makeDb(): Database.Database {
       space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
       created_by_participant_id TEXT
     );
+
+    -- Medien/Uploads sind NICHT per Fremdschlüssel an die Identität gebunden,
+    -- sondern tragen nur den (Freitext-)Uploader-Namen als Momentaufnahme.
+    CREATE TABLE items (
+      id TEXT PRIMARY KEY,
+      space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      uploader_name TEXT NOT NULL
+    );
+
+    CREATE TABLE uploads (
+      id TEXT PRIMARY KEY,
+      space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'open',
+      uploader_name TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
   return db;
 }
@@ -134,6 +150,19 @@ function seed(db: Database.Database) {
   db.prepare(
     'INSERT INTO calendar_events (id, space_id, created_by_participant_id) VALUES (?, ?, ?)',
   ).run('cal1', 's1', 'b');
+
+  // Fotos/Medien tragen nur den Uploader-Namen (kein Fremdschlüssel). Annina (b)
+  // hat zwei Medien hochgeladen (einmal in abweichender Schreibweise), Peter (c)
+  // eines. Dazu ein noch offener und ein bereits fertiger Upload von Annina.
+  const it = db.prepare('INSERT INTO items (id, space_id, uploader_name) VALUES (?, ?, ?)');
+  it.run('i1', 's1', 'Annina');
+  it.run('i2', 's1', 'annina'); // abweichende Schreibweise -> muss ebenfalls mitziehen
+  it.run('i3', 's1', 'Peter');
+  const up = db.prepare(
+    'INSERT INTO uploads (id, space_id, status, uploader_name, updated_at) VALUES (?, ?, ?, ?, ?)',
+  );
+  up.run('u1', 's1', 'open', 'Annina', now);
+  up.run('u2', 's1', 'completed', 'Annina', now);
 }
 
 // C1: Duplikat (b) wird endgültig in die zu behaltende Identität (a) zusammengelegt.
@@ -198,6 +227,19 @@ test('consolidate: moves all references from source into target and deletes sour
   assert.equal((db.prepare('SELECT merged_into AS m FROM participants WHERE id = ?').get('d') as { m: string | null }).m, 'a');
   assert.equal((db.prepare('SELECT merged_into AS m FROM participants WHERE id = ?').get('a') as { m: string | null }).m, null);
 
+  // Fotos/Medien: Annina (b, inkl. abweichender Schreibweise) wird dem
+  // behaltenen Namen Alain (a) zugeschrieben; Peters Medium bleibt unangetastet.
+  const uploaderOf = (id: string) =>
+    (db.prepare('SELECT uploader_name AS u FROM items WHERE id = ?').get(id) as { u: string }).u;
+  assert.equal(uploaderOf('i1'), 'Alain');
+  assert.equal(uploaderOf('i2'), 'Alain');
+  assert.equal(uploaderOf('i3'), 'Peter');
+  // Offener Upload zieht mit, ein bereits fertiger bleibt unangetastet.
+  const uploadName = (id: string) =>
+    (db.prepare('SELECT uploader_name AS u FROM uploads WHERE id = ?').get(id) as { u: string }).u;
+  assert.equal(uploadName('u1'), 'Alain');
+  assert.equal(uploadName('u2'), 'Annina');
+
   // Keine verwaisten Fremdschlüssel.
   assert.deepEqual(db.pragma('foreign_key_check'), []);
 });
@@ -217,4 +259,42 @@ test('consolidate: preserves total shares when there is no overlap', () => {
   consolidateParticipants('s1', 'b', 'a', db);
   const after = (db.prepare('SELECT COALESCE(SUM(share_cents),0) AS s FROM finance_expense_splits').get() as { s: number }).s;
   assert.equal(after, before);
+});
+
+// R1: Umbenennen zieht die „Upload von …"-Zuschreibung passender Medien mit
+//     (case-insensitiv) und lässt offene, aber nicht fertige Uploads mitziehen.
+test('renameUploaderName: updates matching media and open uploads', () => {
+  const db = makeDb();
+  seed(db);
+
+  const changed = renameUploaderName('s1', 'Annina', 'Annina B.', db);
+  // i1 + i2 (abweichende Schreibweise) = 2 geänderte Medien.
+  assert.equal(changed, 2);
+
+  const uploaderOf = (id: string) =>
+    (db.prepare('SELECT uploader_name AS u FROM items WHERE id = ?').get(id) as { u: string }).u;
+  assert.equal(uploaderOf('i1'), 'Annina B.');
+  assert.equal(uploaderOf('i2'), 'Annina B.');
+  assert.equal(uploaderOf('i3'), 'Peter'); // fremder Name unangetastet
+
+  const uploadName = (id: string) =>
+    (db.prepare('SELECT uploader_name AS u FROM uploads WHERE id = ?').get(id) as { u: string }).u;
+  assert.equal(uploadName('u1'), 'Annina B.'); // offen -> mitgezogen
+  assert.equal(uploadName('u2'), 'Annina'); // bereits fertig -> unverändert
+});
+
+// R2: Reine Schreibweisen-Korrektur wird übernommen; ein Aufruf ohne echte
+//     Änderung (alter == neuer Name) bleibt ein No-Op.
+test('renameUploaderName: applies case-only fix and is a no-op for identical names', () => {
+  const db = makeDb();
+  seed(db);
+
+  assert.equal(renameUploaderName('s1', 'Peter', 'Peter', db), 0);
+
+  const changed = renameUploaderName('s1', 'annina', 'Annina', db);
+  assert.equal(changed, 2);
+  const uploaderOf = (id: string) =>
+    (db.prepare('SELECT uploader_name AS u FROM items WHERE id = ?').get(id) as { u: string }).u;
+  assert.equal(uploaderOf('i1'), 'Annina');
+  assert.equal(uploaderOf('i2'), 'Annina');
 });
