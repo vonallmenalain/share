@@ -10,8 +10,8 @@ import { deleteAllVariants, deleteSpaceStorage } from '../lib/media';
 import { logAccess } from '../lib/access';
 import { publicItem } from './items';
 import { getEnabledModules, isModuleKey, setEnabledModules } from '../lib/modules';
-import { publicParticipant } from '../lib/participants';
-import { normalizeCurrency, toBool } from '../lib/validation';
+import { consolidateParticipants, findParticipant, publicParticipant } from '../lib/participants';
+import { normalizeCurrency, optionalString, requireString, toBool } from '../lib/validation';
 import { ModuleKey } from '../db';
 
 const router = Router();
@@ -525,6 +525,44 @@ router.post(
 );
 
 /**
+ * Admin: eine Teilnehmer-Identität umbenennen (und optional die Farbe ändern).
+ * Der Name ist pro Bereich eindeutig (Gross-/Kleinschreibung egal) – ein
+ * Konflikt mit einer anderen Identität wird mit `409` abgelehnt. Gedacht, um
+ * Tippfehler zu korrigieren oder einen klareren Namen zu vergeben, ohne dass die
+ * betroffene Person selbst am Gerät sein muss.
+ */
+router.patch(
+  '/:id/participants/:participantId',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const row = findParticipant(req.params.participantId, req.params.id, db);
+    if (!row) throw new ApiError(404, 'Teilnehmer nicht gefunden.');
+
+    const name =
+      req.body?.name === undefined ? row.name : requireString(req.body.name, 'Name', { max: 60 });
+    const color = req.body?.color === undefined ? row.color : optionalString(req.body.color, 32);
+
+    if (name.toLowerCase() !== row.name.toLowerCase()) {
+      const dup = db
+        .prepare('SELECT 1 FROM participants WHERE space_id = ? AND name = ? COLLATE NOCASE AND id <> ?')
+        .get(req.params.id, name, row.id);
+      if (dup) throw new ApiError(409, 'Diesen Namen gibt es in diesem Bereich bereits.');
+    }
+
+    db.prepare('UPDATE participants SET name = ?, color = ?, updated_at = ? WHERE id = ?').run(
+      name,
+      color,
+      new Date().toISOString(),
+      row.id,
+    );
+    const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(row.id) as ParticipantRow;
+    res.json({ participant: publicParticipant(updated) });
+  }),
+);
+
+/**
  * Admin: eine Teilnehmer-Identität archivieren oder wieder aktivieren.
  * Archivieren blendet die Person überall aus, lässt aber alle Finanzdaten
  * unangetastet – die sichere Alternative zum endgültigen Löschen, wenn die
@@ -618,6 +656,45 @@ router.post(
 
     const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(source.id) as ParticipantRow;
     res.json({ participant: publicParticipant(updated) });
+  }),
+);
+
+/**
+ * Admin: zwei Identitäten DERSELBEN Person endgültig zu EINER zusammenlegen
+ * („Duplikat bereinigen"). Anders als das Finanz-Zusammenführen (`/merge`,
+ * nur Ansicht/Berechnung, umkehrbar) werden hier ALLE Daten der Quelle
+ * (`:participantId`, die doppelte Identität) auf das Ziel (`into`, die zu
+ * behaltende Identität) übertragen und die Quelle danach gelöscht. Das ist
+ * **nicht** umkehrbar.
+ *
+ * Body: `{ "into": "<Ziel-Teilnehmer-ID>" }`. Quelle und Ziel müssen zum Bereich
+ * gehören und verschieden sein. Die eigentliche Datenübertragung erledigt
+ * `consolidateParticipants` in einer Transaktion.
+ */
+router.post(
+  '/:id/participants/:participantId/consolidate',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const source = findParticipant(req.params.participantId, req.params.id, db);
+    if (!source) throw new ApiError(404, 'Teilnehmer nicht gefunden.');
+
+    const intoRaw = req.body?.into;
+    if (intoRaw === null || intoRaw === undefined || intoRaw === '') {
+      throw new ApiError(400, 'Bitte die Identität angeben, in die zusammengelegt werden soll.');
+    }
+    const targetId = String(intoRaw);
+    if (targetId === source.id) {
+      throw new ApiError(400, 'Eine Identität kann nicht mit sich selbst zusammengelegt werden.');
+    }
+    const target = findParticipant(targetId, req.params.id, db);
+    if (!target) throw new ApiError(400, 'Die Ziel-Identität gehört nicht zu diesem Bereich.');
+
+    consolidateParticipants(req.params.id, source.id, target.id, db);
+
+    const updated = db.prepare('SELECT * FROM participants WHERE id = ?').get(target.id) as ParticipantRow;
+    res.json({ participant: publicParticipant(updated), removedId: source.id });
   }),
 );
 

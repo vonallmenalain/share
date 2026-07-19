@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/lib/finance.test.ts"
+    "test": "node --import tsx --test src/lib/finance.test.ts src/lib/participants.test.ts"
   },
   "dependencies": {
     "archiver": "^7.0.1",
