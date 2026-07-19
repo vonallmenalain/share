@@ -168,6 +168,26 @@ export function useParticipants(slug: string, token: string, requirePin: boolean
   );
 
   /**
+   * Eigenen Anzeigenamen ändern. Aktualisiert die lokale Liste sowie – ist die
+   * aktuelle Person betroffen – die geräteweite Identität, damit künftige
+   * Bereiche denselben Namen verwenden.
+   */
+  const rename = useCallback(
+    async (id: string, name: string): Promise<Participant> => {
+      const res = await api<{ participant: Participant }>(`/api/participants/${id}`, {
+        method: 'PATCH',
+        token,
+        participantId: id,
+        body: { name },
+      });
+      setParticipants((prev) => prev.map((p) => (p.id === id ? res.participant : p)));
+      if (id === currentId) identityStore.setName(res.participant.name);
+      return res.participant;
+    },
+    [token, currentId],
+  );
+
+  /**
    * Legt die geräteweite Identität in diesem Bereich mit dem angegebenen
    * Code neu an – für den Fall, dass ein Code hier Pflicht ist, die
    * Identität aber noch keinen hat (siehe `needsPin`).
@@ -285,6 +305,7 @@ export function useParticipants(slug: string, token: string, requirePin: boolean
     establishPin,
     verifyPin,
     setPin,
+    rename,
   };
 }
 
