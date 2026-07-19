@@ -103,6 +103,16 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
   const [gateError, setGateError] = useState('');
   const [gateBusy, setGateBusy] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
+  // War beim Öffnen dieses Bereichs bereits geräteweit ein Name hinterlegt?
+  // Dieser Wert wird EINMAL beim Eintritt ins Betreten-Formular festgehalten
+  // (siehe Effekt unten) und danach NICHT mehr live aus dem nameStore
+  // abgeleitet. Andernfalls würde das Namensfeld verschwinden, sobald der
+  // erste Buchstabe getippt wird: `setName` schreibt jeden Tastendruck sofort
+  // in den nameStore, wodurch eine live berechnete Abfrage den Namen als
+  // „bereits bekannt" einstufen und das Eingabefeld ausblenden würde.
+  const [gateHasKnownIdentity, setGateHasKnownIdentity] = useState(
+    () => !!nameStore.get().trim(),
+  );
 
   // Wechselt `slug` (Bereichswechsel), müssen `space`/`token` NOCH IM
   // SELBEN Render (nicht erst über einen Effekt danach) zurückgesetzt
@@ -186,10 +196,13 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
           }
         }
         if (cancelled) return;
+        setGateHasKnownIdentity(!!nameStore.get().trim());
         setPhase('gate');
       } catch (err) {
         if (cancelled) return;
-        setPhase(err instanceof ApiError && err.status === 404 ? 'notfound' : 'gate');
+        const notFound = err instanceof ApiError && err.status === 404;
+        if (!notFound) setGateHasKnownIdentity(!!nameStore.get().trim());
+        setPhase(notFound ? 'notfound' : 'gate');
       }
     })();
     return () => {
@@ -310,7 +323,7 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
         setPassword: setGatePassword,
         error: gateError,
         busy: gateBusy,
-        hasKnownIdentity: !!nameStore.get().trim(),
+        hasKnownIdentity: gateHasKnownIdentity,
       },
       enter,
       chromeHidden,
@@ -330,6 +343,7 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       gatePassword,
       gateError,
       gateBusy,
+      gateHasKnownIdentity,
       enter,
       chromeHidden,
       visitedSpaces,
