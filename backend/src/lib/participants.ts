@@ -177,6 +177,83 @@ export function runUploaderNameBackfillOnce(): number {
   return changed;
 }
 
+/**
+ * Einmalige, BEREICHSBEZOGENE Neuzuweisung gespeicherter „Upload von …"-Namen:
+ * bildet in einem konkret benannten Bereich alte (Kurz-)Uploader-Namen fest auf
+ * gewünschte Identitätsnamen ab. Anders als `backfillUploaderNames` (das nur
+ * Schreibweisen an bereits case-insensitiv passende Identitäten angleicht) trägt
+ * diese Funktion eine ausdrückliche Zuordnung nach, für die es aus dem Namen
+ * allein KEINE automatische Ableitung gibt – z. B. das Kürzel „A" → „Christiane"
+ * (der gespeicherte Name trifft die Ziel-Identität nicht einmal case-insensitiv).
+ *
+ * Der Bereich wird über seinen Anzeigenamen (`spaces.name`, case-insensitiv)
+ * bestimmt; gibt es keinen passenden Bereich, bleibt alles unangetastet. Pro
+ * Zuordnung werden – wie bei `renameUploaderName` – alle `items` (Galerie UND
+ * Notiz-Anhänge) sowie noch offene `uploads` dieses Bereichs umgeschrieben, deren
+ * `uploader_name` dem alten Namen **exakt** (als ganze Zeichenkette, case-
+ * insensitiv) entspricht. Namen ohne passende Zuordnung bleiben unberührt. Die
+ * Zuordnung ist bewusst eng gefasst und auf den einen Bereich beschränkt, damit
+ * ein gleichlautendes Kürzel in einem anderen Bereich nicht mitverändert wird.
+ *
+ * Gibt die Anzahl der geänderten (fertigen) Medien zurück.
+ */
+export function remapUploaderNames(
+  spaceName: string,
+  mapping: Array<[from: string, to: string]>,
+  db: Database.Database = getDb(),
+): number {
+  const spaces = db
+    .prepare('SELECT id FROM spaces WHERE name = ? COLLATE NOCASE')
+    .all(spaceName) as Array<{ id: string }>;
+  if (spaces.length === 0) return 0;
+
+  const updItems = db.prepare(
+    `UPDATE items SET uploader_name = @to
+     WHERE space_id = @space AND uploader_name = @from COLLATE NOCASE`,
+  );
+  const updUploads = db.prepare(
+    `UPDATE uploads SET uploader_name = @to
+     WHERE space_id = @space AND status = 'open' AND uploader_name = @from COLLATE NOCASE`,
+  );
+
+  const run = db.transaction(() => {
+    let changed = 0;
+    for (const s of spaces) {
+      for (const [from, to] of mapping) {
+        if (from === to) continue;
+        changed += updItems.run({ to, space: s.id, from }).changes;
+        updUploads.run({ to, space: s.id, from });
+      }
+    }
+    return changed;
+  });
+  return run();
+}
+
+/**
+ * Einmalige Neuzuweisung der Kurz-Uploader-Namen im Bereich „Ferien Frankreich
+ * 2026": „S" → „Salome", „F" → „Frank", „A" → „Christiane" (die Identitäten
+ * bestehen bereits; nur der bei den Fotos gespeicherte Freitext-Name wird
+ * nachgezogen). Läuft – per app_meta-Flag abgesichert – GENAU EINMAL beim
+ * Serverstart nach dem Deploy und ist idempotent. Ab dann hält die laufende
+ * Synchronisierung (`renameUploaderName`) die Namen über die Identität aktuell.
+ * Gibt die Anzahl geänderter Medien zurück (0, wenn bereits gelaufen).
+ */
+const FRANKREICH_REMAP_KEY = 'uploader_remap_frankreich_2026_v1';
+const FRANKREICH_SPACE_NAME = 'Ferien Frankreich 2026';
+const FRANKREICH_UPLOADER_REMAP: Array<[from: string, to: string]> = [
+  ['S', 'Salome'],
+  ['F', 'Frank'],
+  ['A', 'Christiane'],
+];
+
+export function runFrankreichUploaderRemapOnce(): number {
+  if (getMeta(FRANKREICH_REMAP_KEY) === 'done') return 0;
+  const changed = remapUploaderNames(FRANKREICH_SPACE_NAME, FRANKREICH_UPLOADER_REMAP);
+  setMeta(FRANKREICH_REMAP_KEY, 'done');
+  return changed;
+}
+
 /** Lädt einen Teilnehmer, sofern er zum angegebenen Bereich gehört. */
 export function findParticipant(
   id: string,

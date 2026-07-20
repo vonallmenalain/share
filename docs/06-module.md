@@ -225,6 +225,23 @@ Abgleich läuft über `runUploaderNameBackfillOnce` **genau einmal** beim
 Serverstart (per `app_meta`-Flag `uploader_name_backfill_v1` abgesichert, analog
 zum EXIF-Masse-Backfill) und ist idempotent.
 
+**Ausdrückliche Neuzuweisung (bereichsbezogen).** Für Fälle, in denen sich ein
+gespeicherter Name gar **nicht** aus der Identität ableiten lässt – etwa ein
+Kürzel wie „A", das für „Christiane" steht (es trifft die Ziel-Identität nicht
+einmal case-insensitiv) – trägt `remapUploaderNames` eine feste Zuordnung nach:
+Es bildet in einem über seinen Anzeigenamen (`spaces.name`) bestimmten Bereich
+alte (Kurz-)Uploader-Namen auf gewünschte Identitätsnamen ab. Umgeschrieben
+werden – wie bei `renameUploaderName` – alle `items` (Galerie **und**
+Notiz-Anhänge) sowie noch offene `uploads`, deren `uploader_name` dem alten Namen
+**exakt** (als ganze Zeichenkette, `COLLATE NOCASE`) entspricht; alles andere
+bleibt unangetastet. Die Zuordnung ist bewusst auf den einen Bereich beschränkt,
+damit ein gleichlautendes Kürzel in einem anderen Bereich nicht mitverändert
+wird. Konkret gleicht `runFrankreichUploaderRemapOnce` **genau einmal** beim
+Serverstart (per `app_meta`-Flag `uploader_remap_frankreich_2026_v1` abgesichert,
+idempotent) im Bereich **„Ferien Frankreich 2026"** die Kürzel „S" → „Salome",
+„F" → „Frank" und „A" → „Christiane" an. Danach hält die laufende
+Synchronisierung (`renameUploaderName`) die Namen über die Identität aktuell.
+
 Getestet in `backend/src/lib/participants.test.ts`.
 
 ## Finanzberechnung

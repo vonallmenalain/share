@@ -9,7 +9,7 @@ import { initDb, getDb, UploadRow } from './db';
 import { errorHandler, notFound } from './middleware/errors';
 import { checkFfmpeg } from './lib/video';
 import { requeueUnfinished, backfillOrientedDims } from './services/process';
-import { runUploaderNameBackfillOnce } from './lib/participants';
+import { runUploaderNameBackfillOnce, runFrankreichUploaderRemapOnce } from './lib/participants';
 import spacesRoutes from './routes/spaces';
 import itemsRoutes from './routes/items';
 import uploadsRoutes from './routes/uploads';
@@ -109,6 +109,15 @@ async function main() {
   if (namesSynced > 0) {
     // eslint-disable-next-line no-console
     console.log(`[migrate] uploader names aligned for ${namesSynced} media item(s)`);
+  }
+
+  // Einmalige, bereichsbezogene Neuzuweisung: die Kurz-Uploader-Namen S/F/A im
+  // Bereich „Ferien Frankreich 2026" auf die Identitätsnamen Salome/Frank/
+  // Christiane abbilden (per app_meta-Flag nur beim ersten Start nach dem Deploy).
+  const remapped = runFrankreichUploaderRemapOnce();
+  if (remapped > 0) {
+    // eslint-disable-next-line no-console
+    console.log(`[migrate] Frankreich uploader names remapped for ${remapped} media item(s)`);
   }
 
   await cleanupStaleUploads();
