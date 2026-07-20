@@ -1,7 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import { backfillUploaderNames, consolidateParticipants, renameUploaderName } from './participants';
+import {
+  backfillUploaderNames,
+  consolidateParticipants,
+  remapUploaderNames,
+  renameUploaderName,
+} from './participants';
 
 /**
  * Baut eine In-Memory-Datenbank mit genau den Tabellen, die eine
@@ -297,6 +302,71 @@ test('renameUploaderName: applies case-only fix and is a no-op for identical nam
     (db.prepare('SELECT uploader_name AS u FROM items WHERE id = ?').get(id) as { u: string }).u;
   assert.equal(uploaderOf('i1'), 'Annina');
   assert.equal(uploaderOf('i2'), 'Annina');
+});
+
+// F1: Einmalige, bereichsbezogene Neuzuweisung – bildet Kurz-Uploader-Namen
+//     (S/F/A) auf Identitätsnamen ab, NUR im genannten Bereich, zieht offene
+//     Uploads mit und ist idempotent.
+test('remapUploaderNames: reassigns short labels within the named space only', () => {
+  const db = makeDb();
+  const now = '2026-01-01T00:00:00.000Z';
+  db.prepare('INSERT INTO spaces (id, name) VALUES (?, ?)').run('fr', 'Ferien Frankreich 2026');
+  db.prepare('INSERT INTO spaces (id, name) VALUES (?, ?)').run('other', 'Ferien Tessin');
+
+  const it = db.prepare('INSERT INTO items (id, space_id, uploader_name) VALUES (?, ?, ?)');
+  it.run('i1', 'fr', 'S'); // -> Salome
+  it.run('i2', 'fr', 'F'); // -> Frank
+  it.run('i3', 'fr', 'A'); // -> Christiane
+  it.run('i4', 'fr', 's'); // abweichende Schreibweise -> ebenfalls Salome
+  it.run('i5', 'fr', 'Salome'); // bereits richtig -> unverändert
+  it.run('i6', 'fr', 'Gast'); // ohne Zuordnung -> unangetastet
+  it.run('i7', 'other', 'S'); // anderer Bereich -> unangetastet
+
+  const up = db.prepare(
+    'INSERT INTO uploads (id, space_id, status, uploader_name, updated_at) VALUES (?, ?, ?, ?, ?)',
+  );
+  up.run('u1', 'fr', 'open', 'F', now); // offen -> mitgezogen
+  up.run('u2', 'fr', 'completed', 'F', now); // fertig -> unverändert
+
+  const mapping: Array<[string, string]> = [
+    ['S', 'Salome'],
+    ['F', 'Frank'],
+    ['A', 'Christiane'],
+  ];
+  const changed = remapUploaderNames('Ferien Frankreich 2026', mapping, db);
+  assert.equal(changed, 4); // i1, i2, i3, i4
+
+  const uploaderOf = (id: string) =>
+    (db.prepare('SELECT uploader_name AS u FROM items WHERE id = ?').get(id) as { u: string }).u;
+  assert.equal(uploaderOf('i1'), 'Salome');
+  assert.equal(uploaderOf('i2'), 'Frank');
+  assert.equal(uploaderOf('i3'), 'Christiane');
+  assert.equal(uploaderOf('i4'), 'Salome');
+  assert.equal(uploaderOf('i5'), 'Salome');
+  assert.equal(uploaderOf('i6'), 'Gast');
+  assert.equal(uploaderOf('i7'), 'S'); // anderer Bereich bleibt unangetastet
+
+  const uploadName = (id: string) =>
+    (db.prepare('SELECT uploader_name AS u FROM uploads WHERE id = ?').get(id) as { u: string }).u;
+  assert.equal(uploadName('u1'), 'Frank');
+  assert.equal(uploadName('u2'), 'F');
+
+  // Idempotent: ein zweiter Lauf ändert nichts mehr.
+  assert.equal(remapUploaderNames('Ferien Frankreich 2026', mapping, db), 0);
+});
+
+// F2: Unbekannter Bereichsname -> No-Op (nichts wird verändert).
+test('remapUploaderNames: is a no-op when no space matches the name', () => {
+  const db = makeDb();
+  db.prepare('INSERT INTO spaces (id, name) VALUES (?, ?)').run('x', 'Ferien Tessin');
+  db.prepare('INSERT INTO items (id, space_id, uploader_name) VALUES (?, ?, ?)').run('i1', 'x', 'S');
+
+  const changed = remapUploaderNames('Ferien Frankreich 2026', [['S', 'Salome']], db);
+  assert.equal(changed, 0);
+  assert.equal(
+    (db.prepare('SELECT uploader_name AS u FROM items WHERE id = ?').get('i1') as { u: string }).u,
+    'S',
+  );
 });
 
 // B1: Einmaliger Bestands-Abgleich – gleicht Namen an bestehende Identitäten an
