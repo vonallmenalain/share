@@ -1758,6 +1758,110 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---- Übersicht: eine ausklappbare Zeile pro Identität ------------------- */
+.identity-list {
+  display: grid;
+  gap: 8px;
+}
+.identity-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.identity-card.open {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+.identity-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.identity-head:hover {
+  background: #f7f9fb;
+}
+.identity-name {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.identity-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.identity-last {
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.identity-body {
+  padding: 4px 12px 12px;
+  border-top: 1px solid var(--line);
+}
+.identity-substats {
+  font-size: 12px;
+  margin: 8px 0 10px;
+}
+.chevron.sm {
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 10px;
+}
+.access-table tr.ip-row {
+  cursor: pointer;
+}
+.access-table tr.ip-row:hover {
+  background: #eef2f6;
+}
+.access-table tr.ip-detail-row td {
+  background: #f7f9fb;
+  white-space: normal;
+  padding: 6px 10px 6px 26px;
+}
+.access-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.access-detail-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.access-detail-list .dt {
+  font-variant-numeric: tabular-nums;
+  min-width: 148px;
+}
+.kind-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #eef0f3;
+  color: var(--ink-soft);
+}
+.kind-tag.enter {
+  background: #e6f4ea;
+  color: #1a7f37;
+}
+
 /* ==========================================================================
    Module (Ferien-/Gruppen-App): Navigation, Finanzen, Einkauf, Notizen,
    Kalender. Nutzt die bestehenden Design-Tokens (Farben, Radius, Schatten).
