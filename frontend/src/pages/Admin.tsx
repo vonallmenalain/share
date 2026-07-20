@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import ShareIcon from '../components/ShareIcon';
@@ -1397,15 +1397,15 @@ function AdminTile({
 
 // ---- Zugriffsstatistik (nur Admin) ----------------------------------------
 
-type LogView = 'list' | 'day' | 'location' | 'ip' | 'visitor' | 'device';
+type LogView = 'identity' | 'list' | 'day' | 'location' | 'ip' | 'visitor' | 'device';
 type SortKey = 'at' | 'visitor' | 'location' | 'ip' | 'device';
 
 const LOG_VIEWS: { id: LogView; label: string }[] = [
+  { id: 'identity', label: 'Übersicht' },
   { id: 'list', label: 'Alle Zugriffe' },
   { id: 'day', label: 'Pro Tag' },
   { id: 'location', label: 'Pro Standort' },
   { id: 'ip', label: 'Pro IP' },
-  { id: 'visitor', label: 'Pro Person' },
   { id: 'device', label: 'Pro Gerät' },
 ];
 
@@ -1433,14 +1433,93 @@ function shortDevice(ua: string | null): string {
   return parts.length ? parts.join(' · ') : 'Unbekannt';
 }
 
+/** Wählt aus (absteigend sortierten) Zugriffen den jüngsten bekannten Standort. */
+function representativeLocation(logsDesc: AccessLog[]): string {
+  for (const l of logsDesc) {
+    const label = locationLabel(l);
+    if (label !== 'Unbekannt') return label;
+  }
+  return 'Unbekannt';
+}
+
+/** Wählt aus (absteigend sortierten) Zugriffen das jüngste bekannte Gerät. */
+function representativeDevice(logsDesc: AccessLog[]): string {
+  for (const l of logsDesc) {
+    const dev = shortDevice(l.userAgent);
+    if (dev !== 'Unbekannt') return dev;
+  }
+  return 'Unbekannt';
+}
+
+/** Ein Zugriff mit Koordinaten wird als Karten-Link, sonst als Text dargestellt. */
+function LocationCell({ log }: { log: AccessLog }) {
+  const label = locationLabel(log);
+  if (log.latitude && log.longitude) {
+    return (
+      <a
+        href={`https://www.openstreetmap.org/?mlat=${log.latitude}&mlon=${log.longitude}#map=11/${log.latitude}/${log.longitude}`}
+        target="_blank"
+        rel="noreferrer"
+        title="Auf Karte anzeigen"
+      >
+        {label}
+      </a>
+    );
+  }
+  return <>{label}</>;
+}
+
+/** Ein IP-Cluster innerhalb einer Identität (Zugriffe von derselben IP). */
+interface IpGroup {
+  key: string;
+  ip: string | null;
+  count: number;
+  last: string;
+  location: string;
+  device: string;
+  logs: AccessLog[];
+}
+
+/** Alle Zugriffe einer Person, zusammengefasst zu einer ausklappbaren Zeile. */
+interface IdentityGroup {
+  key: string;
+  visitor: string | null;
+  count: number;
+  last: string;
+  first: string;
+  ipCount: number;
+  locationCount: number;
+  deviceCount: number;
+  ips: IpGroup[];
+}
+
 function AccessLogPanel({ spaceId, adminKey }: { spaceId: string; adminKey: string }) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [data, setData] = useState<AccessLogsResponse | null>(null);
   const [error, setError] = useState('');
-  const [view, setView] = useState<LogView>('list');
+  const [view, setView] = useState<LogView>('identity');
   const [sortKey, setSortKey] = useState<SortKey>('at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  // Welche Identitäts- bzw. IP-Zeilen sind in der Übersicht ausgeklappt?
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+  const [openIps, setOpenIps] = useState<Set<string>>(new Set());
+
+  const toggleId = (key: string) =>
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const toggleIp = (key: string) =>
+    setOpenIps((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const load = async () => {
     setStatus('loading');
@@ -1524,6 +1603,53 @@ function AccessLogPanel({ spaceId, adminKey }: { spaceId: string; adminKey: stri
       visitor: by((l) => l.visitor || 'Unbekannt'),
       device: by((l) => shortDevice(l.userAgent)),
     };
+  }, [logs]);
+
+  // Übersicht: eine Zeile pro Identität (Person), Zugriffe zusätzlich nach
+  // IP-Adresse gebündelt, damit wiederholte Besuche nicht die Liste aufblähen.
+  const identityGroups = useMemo<IdentityGroup[]>(() => {
+    const byVisitor = new Map<string, AccessLog[]>();
+    for (const l of logs) {
+      const key = (l.visitor || '').trim() || 'Unbekannt';
+      const arr = byVisitor.get(key);
+      if (arr) arr.push(l);
+      else byVisitor.set(key, [l]);
+    }
+    const desc = (a: AccessLog, b: AccessLog) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0);
+    const result: IdentityGroup[] = [];
+    for (const [key, all] of byVisitor) {
+      const sorted = [...all].sort(desc);
+      const byIp = new Map<string, AccessLog[]>();
+      for (const l of sorted) {
+        const ipKey = l.ip || 'Unbekannt';
+        const arr = byIp.get(ipKey);
+        if (arr) arr.push(l);
+        else byIp.set(ipKey, [l]);
+      }
+      const ips: IpGroup[] = Array.from(byIp.entries())
+        .map(([ipKey, ipLogs]) => ({
+          key: ipKey,
+          ip: ipLogs[0].ip,
+          count: ipLogs.length,
+          last: ipLogs[0].at,
+          location: representativeLocation(ipLogs),
+          device: representativeDevice(ipLogs),
+          logs: ipLogs,
+        }))
+        .sort((a, b) => b.count - a.count || (a.last < b.last ? 1 : -1));
+      result.push({
+        key,
+        visitor: sorted[0].visitor,
+        count: sorted.length,
+        last: sorted[0].at,
+        first: sorted[sorted.length - 1].at,
+        ipCount: byIp.size,
+        locationCount: new Set(sorted.map((l) => locationLabel(l))).size,
+        deviceCount: new Set(sorted.map((l) => shortDevice(l.userAgent))).size,
+        ips,
+      });
+    }
+    return result.sort((a, b) => b.count - a.count || (a.last < b.last ? 1 : -1));
   }, [logs]);
 
   const setSort = (key: SortKey) => {
@@ -1676,6 +1802,115 @@ function AccessLogPanel({ spaceId, adminKey }: { spaceId: string; adminKey: stri
                 <div className="faint" style={{ fontSize: 13, padding: '8px 0' }}>
                   Noch keine Zugriffe protokolliert.
                 </div>
+              ) : view === 'identity' ? (
+                <div className="identity-list">
+                  {identityGroups.map((g) => {
+                    const idOpen = openIds.has(g.key);
+                    return (
+                      <div className={`identity-card${idOpen ? ' open' : ''}`} key={g.key}>
+                        <button
+                          type="button"
+                          className="identity-head"
+                          onClick={() => toggleId(g.key)}
+                          aria-expanded={idOpen}
+                        >
+                          <span className={`chevron${idOpen ? ' open' : ''}`}>▸</span>
+                          <span className="identity-name">
+                            {g.visitor ? g.visitor : <span className="faint">Ohne Namen</span>}
+                          </span>
+                          <span className="identity-meta">
+                            <span className="tag">
+                              {g.count} {g.count === 1 ? 'Zugriff' : 'Zugriffe'}
+                            </span>
+                            <span className="identity-last" title="Letzter Zugriff">
+                              {formatDateTime(g.last)}
+                            </span>
+                          </span>
+                        </button>
+
+                        {idOpen && (
+                          <div className="identity-body">
+                            <div className="identity-substats faint">
+                              {g.ipCount} {g.ipCount === 1 ? 'IP-Adresse' : 'IP-Adressen'} ·{' '}
+                              {g.locationCount}{' '}
+                              {g.locationCount === 1 ? 'Standort' : 'Standorte'} · {g.deviceCount}{' '}
+                              {g.deviceCount === 1 ? 'Gerät' : 'Geräte'} · seit{' '}
+                              {formatDate(g.first)}
+                            </div>
+                            <div className="access-scroll">
+                              <table className="access-table">
+                                <thead>
+                                  <tr>
+                                    <th>IP</th>
+                                    <th>Standort</th>
+                                    <th>Gerät</th>
+                                    <th>Zugriffe</th>
+                                    <th>Letzter Zugriff</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {g.ips.map((ip) => {
+                                    const ipKey = `${g.key}|${ip.key}`;
+                                    const ipOpen = openIps.has(ipKey);
+                                    return (
+                                      <Fragment key={ip.key}>
+                                        <tr
+                                          className="ip-row"
+                                          onClick={() => toggleIp(ipKey)}
+                                          title="Einzelne Zugriffe ein-/ausklappen"
+                                        >
+                                          <td className="mono">
+                                            <span className={`chevron sm${ipOpen ? ' open' : ''}`}>
+                                              ▸
+                                            </span>
+                                            {ip.ip || <span className="faint">Unbekannt</span>}
+                                          </td>
+                                          <td>{ip.location}</td>
+                                          <td>{ip.device}</td>
+                                          <td>{ip.count}</td>
+                                          <td>{formatDateTime(ip.last)}</td>
+                                        </tr>
+                                        {ipOpen && (
+                                          <tr className="ip-detail-row">
+                                            <td colSpan={5}>
+                                              <ul className="access-detail-list">
+                                                {ip.logs.map((l) => (
+                                                  <li key={l.id}>
+                                                    <span className="dt">
+                                                      {formatDateTime(l.at)}
+                                                    </span>
+                                                    <span className={`kind-tag ${l.kind}`}>
+                                                      {l.kind === 'enter'
+                                                        ? 'Betreten'
+                                                        : 'Geöffnet'}
+                                                    </span>
+                                                    <span className="loc">
+                                                      <LocationCell log={l} />
+                                                    </span>
+                                                    <span
+                                                      className="dev faint"
+                                                      title={l.userAgent ?? ''}
+                                                    >
+                                                      {shortDevice(l.userAgent)}
+                                                    </span>
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </Fragment>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               ) : view === 'list' ? (
                 <div className="access-scroll">
                   <table className="access-table">
@@ -1696,18 +1931,7 @@ function AccessLogPanel({ spaceId, adminKey }: { spaceId: string; adminKey: stri
                           </td>
                           <td>{l.visitor || <span className="faint">–</span>}</td>
                           <td>
-                            {l.latitude && l.longitude ? (
-                              <a
-                                href={`https://www.openstreetmap.org/?mlat=${l.latitude}&mlon=${l.longitude}#map=11/${l.latitude}/${l.longitude}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                title="Auf Karte anzeigen"
-                              >
-                                {locationLabel(l)}
-                              </a>
-                            ) : (
-                              locationLabel(l)
-                            )}
+                            <LocationCell log={l} />
                           </td>
                           <td className="mono">{l.ip || <span className="faint">–</span>}</td>
                           <td title={l.userAgent ?? ''}>{shortDevice(l.userAgent)}</td>
