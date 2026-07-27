@@ -36,7 +36,7 @@ export default function Landing() {
             <label className="label">Bereich öffnen</label>
             <input
               className="input"
-              placeholder="Link oder Code einfügen, z. B. ferien-tessin-k3p9x2qa"
+              placeholder="Link oder Code einfügen"
               value={value}
               onChange={(e) => setValue(e.target.value)}
               autoFocus
