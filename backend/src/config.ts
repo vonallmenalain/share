@@ -68,10 +68,12 @@ export const config = {
 
   // Upload-Verhalten. Chunk-Grösse für resumable Uploads (Standard 5 MB), damit
   // jede einzelne HTTP-Anfrage klein bleibt (Cloudflare Free limitiert ~100 MB
-  // pro Anfrage). Maximale Gesamtgrösse pro Datei (Standard 5 GB für Videos).
+  // pro Anfrage). Maximale Gesamtgrösse pro Datei (Standard 10 GB für Videos);
+  // das begrenzt nur den Upload – auf dem Zielvolume muss entsprechend Platz
+  // sein (Original + Varianten).
   upload: {
     chunkSizeBytes: int('UPLOAD_CHUNK_SIZE_BYTES', 5 * 1024 * 1024),
-    maxFileBytes: int('UPLOAD_MAX_FILE_MB', 5120) * 1024 * 1024,
+    maxFileBytes: int('UPLOAD_MAX_FILE_MB', 10240) * 1024 * 1024,
     // Unvollständige Upload-Sessions, die älter als X Stunden sind, werden
     // automatisch aufgeräumt.
     sessionTtlHours: int('UPLOAD_SESSION_TTL_HOURS', 48),
