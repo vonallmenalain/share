@@ -46,6 +46,45 @@ async function computeReceived(upload: UploadRow): Promise<number[]> {
   return received;
 }
 
+/**
+ * Zählt nur, wie viele Chunks bereits auf der Platte liegen – mit einem
+ * einzigen readdir statt einem stat pro Chunk.
+ *
+ * Hintergrund: Eine 10-GB-Datei besteht aus 2048 Chunks. Würde nach jedem
+ * empfangenen Chunk die vollständige Prüfung (computeReceived) laufen, ergäbe
+ * das über den ganzen Upload hinweg quadratisch viele Dateisystem-Zugriffe
+ * (2048 × 2048) – auf einem NAS spürbar langsam. Für die Antwort auf einen
+ * Chunk-PUT genügt die Anzahl; die genaue Prüfung inkl. Chunk-Grössen läuft
+ * weiterhin beim Anlegen der Session und beim Abschliessen (dort wird
+ * zusätzlich die Grösse der zusammengefügten Datei verifiziert).
+ */
+async function countReceived(upload: UploadRow): Promise<number> {
+  let entries: string[];
+  try {
+    entries = await fsp.readdir(uploadDir(upload.id));
+  } catch {
+    return 0;
+  }
+  let count = 0;
+  for (const name of entries) {
+    const m = /^(\d+)\.part$/.exec(name);
+    if (!m) continue;
+    const index = Number(m[1]);
+    if (Number.isInteger(index) && index >= 0 && index < upload.total_chunks) count++;
+  }
+  return count;
+}
+
+/** Maximale Dateigrösse für Fehlermeldungen lesbar formatieren (z. B. „10 GB"). */
+function formatMaxFileSize(): string {
+  const mb = config.upload.maxFileBytes / (1024 * 1024);
+  if (mb >= 1024) {
+    const gb = mb / 1024;
+    return `${Number.isInteger(gb) ? gb : gb.toFixed(1)} GB`;
+  }
+  return `${Math.round(mb)} MB`;
+}
+
 function getUpload(uploadId: string, spaceId: string): UploadRow {
   const db = getDb();
   const upload = db.prepare('SELECT * FROM uploads WHERE id = ?').get(uploadId) as
@@ -76,8 +115,7 @@ router.post(
     if (!filename) throw new ApiError(400, 'Dateiname fehlt.');
     if (!Number.isFinite(size) || size <= 0) throw new ApiError(400, 'Ungültige Dateigrösse.');
     if (size > config.upload.maxFileBytes) {
-      const maxMb = Math.round(config.upload.maxFileBytes / (1024 * 1024));
-      throw new ApiError(413, `Datei zu gross (max. ${maxMb} MB).`);
+      throw new ApiError(413, `Datei zu gross (max. ${formatMaxFileSize()}).`);
     }
 
     const db = getDb();
@@ -205,8 +243,8 @@ router.put(
       .prepare('UPDATE uploads SET updated_at = ? WHERE id = ?')
       .run(new Date().toISOString(), upload.id);
 
-    const received = await computeReceived(upload);
-    res.json({ ok: true, received: received.length, totalChunks: upload.total_chunks });
+    const received = await countReceived(upload);
+    res.json({ ok: true, received, totalChunks: upload.total_chunks });
   }),
 );
 

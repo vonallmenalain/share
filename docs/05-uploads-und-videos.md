@@ -17,6 +17,14 @@ sondern in **Teile (Chunks) zu je 5 MB** zerlegt:
 3. **Abschliessen** – sind alle Chunks da, fügt das Backend sie zur
    Originaldatei zusammen, prüft die Gesamtgrösse und stösst die Verarbeitung an.
 
+Standardmässig sind **bis zu 10 GB pro Datei** erlaubt (`UPLOAD_MAX_FILE_MB`,
+siehe Tabelle unten). Eine 10-GB-Datei besteht bei 5-MB-Chunks aus 2048 Teilen –
+das ist gewollt: jede einzelne Anfrage bleibt klein und der Upload ist jederzeit
+fortsetzbar. Achte nur darauf, dass auf dem QNAP-Volume genug Platz ist: neben
+dem Original entstehen noch Vorschau/Poster, und während des Uploads liegen die
+Chunks zusätzlich unter `storage/tmp/uploads` (bis zur Fertigstellung also
+kurzzeitig etwa die doppelte Dateigrösse).
+
 ### Was passiert bei Abbruch / Browser schliessen?
 
 - **Einzelner Netzwerk-Fehler:** Jeder Chunk wird bei vorübergehenden Fehlern
@@ -78,7 +86,7 @@ sodass Videos zügig starten und vor-/zurückgespult werden können.
 | Variable | Standard | Bedeutung |
 |---|---|---|
 | `UPLOAD_CHUNK_SIZE_BYTES` | `5242880` (5 MB) | Grösse eines Chunks |
-| `UPLOAD_MAX_FILE_MB` | `5120` (5 GB) | Maximale Dateigrösse |
+| `UPLOAD_MAX_FILE_MB` | `10240` (10 GB) | Maximale Dateigrösse |
 | `UPLOAD_SESSION_TTL_HOURS` | `48` | Aufräumzeit unvollständiger Uploads |
 | `IMG_THUMB_MAX` / `IMG_PREVIEW_MAX` | `600` / `1800` | Kantenlänge der Bildvarianten |
 | `VIDEO_PREVIEW_MAX_HEIGHT` | `720` | Höhe der Video-Vorschau |

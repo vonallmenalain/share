@@ -63,7 +63,7 @@ Im selben Ordner eine Datei `.env` erstellen (Vorlage: `backend/.env.example`):
 PUBLIC_APP_URL=https://share.alae.app
 JWT_SECRET=<openssl rand -base64 48>
 ADMIN_KEY=<dein-geheimer-admin-schlüssel>
-UPLOAD_MAX_FILE_MB=5120
+UPLOAD_MAX_FILE_MB=10240
 COOKIE_SECURE=true
 COOKIE_SAMESITE=lax
 COOKIE_DOMAIN=.alae.app

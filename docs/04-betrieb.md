@@ -29,7 +29,7 @@ die SQLite-DB. Tipp: QNAP **Hybrid Backup Sync**.
 | „Failed to fetch“ beim Öffnen/Upload | `VITE_API_BASE_URL` (Netlify) falsch, oder `PUBLIC_APP_URL` (Backend) passt nicht → CORS. Beide prüfen, Netlify neu deployen. |
 | Upload bricht bei grossen Dateien ab | Normalerweise kein Problem (Chunks). Falls doch: `UPLOAD_CHUNK_SIZE_BYTES` ≤ 90 MB lassen (Cloudflare-Limit). Upload lässt sich fortsetzen (Datei erneut auswählen). |
 | Videos spielen nicht ab | Im Container-Log steht „ffmpeg NICHT gefunden“. Offizielles Image nutzen (enthält ffmpeg) oder `VIDEO_PROCESSING=true` lassen. Download des Originals geht immer. |
-| Datei zu gross | `UPLOAD_MAX_FILE_MB` erhöhen (Standard 5120 = 5 GB) und Backend neu starten. |
+| Datei zu gross | `UPLOAD_MAX_FILE_MB` erhöhen (Standard 10240 = 10 GB) und Backend neu starten. |
 | „Zugang abgelaufen“ | Der Bereichs-Token ist abgelaufen (`ACCESS_TOKEN_TTL_DAYS`, Standard 60 Tage). Einfach Link erneut öffnen / Passwort erneut eingeben. |
 | Neue Bereiche lassen sich nicht anlegen | Falscher `ADMIN_KEY`. Wert in `.env` prüfen. |
 
