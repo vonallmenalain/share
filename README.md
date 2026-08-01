@@ -139,6 +139,13 @@ Auswahl wird nur **lokal im Browser** gespeichert. Das ist bewusst ein
 **Vertrauensmodell für Familie &amp; Freunde** – keine echte Benutzer-
 Authentifizierung.
 
+Beim Erstellen eines Bereichs (und später im Adminbereich) lässt sich das auch
+ganz abschalten: Mit **„Nicht nach einem Namen fragen“** landet man nach dem
+Anklicken des Links **direkt** im Bereich – z. B. auf der Fotoseite, ohne
+„Wer bist du?“ und ohne Namensfeld. Beiträge erscheinen dann unter dem Namen,
+den das Gerät bereits kennt, sonst als „Gast“; ein Passwort (falls gesetzt)
+wird weiterhin abgefragt.
+
 Alte geteilte Links, installierte PWAs und `/s/:slug` (öffnet weiterhin direkt
 die Fotogalerie) funktionieren unverändert.
 

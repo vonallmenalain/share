@@ -608,6 +608,7 @@ function AdminParticipantsPanel({
   onUpdateSpace: (space: Space) => void;
 }) {
   const [requirePin, setRequirePin] = useState(space.requireParticipantPin);
+  const [skipPrompt, setSkipPrompt] = useState(space.skipIdentityPrompt);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [policyMsg, setPolicyMsg] = useState('');
 
@@ -620,7 +621,8 @@ function AdminParticipantsPanel({
 
   useEffect(() => {
     setRequirePin(space.requireParticipantPin);
-  }, [space.requireParticipantPin]);
+    setSkipPrompt(space.skipIdentityPrompt);
+  }, [space.requireParticipantPin, space.skipIdentityPrompt]);
 
   const savePolicy = async () => {
     setSavingPolicy(true);
@@ -629,7 +631,10 @@ function AdminParticipantsPanel({
       const res = await api<{ space: Space }>(`/api/spaces/${space.id}/participant-policy`, {
         method: 'PATCH',
         adminKey,
-        body: { requireParticipantPin: requirePin },
+        body: {
+          requireParticipantPin: skipPrompt ? false : requirePin,
+          skipIdentityPrompt: skipPrompt,
+        },
       });
       onUpdateSpace(res.space);
       setPolicyMsg('Gespeichert ✓');
@@ -774,13 +779,40 @@ function AdminParticipantsPanel({
     <div className="admin-module-panel">
       <div className="admin-module-title">Wer bist du? &amp; Code (PIN)</div>
       <label className="checkbox-line">
-        <input type="checkbox" checked={requirePin} onChange={(e) => setRequirePin(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={requirePin}
+          disabled={skipPrompt}
+          onChange={(e) => setRequirePin(e.target.checked)}
+        />
         Code für neue Identitäten in diesem Bereich zur Pflicht machen
       </label>
+      <label className="checkbox-line" style={{ marginTop: 6 }}>
+        <input
+          type="checkbox"
+          checked={skipPrompt}
+          onChange={(e) => {
+            setSkipPrompt(e.target.checked);
+            if (e.target.checked) setRequirePin(false);
+          }}
+        />
+        Nicht nach einem Namen fragen
+      </label>
+      <p className="hint" style={{ marginTop: 6 }}>
+        Ohne Namensabfrage landet man nach dem Anklicken des Links direkt im Bereich (z.&nbsp;B. in
+        der Galerie) – ohne „Wer bist du?“ und ohne Namensfeld. Es wird dann niemand mehr angelegt;
+        Beiträge erscheinen unter dem Namen, den das Gerät bereits kennt, sonst als „Gast“. Ein
+        Passwort (falls gesetzt) wird weiterhin abgefragt. Bereits vorhandene Identitäten bleiben
+        erhalten und tauchen wieder auf, sobald die Option deaktiviert wird.
+      </p>
       <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 10 }}>
         <button
           className="btn btn-sm btn-primary"
-          disabled={savingPolicy || requirePin === space.requireParticipantPin}
+          disabled={
+            savingPolicy ||
+            (requirePin === space.requireParticipantPin &&
+              skipPrompt === space.skipIdentityPrompt)
+          }
           onClick={savePolicy}
         >
           {savingPolicy ? 'Speichere…' : 'Einstellung speichern'}

@@ -9,7 +9,6 @@ import { shareItems } from '../lib/share';
 import { api, fileUrl, Item } from '../api/client';
 import { useUploads } from '../context/Uploads';
 import { useSpaceSessionContext } from '../context/SpaceSessionContext';
-import { nameStore } from '../lib/storage';
 import { dayKey, formatDayHeading } from '../lib/format';
 
 type View = 'gallery' | 'favorites' | 'people' | 'time';
@@ -24,8 +23,15 @@ const VIEW_OPTIONS: { key: View; label: string }[] = [
 export default function Space() {
   const navigate = useNavigate();
   const uploads = useUploads();
-  const { slug, space, token, name, setName, chromeHidden, setChromeHidden } =
-    useSpaceSessionContext();
+  const {
+    slug,
+    space,
+    token,
+    setName,
+    uploaderName: sessionUploaderName,
+    chromeHidden,
+    setChromeHidden,
+  } = useSpaceSessionContext();
   const uploadHref = `/s/${slug}/upload`;
   const goUpload = useCallback(() => navigate(uploadHref), [navigate, uploadHref]);
 
@@ -115,7 +121,9 @@ export default function Space() {
   const startUpload = useCallback(
     (files: File[]) => {
       if (!space || !token || files.length === 0) return;
-      let uploaderName = name.trim() || nameStore.get();
+      // In Bereichen ohne Namensabfrage steht hier bereits ein Name („Gast")
+      // bereit – dort wird bewusst nicht mehr nachgefragt.
+      let uploaderName = sessionUploaderName;
       if (!uploaderName) {
         uploaderName = (window.prompt('Dein Name (wird bei deinen Medien angezeigt):') || '').trim();
         if (!uploaderName) return;
@@ -123,7 +131,7 @@ export default function Space() {
       }
       uploads.addFiles(files, { spaceId: space.id, token, uploaderName });
     },
-    [space, token, name, uploads, setName],
+    [space, token, sessionUploaderName, uploads, setName],
   );
 
   const onDrop = (e: React.DragEvent) => {
@@ -248,7 +256,7 @@ export default function Space() {
           await api(`/api/items/${id}/delete`, {
             method: 'POST',
             token,
-            uploaderName: name || undefined,
+            uploaderName: sessionUploaderName || undefined,
           });
           ok.push(id);
         } catch {
@@ -264,7 +272,7 @@ export default function Space() {
         );
       }
     },
-    [token, name],
+    [token, sessionUploaderName],
   );
 
   const deleteSelected = async () => {
@@ -298,13 +306,13 @@ export default function Space() {
           method: 'POST',
           token,
           body: { favorite: next },
-          uploaderName: name || undefined,
+          uploaderName: sessionUploaderName || undefined,
         });
       } catch {
         setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, favorite: !next } : i)));
       }
     },
-    [token, name],
+    [token, sessionUploaderName],
   );
 
   const handleThumbUpdated = useCallback((updated: Item) => {
@@ -615,7 +623,7 @@ export default function Space() {
           items={flatOrder}
           index={lightboxIndex}
           token={token}
-          currentName={name}
+          currentName={sessionUploaderName}
           onClose={() => setLightboxId(null)}
           onNavigate={(i) => setLightboxId(flatOrder[i]?.id ?? null)}
           onDownload={downloadOriginal}

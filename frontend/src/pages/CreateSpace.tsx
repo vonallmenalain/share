@@ -28,6 +28,9 @@ export default function CreateSpace() {
   const [modules, setModules] = useState<Set<ModuleKey>>(new Set(['photos']));
   const [currency, setCurrency] = useState('CHF');
   const [requireParticipantPin, setRequireParticipantPin] = useState(false);
+  // „Nicht nach einem Namen fragen": schliesst den Pflicht-Code aus – ohne
+  // Identität gibt es nichts, was ein Code schützen könnte.
+  const [skipIdentityPrompt, setSkipIdentityPrompt] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState<Space | null>(null);
@@ -61,7 +64,8 @@ export default function CreateSpace() {
           password: password || undefined,
           modules: Array.from(modules),
           financeCurrency: modules.has('finance') ? currency : undefined,
-          requireParticipantPin,
+          requireParticipantPin: skipIdentityPrompt ? false : requireParticipantPin,
+          skipIdentityPrompt,
         },
       });
       adminKeyStore.set(adminKey);
@@ -166,6 +170,7 @@ export default function CreateSpace() {
                     <input
                       type="checkbox"
                       checked={requireParticipantPin}
+                      disabled={skipIdentityPrompt}
                       onChange={(e) => setRequireParticipantPin(e.target.checked)}
                     />
                     Code (PIN) für „Wer bist du?" zur Pflicht machen
@@ -177,6 +182,38 @@ export default function CreateSpace() {
                     Gerät sicher wieder verwenden. Der Code wird auf dem Gerät gespeichert und muss
                     normalerweise nur einmal eingegeben werden. Ohne diese Option bleibt der Code
                     weiterhin als freiwilliger Schutz verfügbar.
+                    {skipIdentityPrompt && (
+                      <>
+                        {' '}
+                        <strong>
+                          Nicht verfügbar, solange gar nicht nach einem Namen gefragt wird.
+                        </strong>
+                      </>
+                    )}
+                  </p>
+                </div>
+
+                <div className="field">
+                  <label className="checkbox-line">
+                    <input
+                      type="checkbox"
+                      checked={skipIdentityPrompt}
+                      onChange={(e) => {
+                        setSkipIdentityPrompt(e.target.checked);
+                        // Ohne Identität gibt es keinen Code, der Pflicht sein
+                        // könnte – die andere Option wird deshalb abgewählt.
+                        if (e.target.checked) setRequireParticipantPin(false);
+                      }}
+                    />
+                    Nicht nach einem Namen fragen
+                  </label>
+                  <p className="hint" style={{ marginTop: 6 }}>
+                    Wer den Link anklickt, landet sofort im Bereich – z.&nbsp;B. direkt auf der
+                    Fotoseite, ohne den Bildschirm „Wer bist du?" und ohne Namensfeld. Es wird dabei
+                    niemand angelegt: Beiträge erscheinen unter dem Namen, den das Gerät bereits
+                    kennt, sonst als „Gast". Ein Passwort (falls gesetzt) wird weiterhin abgefragt.
+                    Praktisch für Bereiche zum reinen Anschauen oder für Personen, die möglichst
+                    wenig gefragt werden sollen.
                   </p>
                 </div>
 

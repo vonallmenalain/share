@@ -70,6 +70,8 @@ function publicSpace(space: SpaceRow) {
     financeCurrency: modules.includes('finance') ? financeCurrencyOf(space.id) : null,
     // Ist in diesem Bereich ein Code (PIN) für Teilnehmer-Identitäten Pflicht?
     requireParticipantPin: space.require_participant_pin === 1,
+    // Wird in diesem Bereich gar nicht nach einem Namen gefragt?
+    skipIdentityPrompt: space.skip_identity_prompt === 1,
   };
 }
 
@@ -100,7 +102,11 @@ router.post(
     // Beim Anlegen festlegen, ob ein Code (PIN) für Teilnehmer-Identitäten in
     // diesem Bereich Pflicht ist. Als Option (freiwilliger Code) gibt es sie
     // immer – hier wird nur bestimmt, ob sie beim Anlegen erzwungen wird.
-    const requireParticipantPin = toBool(req.body?.requireParticipantPin);
+    // Wird gar nicht nach einem Namen gefragt (skipIdentityPrompt), gibt es
+    // keine Identität, an der ein Code hängen könnte – die beiden Optionen
+    // schliessen sich also aus.
+    const skipIdentityPrompt = toBool(req.body?.skipIdentityPrompt);
+    const requireParticipantPin = !skipIdentityPrompt && toBool(req.body?.requireParticipantPin);
 
     const db = getDb();
     // Slug aus Name + kurzem Zufallsteil, garantiert eindeutig.
@@ -122,9 +128,17 @@ router.post(
     // Space, Module und (falls nötig) Finanzkonfiguration in einer Transaktion.
     const create = db.transaction(() => {
       db.prepare(
-        `INSERT INTO spaces (id, slug, name, password_hash, require_participant_pin, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(id, slug, name, passwordHash, requireParticipantPin ? 1 : 0, createdAt);
+        `INSERT INTO spaces (id, slug, name, password_hash, require_participant_pin, skip_identity_prompt, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        id,
+        slug,
+        name,
+        passwordHash,
+        requireParticipantPin ? 1 : 0,
+        skipIdentityPrompt ? 1 : 0,
+        createdAt,
+      );
       setEnabledModules(id, modules, db);
       if (modules.includes('finance')) {
         db.prepare(
@@ -455,11 +469,17 @@ router.patch(
 );
 
 /**
- * Admin: legt fest, ob ein Code (PIN) für Teilnehmer-Identitäten in diesem
- * Bereich Pflicht ist. Als Option (freiwilliger Schutz-Code) steht der Code
- * unabhängig davon immer zur Verfügung – diese Einstellung erzwingt ihn nur
- * beim Anlegen einer neuen Identität bzw. beim erneuten Auswählen einer
- * Identität ohne Code (z. B. nach einem Zurücksetzen durch den Admin).
+ * Admin: legt fest, wie in diesem Bereich mit Identitäten umgegangen wird.
+ *
+ * - `requireParticipantPin`: ob ein Code (PIN) für Teilnehmer-Identitäten
+ *   Pflicht ist. Als Option (freiwilliger Schutz-Code) steht der Code
+ *   unabhängig davon immer zur Verfügung – diese Einstellung erzwingt ihn nur
+ *   beim Anlegen einer neuen Identität bzw. beim erneuten Auswählen einer
+ *   Identität ohne Code (z. B. nach einem Zurücksetzen durch den Admin).
+ * - `skipIdentityPrompt`: gar nicht nach einem Namen fragen – wer den Link
+ *   öffnet, landet direkt im Bereich. Beides zusammen ergibt keinen Sinn
+ *   (ohne Identität gibt es keinen Code), daher gewinnt hier
+ *   `skipIdentityPrompt`. Nicht mitgeschickte Felder bleiben unverändert.
  */
 router.patch(
   '/:id/participant-policy',
@@ -471,11 +491,18 @@ router.patch(
       | SpaceRow
       | undefined;
     if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
-    const requireParticipantPin = toBool(req.body?.requireParticipantPin);
-    db.prepare('UPDATE spaces SET require_participant_pin = ? WHERE id = ?').run(
-      requireParticipantPin ? 1 : 0,
-      space.id,
-    );
+    const skipIdentityPrompt =
+      req.body?.skipIdentityPrompt === undefined
+        ? space.skip_identity_prompt === 1
+        : toBool(req.body.skipIdentityPrompt);
+    const wantPin =
+      req.body?.requireParticipantPin === undefined
+        ? space.require_participant_pin === 1
+        : toBool(req.body.requireParticipantPin);
+    const requireParticipantPin = !skipIdentityPrompt && wantPin;
+    db.prepare(
+      'UPDATE spaces SET require_participant_pin = ?, skip_identity_prompt = ? WHERE id = ?',
+    ).run(requireParticipantPin ? 1 : 0, skipIdentityPrompt ? 1 : 0, space.id);
     const updated = db.prepare('SELECT * FROM spaces WHERE id = ?').get(space.id) as SpaceRow;
     res.json({ space: publicSpace(updated) });
   }),

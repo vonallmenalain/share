@@ -71,6 +71,30 @@ echte Benutzer-Authentifizierung. Teilnehmernamen sind pro Bereich (ohne
 Beachtung der Gross-/Kleinschreibung) eindeutig. Verwendete Teilnehmer werden
 nicht gelöscht, sondern nur **archiviert**.
 
+### Ohne Namensabfrage („Nicht nach einem Namen fragen“)
+
+Beim Erstellen eines Bereichs (und später im Adminbereich) lässt sich die
+Namensabfrage komplett abschalten (`spaces.skip_identity_prompt`, im API als
+`skipIdentityPrompt`). Dann gilt für diesen Bereich:
+
+- Nach dem Anklicken des Links geht es **direkt** ins Modul (z. B. in die
+  Galerie) – ohne „Wer bist du?“ und ohne Namensfeld im Betreten-Formular. Ein
+  **Passwort** wird weiterhin abgefragt; ohne Passwort entfällt jeder
+  Zwischenschritt (`SpaceSessionContext` holt den Access-Token im Hintergrund).
+- Es wird **keine Identität angelegt** und keine automatisch aufgelöst
+  (`useParticipants` überspringt die Auflösung). Bereits vorhandene
+  Teilnehmer bleiben erhalten und erscheinen wieder, sobald die Option
+  deaktiviert wird.
+- Beiträge (z. B. Uploads) laufen unter dem Namen, den das Gerät bereits kennt
+  (`identityStore`), sonst unter **„Gast“** – der frühere Namens-Dialog vor dem
+  ersten Upload entfällt hier (siehe `uploaderName` im `SpaceSessionContext`).
+- Die Option schliesst den **Pflicht-Code** aus: Ohne Identität gibt es nichts,
+  was ein Code schützen könnte. Das Backend setzt `require_participant_pin`
+  deshalb auf `0`, sobald `skip_identity_prompt` gesetzt ist.
+
+Bestehende Bereiche sind davon nicht betroffen: Die Spalte wird per Migration
+mit `0` ergänzt, es bleibt also beim bisherigen Verhalten.
+
 ### Schutz-Code (PIN)
 
 Jede Identität kann freiwillig mit einem **Code (PIN, 4–8 Ziffern)** geschützt
@@ -80,8 +104,11 @@ Auswahl, der Code wird nur einmal benötigt). Beim Erstellen eines Bereichs
 lässt sich zusätzlich festlegen, dass der Code **Pflicht** ist
 (`spaces.require_participant_pin`) – dann muss beim Anlegen einer neuen
 Identität (oder beim erneuten Auswählen einer Identität ohne Code) zwingend
-einer vergeben werden. Diese Einstellung lässt sich im Adminbereich jederzeit
-ändern (`PATCH /api/spaces/:id/participant-policy`).
+einer vergeben werden. Diese Einstellung lässt sich – wie „Nicht nach einem
+Namen fragen“ – im Adminbereich jederzeit ändern
+(`PATCH /api/spaces/:id/participant-policy`, Body `{ requireParticipantPin?:
+boolean, skipIdentityPrompt?: boolean }`; nicht mitgeschickte Felder bleiben
+unverändert).
 
 **Code vergessen?** Da der Code nicht rückwärts auflösbar ist (bcrypt-Hash),
 kann er nicht wiederhergestellt werden. Stattdessen kann der Administrator den
