@@ -7,7 +7,7 @@ import { uploadNoteImage } from '../../lib/uploader';
 import { nameStore } from '../../lib/storage';
 
 export default function NoteEditorPage() {
-  const { slug, token, name, identity } = useSpaceSessionContext();
+  const { slug, token, uploaderName: sessionUploaderName, identity } = useSpaceSessionContext();
   const { noteId = '' } = useParams();
   const navigate = useNavigate();
   const participantId = identity.currentId ?? undefined;
@@ -191,7 +191,7 @@ export default function NoteEditorPage() {
 
   const addImages = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const uploaderName = name.trim() || nameStore.get() || 'Unbekannt';
+    const uploaderName = sessionUploaderName || nameStore.get() || 'Unbekannt';
     setUploading(true);
     try {
       for (const file of Array.from(files)) {

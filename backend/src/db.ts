@@ -23,6 +23,7 @@ export function initDb(): Database.Database {
       name                     TEXT NOT NULL,
       password_hash            TEXT,
       require_participant_pin  INTEGER NOT NULL DEFAULT 0,
+      skip_identity_prompt     INTEGER NOT NULL DEFAULT 0,
       created_at               TEXT NOT NULL
     );
 
@@ -413,6 +414,18 @@ function migrate(database: Database.Database) {
     'require_participant_pin',
     `require_participant_pin INTEGER NOT NULL DEFAULT 0`,
   );
+
+  // „Nicht nach einem Namen fragen": Ist die Option aktiv, landet man nach dem
+  // Anklicken des Links direkt im Bereich (z. B. in der Galerie) – ohne den
+  // Bildschirm „Wer bist du?" und ohne Namensfeld beim Betreten. Es wird dann
+  // auch keine Identität angelegt; ein allfälliges Passwort wird weiterhin
+  // abgefragt. Nachträglich ergänzt, daher per Migration.
+  addColumn(
+    'spaces',
+    spaceCols,
+    'skip_identity_prompt',
+    `skip_identity_prompt INTEGER NOT NULL DEFAULT 0`,
+  );
 }
 
 export function getDb(): Database.Database {
@@ -427,6 +440,8 @@ export interface SpaceRow {
   password_hash: string | null;
   /** Ist der Teilnehmer-Code (PIN) in diesem Bereich Pflicht? 0 = nein, 1 = ja. */
   require_participant_pin: number;
+  /** Ganz ohne Namensabfrage („Wer bist du?") betreten? 0 = nein, 1 = ja. */
+  skip_identity_prompt: number;
   created_at: string;
 }
 

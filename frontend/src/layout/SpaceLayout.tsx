@@ -104,12 +104,12 @@ function SpaceShell() {
         <div className="panel">
           <span className="hero-badge">{space?.name ?? 'Bereich'}</span>
           <h1>Bereich betreten</h1>
-          {!gate.hasKnownIdentity && (
+          {gate.needsName && (
             <p className="sub">Gib deinen Namen ein, damit alle sehen, von wem die Beiträge stammen.</p>
           )}
           {gate.error && <div className="error-box">{gate.error}</div>}
           <form onSubmit={enter}>
-            {!gate.hasKnownIdentity && (
+            {gate.needsName && (
               <div className="field">
                 <label className="label">Dein Name</label>
                 <input
@@ -130,7 +130,7 @@ function SpaceShell() {
                   type="password"
                   value={gate.password}
                   onChange={(e) => gate.setPassword(e.target.value)}
-                  autoFocus={gate.hasKnownIdentity}
+                  autoFocus={!gate.needsName}
                 />
                 <p className="hint" style={{ marginTop: 6 }}>
                   Auf den Bereich kann nur mit einem Passwort des Erstellers zugegriffen werden.
@@ -155,14 +155,24 @@ function SpaceShell() {
   // Aktiv nachgefragt wird nur, wenn das nicht eindeutig gelingt (z. B. noch
   // gar keine Identität vorhanden, oder der Name ist hier bereits mit einem
   // anderen Code geschützt). Während die Auflösung läuft (identity.resolving)
-  // soll diese Abfrage nicht kurz aufblitzen.
+  // soll diese Abfrage nicht kurz aufblitzen. Fragt der Bereich bewusst gar
+  // nicht nach einem Namen (identity.skipPrompt), entfällt jede dieser
+  // Zwischenansichten – man landet direkt im Modul.
   const needsIdentity =
-    !identity.loading && !identity.resolving && !identity.current && !identity.needsPin;
+    !identity.skipPrompt &&
+    !identity.loading &&
+    !identity.resolving &&
+    !identity.current &&
+    !identity.needsPin;
   // Ist der Code (PIN) in diesem Bereich Pflicht, aber die aktuelle Person
   // hat (noch) keinen – z. B. weil der Administrator ihn zurückgesetzt hat
   // („Code vergessen?") – muss zuerst ein neuer Code vergeben werden.
   const needsPinSetup =
-    !identity.loading && !!identity.current && identity.requirePin && !identity.current.hasPin;
+    !identity.skipPrompt &&
+    !identity.loading &&
+    !!identity.current &&
+    identity.requirePin &&
+    !identity.current.hasPin;
 
   const shareSpaceLink = async () => {
     const url = `${window.location.origin}/s/${slug}`;

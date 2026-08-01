@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { api, ApiError, ModuleKey, Participant, Space as SpaceType } from '../api/client';
 import { nameStore, tokenStore, visitedSpacesStore, VisitedSpace } from '../lib/storage';
-import { useParticipants } from '../lib/useParticipants';
+import { GUEST_NAME, useParticipants } from '../lib/useParticipants';
 
 export type SessionPhase = 'loading' | 'gate' | 'ready' | 'notfound';
 
@@ -27,6 +27,12 @@ export interface IdentityValue {
   error: string | null;
   /** Ist in diesem Bereich ein Code (PIN) für Identitäten Pflicht? */
   requirePin: boolean;
+  /**
+   * Wird in diesem Bereich bewusst gar nicht nach einem Namen gefragt? Dann
+   * erscheint weder „Wer bist du?" noch eine Code-Abfrage – man landet direkt
+   * im Bereich, und es wird auch keine Identität angelegt.
+   */
+  skipPrompt: boolean;
   /**
    * Läuft im Hintergrund gerade die automatische Auflösung/Anlage der
    * geräteweiten Identität für diesen Bereich? Solange das der Fall ist,
@@ -60,6 +66,13 @@ export interface SpaceSessionValue {
   token: string;
   name: string;
   setName: (n: string) => void;
+  /**
+   * Name, unter dem Beiträge (z. B. Uploads) dieses Geräts erscheinen sollen.
+   * Leer, solange noch kein Name bekannt ist – dann fragen die Module selbst
+   * nach. In Bereichen ohne Namensabfrage wird nie gefragt: dort ist es der
+   * bereits bekannte Name oder „Gast".
+   */
+  uploaderName: string;
   gate: {
     password: string;
     setPassword: (p: string) => void;
@@ -67,6 +80,12 @@ export interface SpaceSessionValue {
     busy: boolean;
     /** Ist die geräteweite Identität bereits bekannt (Name muss nicht mehr erfragt werden)? */
     hasKnownIdentity: boolean;
+    /**
+     * Soll beim Betreten überhaupt nach einem Namen gefragt werden? Falsch,
+     * sobald die Identität bereits bekannt ist – oder wenn dieser Bereich gar
+     * nicht nach einem Namen fragt (siehe `skipIdentityPrompt`).
+     */
+    needsName: boolean;
   };
   enter: (e?: React.FormEvent) => Promise<void>;
   /** Galerie-„Vollbildmodus": blendet TopBar & Navigation beim Scrollen aus. */
@@ -139,7 +158,16 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
   // „Wer bist du?" – geräteweit für ALLE Bereiche, damit die Auswahl nur
   // einmal pro Gerät nötig ist, unabhängig davon, welcher Bereich oder
   // welches Modul zuerst geöffnet wird (siehe useParticipants).
-  const participantState = useParticipants(slug, token, !!space?.requireParticipantPin);
+  // Fragt dieser Bereich gar nicht nach einem Namen, bleibt die Identität
+  // bewusst leer: keine „Wer bist du?"-Abfrage, keine automatische Anlage und
+  // damit auch kein Code – man landet direkt im Bereich.
+  const skipIdentityPrompt = !!space?.skipIdentityPrompt;
+  const participantState = useParticipants(
+    slug,
+    token,
+    !skipIdentityPrompt && !!space?.requireParticipantPin,
+    skipIdentityPrompt,
+  );
 
   const setName = useCallback((n: string) => {
     setNameState(n);
@@ -177,15 +205,17 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
 
         // Ist die geräteweite Identität bereits bekannt und braucht dieser
         // Bereich kein Passwort, kann der Zugang vollständig unsichtbar im
-        // Hintergrund erfolgen – ohne jede Rückfrage. Nur wenn ein Passwort
-        // nötig ist oder es noch gar keine Identität gibt (allererster
-        // geöffneter Link), wird das Betreten-Formular gezeigt.
+        // Hintergrund erfolgen – ohne jede Rückfrage. Dasselbe gilt für
+        // Bereiche, die gar nicht nach einem Namen fragen: dort ist ohne
+        // Passwort nie ein Zwischenschritt nötig. Nur wenn ein Passwort nötig
+        // ist oder es noch gar keine Identität gibt (allererster geöffneter
+        // Link), wird das Betreten-Formular gezeigt.
         const knownName = nameStore.get().trim();
-        if (!res.space.hasPassword && knownName) {
+        if (!res.space.hasPassword && (knownName || res.space.skipIdentityPrompt)) {
           try {
             const accessRes = await api<{ space: SpaceType; accessToken: string }>(
               `/api/spaces/by-slug/${encodeURIComponent(slug)}/access`,
-              { method: 'POST', body: { name: knownName } },
+              { method: 'POST', body: { name: knownName || undefined } },
             );
             if (cancelled) return;
             tokenStore.set(slug, accessRes.accessToken);
@@ -230,7 +260,9 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       e?.preventDefault();
       setGateError('');
       const trimmedName = name.trim();
-      if (!trimmedName) {
+      // In Bereichen ohne Namensabfrage wird hier höchstens noch das Passwort
+      // verlangt – ein Name ist dann keine Bedingung fürs Betreten.
+      if (!trimmedName && !skipIdentityPrompt) {
         setGateError('Bitte deinen Namen eingeben.');
         return;
       }
@@ -238,13 +270,16 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       try {
         const res = await api<{ space: SpaceType; accessToken: string }>(
           `/api/spaces/by-slug/${encodeURIComponent(slug)}/access`,
-          { method: 'POST', body: { password: gatePassword || undefined, name: trimmedName } },
+          {
+            method: 'POST',
+            body: { password: gatePassword || undefined, name: trimmedName || undefined },
+          },
         );
         tokenStore.set(slug, res.accessToken);
         // Der Name wird geräteweit gespeichert (siehe identityStore) – ein
         // Code (PIN) wird erst danach erfragt, falls dieser Bereich ihn
         // zwingend verlangt (siehe needsPin in useParticipants).
-        nameStore.set(trimmedName);
+        if (trimmedName) nameStore.set(trimmedName);
         setSpace(res.space);
         setToken(res.accessToken);
         setPhase('ready');
@@ -254,7 +289,7 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
         setGateBusy(false);
       }
     },
-    [slug, gatePassword, name],
+    [slug, gatePassword, name, skipIdentityPrompt],
   );
 
   // Der frei wählbare Anzeigename (für Modul-Aktionen ausserhalb der
@@ -268,6 +303,15 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [participantState.current]);
 
+  // Fragt der Bereich nicht nach Namen, darf auch kein Modul mehr danach
+  // fragen (z. B. der frühere Namens-Dialog vor dem ersten Upload) – dort
+  // erscheinen Beiträge unter dem geräteweit bekannten Namen oder als „Gast".
+  const uploaderName = useMemo(() => {
+    const known = name.trim() || nameStore.get().trim();
+    if (known) return known;
+    return skipIdentityPrompt ? GUEST_NAME : '';
+  }, [name, skipIdentityPrompt]);
+
   const hasModule = useCallback(
     (key: ModuleKey) => (key === 'photos' ? true : !!space?.modules?.includes(key)),
     [space],
@@ -280,7 +324,8 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       currentId: participantState.currentId,
       loading: participantState.loading,
       error: participantState.error,
-      requirePin: !!space?.requireParticipantPin,
+      requirePin: !skipIdentityPrompt && !!space?.requireParticipantPin,
+      skipPrompt: skipIdentityPrompt,
       resolving: participantState.resolving,
       resolveError: participantState.resolveError,
       clearResolveError: participantState.clearResolveError,
@@ -311,6 +356,7 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       participantState.rename,
       participantState.switchIdentity,
       space?.requireParticipantPin,
+      skipIdentityPrompt,
     ],
   );
 
@@ -322,12 +368,14 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       token,
       name,
       setName,
+      uploaderName,
       gate: {
         password: gatePassword,
         setPassword: setGatePassword,
         error: gateError,
         busy: gateBusy,
         hasKnownIdentity: gateHasKnownIdentity,
+        needsName: !gateHasKnownIdentity && !skipIdentityPrompt,
       },
       enter,
       chromeHidden,
@@ -344,10 +392,12 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       token,
       name,
       setName,
+      uploaderName,
       gatePassword,
       gateError,
       gateBusy,
       gateHasKnownIdentity,
+      skipIdentityPrompt,
       enter,
       chromeHidden,
       visitedSpaces,

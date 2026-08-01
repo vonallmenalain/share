@@ -102,6 +102,12 @@ export interface Space {
   financeCurrency?: string | null;
   /** Ist ein Code (PIN) für Teilnehmer-Identitäten in diesem Bereich Pflicht? */
   requireParticipantPin: boolean;
+  /**
+   * Wird in diesem Bereich gar nicht nach einem Namen gefragt? Dann landet man
+   * nach dem Anklicken des Links direkt im Bereich (z. B. in der Galerie) –
+   * ohne „Wer bist du?" und ohne Namensfeld beim Betreten.
+   */
+  skipIdentityPrompt: boolean;
   itemCount?: number;
   deletedCount?: number;
   accessCount?: number;

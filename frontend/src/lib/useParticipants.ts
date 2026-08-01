@@ -18,8 +18,18 @@ import { identityStore, participantStore } from './storage';
  * dass andere in ihrem/seinem Namen etwas erfassen, kann der eigenen
  * Identität optional einen Code (PIN) geben (siehe verifyPin/setPin) – dann
  * ist die Auswahl dieser Person nur mit dem richtigen Code möglich.
+ *
+ * Mit `skipIdentity` (Bereichseinstellung „Nicht nach einem Namen fragen")
+ * entfällt das Ganze: Es wird weder nachgefragt noch automatisch eine
+ * Identität angelegt – die Teilnehmerliste wird nur noch geladen, damit
+ * bestehende Namen (z. B. in den Finanzen) weiterhin angezeigt werden können.
  */
-export function useParticipants(slug: string, token: string, requirePin: boolean) {
+export function useParticipants(
+  slug: string,
+  token: string,
+  requirePin: boolean,
+  skipIdentity = false,
+) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(() => participantStore.get(slug));
   const [loading, setLoading] = useState(true);
@@ -231,6 +241,9 @@ export function useParticipants(slug: string, token: string, requirePin: boolean
   // Identität, bleibt die gewohnte Auswahl („Wer bist du?") als Rückfall.
   useEffect(() => {
     if (!token || loading) return;
+    // Bereiche ohne Namensabfrage bleiben bewusst ohne Identität – hier darf
+    // auch im Hintergrund keine angelegt werden.
+    if (skipIdentity) return;
     if (currentId && participants.some((p) => p.id === currentId && !p.archived)) return;
     const identity = identityStore.get();
     if (!identity?.name) return; // noch keine Identität -> Aufrufer zeigt Erfassung
@@ -284,7 +297,7 @@ export function useParticipants(slug: string, token: string, requirePin: boolean
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, loading, participants, currentId, requirePin, slug]);
+  }, [token, loading, participants, currentId, requirePin, skipIdentity, slug]);
 
   const current = participants.find((p) => p.id === currentId) ?? null;
 
@@ -308,6 +321,14 @@ export function useParticipants(slug: string, token: string, requirePin: boolean
     rename,
   };
 }
+
+/**
+ * Anzeigename für Beiträge, wenn es (bewusst) keinen Namen gibt – nämlich in
+ * Bereichen mit der Einstellung „Nicht nach einem Namen fragen". Dort wird
+ * niemand mehr nach einem Namen gefragt; kennt das Gerät auch keinen, erscheinen
+ * Uploads unter diesem neutralen Namen.
+ */
+export const GUEST_NAME = 'Gast';
 
 export function participantName(participants: Participant[], id: string | null | undefined): string {
   if (!id) return 'Unbekannt';

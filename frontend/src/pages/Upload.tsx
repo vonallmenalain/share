@@ -34,7 +34,7 @@ const isUploaded = (s: string) => s === 'processing' || s === 'done';
  */
 export default function UploadPage() {
   const uploads = useUploads();
-  const { slug, space, token, name, setName } = useSpaceSessionContext();
+  const { slug, space, token, uploaderName: sessionUploaderName, setName } = useSpaceSessionContext();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -42,7 +42,9 @@ export default function UploadPage() {
   const startUpload = useCallback(
     (files: File[]) => {
       if (!space || !token || files.length === 0) return;
-      let uploaderName = name.trim() || nameStore.get();
+      // In Bereichen ohne Namensabfrage steht hier bereits ein Name („Gast")
+      // bereit – dort wird bewusst nicht mehr nachgefragt.
+      let uploaderName = sessionUploaderName;
       if (!uploaderName) {
         uploaderName = (window.prompt('Dein Name (wird bei deinen Medien angezeigt):') || '').trim();
         if (!uploaderName) return;
@@ -51,7 +53,7 @@ export default function UploadPage() {
       }
       uploads.addFiles(files, { spaceId: space.id, token, uploaderName });
     },
-    [space, token, name, uploads, setName],
+    [space, token, sessionUploaderName, uploads, setName],
   );
 
   const pick = () => fileInputRef.current?.click();
@@ -137,7 +139,8 @@ export default function UploadPage() {
           <h1 className="space-title">Hochladen</h1>
           <div className="space-meta">
             {space?.name}
-            {space?.hasPassword ? ' · 🔒 passwortgeschützt' : ''} · als <strong>{name || 'Gast'}</strong>
+            {space?.hasPassword ? ' · 🔒 passwortgeschützt' : ''} · als{' '}
+            <strong>{sessionUploaderName || 'Gast'}</strong>
           </div>
         </div>
 
