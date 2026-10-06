@@ -7,7 +7,7 @@ import { formatBytes } from '../../lib/format';
 import { isDocumentsOnly, shareLink, spaceShareUrl } from '../../lib/spaceLinks';
 import DocViewer from './DocViewer';
 import { PlayerBar, useAudioPlayer } from './AudioPlayer';
-import { VIEWABLE, docMeta, docTitle, downloadUrl, sortFilesByName } from './docUtils';
+import { VIEWABLE, docMeta, docTitle, downloadUrl, sortFilesByName, zipUrl } from './docUtils';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -484,6 +484,17 @@ export default function DocumentsPage() {
 
       <header className="doc-head">
         <h1 className="space-title">{space?.name}</h1>
+        {all.length > 0 && (
+          <a
+            className="btn btn-sm doc-zip"
+            href={zipUrl(token)}
+            download
+            title="Alle Dateien als ZIP herunterladen"
+          >
+            <DownloadIcon size={16} />
+            Alles herunterladen
+          </a>
+        )}
       </header>
 
       {canManage && (

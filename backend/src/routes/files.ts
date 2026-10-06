@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import archiver from 'archiver';
 import { getDb, ItemRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireSpace } from '../middleware/auth';
 import { variantPath, Variant } from '../lib/media';
 import { inlineContentType } from '../lib/documents';
 import { contentDisposition } from '../lib/httpHeaders';
+import { sendOriginalsZip, zipFileName } from '../lib/zip';
 
 const router = Router();
 
@@ -152,9 +152,10 @@ router.get(
 );
 
 /**
- * Mehrere Originale als ZIP herunterladen. Query `ids` = kommagetrennte Item-IDs
- * (oder leer = alle Items des Bereichs). Wird gestreamt, also auch für viele
- * grosse Dateien speicherschonend.
+ * Mehrere Originale als ZIP herunterladen (gestreamt, siehe lib/zip.ts).
+ * Query `ids` = kommagetrennte Item-IDs (Auswahl in der Galerie), ohne `ids`
+ * alle Fotos & Videos der Galerie – gelöschte nicht. Alle Dokumente gibt es
+ * unter `GET /api/documents/zip`.
  */
 router.get(
   '/zip',
@@ -172,7 +173,8 @@ router.get(
     } else {
       items = db
         .prepare(
-          `SELECT * FROM items WHERE space_id = ? AND scope = 'gallery' ORDER BY position ASC`,
+          `SELECT * FROM items WHERE space_id = ? AND scope = 'gallery' AND state = 'active'
+           ORDER BY position ASC`,
         )
         .all(req.spaceId) as ItemRow[];
     }
@@ -181,32 +183,7 @@ router.get(
     const space = db.prepare('SELECT name FROM spaces WHERE id = ?').get(req.spaceId) as
       | { name: string }
       | undefined;
-    const zipName = `${(space?.name ?? 'medien').replace(/[^a-zA-Z0-9-_]+/g, '_')}.zip`;
-
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
-
-    const archive = archiver('zip', { zlib: { level: 0 } }); // Fotos/Videos sind bereits komprimiert.
-    archive.on('error', (err) => {
-      // eslint-disable-next-line no-console
-      console.error('[zip] error', err);
-      res.destroy(err);
-    });
-    archive.pipe(res);
-
-    const usedNames = new Set<string>();
-    for (const item of items) {
-      const filePath = variantPath('original', item.storage_key, item.ext);
-      if (!fs.existsSync(filePath)) continue;
-      let name = path.basename(item.original_filename) || `${item.id}.${item.ext}`;
-      if (usedNames.has(name)) {
-        const dot = name.lastIndexOf('.');
-        name = dot > 0 ? `${name.slice(0, dot)}-${item.id.slice(0, 6)}${name.slice(dot)}` : `${name}-${item.id.slice(0, 6)}`;
-      }
-      usedNames.add(name);
-      archive.file(filePath, { name });
-    }
-    await archive.finalize();
+    await sendOriginalsZip(res, items, zipFileName(space?.name, 'medien'));
   }),
 );
 

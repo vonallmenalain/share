@@ -43,6 +43,11 @@ export function downloadUrl(doc: Pick<DocumentItem, 'id'>, token: string): strin
   return fileUrl(`/files/original/${doc.id}`, token);
 }
 
+/** Alle Dokumente des Bereichs als ZIP („Alles herunterladen"). */
+export function zipUrl(token: string): string {
+  return fileUrl('/api/documents/zip', token);
+}
+
 // ---- PDF-Bytes zwischenspeichern ------------------------------------------
 // Beim Blättern sollen PDFs ohne erneuten Download sofort erscheinen. Die
 // zuletzt verwendeten (und die vorab geladenen Nachbar-)PDFs bleiben daher im
