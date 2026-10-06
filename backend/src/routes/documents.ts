@@ -5,7 +5,13 @@ import { requireAdmin, requireSpace } from '../middleware/auth';
 import { requireEnabledModule } from '../middleware/module';
 import { manageGuard } from '../middleware/manage';
 import { adminLimiter } from '../middleware/rateLimit';
-import { docTypeOf, renameKeepingExtension } from '../lib/documents';
+import {
+  DocSection,
+  docTypeOf,
+  normalizeSectionOrder,
+  renameKeepingExtension,
+  sectionOfDocType,
+} from '../lib/documents';
 import { sendOriginalsZip, zipFileName } from '../lib/zip';
 
 /**
@@ -58,6 +64,14 @@ function getOwnDocument(id: string, spaceId: string): ItemRow {
   return row;
 }
 
+/** Reihenfolge der Abschnitte (Dokumente/Audio) dieses Bereichs. */
+function sectionsOf(spaceId: string): DocSection[] {
+  const row = getDb().prepare('SELECT documents_sections FROM spaces WHERE id = ?').get(spaceId) as
+    | { documents_sections: string | null }
+    | undefined;
+  return normalizeSectionOrder(row?.documents_sections ?? null);
+}
+
 /** Liest den (frei wählbaren) Anzeigenamen der aktuellen Person. */
 function visitorNameOf(req: import('express').Request): string {
   const header = req.headers['x-uploader-name'];
@@ -70,11 +84,17 @@ function visitorNameOf(req: import('express').Request): string {
   }
 }
 
-/** Alle (nicht gelöschten) Dokumente in der festgelegten Reihenfolge. */
+/**
+ * Alle (nicht gelöschten) Dokumente in der festgelegten Reihenfolge, dazu die
+ * Reihenfolge der Abschnitte (`sections`, z. B. ["audio","docs"]).
+ */
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    res.json({ documents: documentsOf(req.spaceId!, 'active').map(publicDocument) });
+    res.json({
+      documents: documentsOf(req.spaceId!, 'active').map(publicDocument),
+      sections: sectionsOf(req.spaceId!),
+    });
   }),
 );
 
@@ -85,7 +105,10 @@ router.get(
 router.get(
   '/zip',
   asyncHandler(async (req, res) => {
-    const items = documentsOf(req.spaceId!, 'active');
+    const sections = sectionsOf(req.spaceId!);
+    const rank = (row: ItemRow) => sections.indexOf(sectionOfDocType(docTypeOf(row.ext, row.mime)));
+    // Abschnitt für Abschnitt, darin wie in der Liste (sort ist stabil).
+    const items = documentsOf(req.spaceId!, 'active').sort((a, b) => rank(a) - rank(b));
     if (items.length === 0) throw new ApiError(404, 'Keine Dokumente zum Herunterladen.');
     const space = getDb().prepare('SELECT name FROM spaces WHERE id = ?').get(req.spaceId) as
       | { name: string }
@@ -123,6 +146,24 @@ router.patch(
     });
     tx((order as unknown[]).slice(0, 5000).map(String));
     res.json({ ok: true });
+  }),
+);
+
+/**
+ * Reihenfolge der Abschnitte speichern, z. B. Audio vor den PDFs.
+ * Body: { order: ["audio", "docs"] }. Gilt für alle, die den Bereich öffnen.
+ */
+router.patch(
+  '/sections',
+  ...manageGuard,
+  asyncHandler(async (req, res) => {
+    const order = req.body?.order;
+    if (!Array.isArray(order)) throw new ApiError(400, 'Ungültige Reihenfolge.');
+    const sections = normalizeSectionOrder(order);
+    getDb()
+      .prepare('UPDATE spaces SET documents_sections = ? WHERE id = ?')
+      .run(JSON.stringify(sections), req.spaceId);
+    res.json({ sections });
   }),
 );
 

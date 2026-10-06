@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { docTypeOf, inlineContentType, renameKeepingExtension } from './documents';
+import {
+  docTypeOf,
+  inlineContentType,
+  normalizeSectionOrder,
+  renameKeepingExtension,
+  sectionOfDocType,
+} from './documents';
 import { ApiError } from '../middleware/errors';
 
 test('documents: PDFs und MP3s werden erkannt (auch Grossschreibung)', () => {
@@ -58,4 +64,28 @@ test('documents: leere oder zu lange Namen werden abgelehnt', () => {
   assert.throws(() => renameKeepingExtension('a.pdf', '   '), ApiError);
   assert.throws(() => renameKeepingExtension('a.pdf', '.pdf'), ApiError);
   assert.throws(() => renameKeepingExtension('a.pdf', 'x'.repeat(151)), ApiError);
+});
+
+test('documents: Abschnitte – Audio für sich, alles andere bei den Dokumenten', () => {
+  assert.equal(sectionOfDocType('audio'), 'audio');
+  assert.equal(sectionOfDocType('pdf'), 'docs');
+  assert.equal(sectionOfDocType('image'), 'docs');
+  assert.equal(sectionOfDocType('video'), 'docs');
+  assert.equal(sectionOfDocType('file'), 'docs');
+});
+
+test('documents: Reihenfolge der Abschnitte wird bereinigt', () => {
+  // Nichts gespeichert: Standard (Dokumente oben).
+  assert.deepEqual(normalizeSectionOrder(null), ['docs', 'audio']);
+  assert.deepEqual(normalizeSectionOrder(undefined), ['docs', 'audio']);
+  // Gespeichert als JSON-Text bzw. als Liste.
+  assert.deepEqual(normalizeSectionOrder('["audio","docs"]'), ['audio', 'docs']);
+  assert.deepEqual(normalizeSectionOrder(['audio', 'docs']), ['audio', 'docs']);
+  // Fehlende werden ergänzt, Doppelte und Unbekanntes ignoriert.
+  assert.deepEqual(normalizeSectionOrder(['audio']), ['audio', 'docs']);
+  assert.deepEqual(normalizeSectionOrder(['audio', 'audio', 'x', 7, null]), ['audio', 'docs']);
+  // Ungültiger Text oder falscher Typ: Standard.
+  assert.deepEqual(normalizeSectionOrder('kaputt'), ['docs', 'audio']);
+  assert.deepEqual(normalizeSectionOrder('"audio"'), ['docs', 'audio']);
+  assert.deepEqual(normalizeSectionOrder({ 0: 'audio' }), ['docs', 'audio']);
 });

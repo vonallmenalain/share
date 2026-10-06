@@ -3219,6 +3219,26 @@ button {
   text-transform: uppercase;
   color: var(--ink-faint);
 }
+/* Überschrift eines Abschnitts, im Bearbeiten-Modus mit Pfeilen zum
+   Verschieben (z. B. Audio vor die Dokumente). */
+.doc-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  margin: 0 0 8px 4px;
+}
+.doc-section-head .doc-section-title {
+  margin: 0;
+}
+.doc-section-head .doc-row-edit {
+  margin: -6px 0;
+}
+.doc-section-head .doc-icon-btn {
+  width: 36px;
+  height: 36px;
+}
 .doc-list {
   list-style: none;
   margin: 0;

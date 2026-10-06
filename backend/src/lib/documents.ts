@@ -17,6 +17,46 @@ import { ApiError } from '../middleware/errors';
 export type DocType = 'pdf' | 'audio' | 'image' | 'video' | 'file';
 
 /**
+ * Abschnitte der Dokumente-Seite: `docs` (PDFs, Bilder, Videos und andere
+ * Dateien) und `audio` (Musik). Standard: Dokumente oben, Audio darunter – im
+ * Bearbeiten-Modus lässt sich die Reihenfolge pro Bereich ändern.
+ */
+export const DOC_SECTIONS = ['docs', 'audio'] as const;
+export type DocSection = (typeof DOC_SECTIONS)[number];
+
+/** In welchem Abschnitt ein Dokument dieses Typs erscheint. */
+export function sectionOfDocType(type: DocType): DocSection {
+  return type === 'audio' ? 'audio' : 'docs';
+}
+
+/**
+ * Bringt eine Reihenfolge der Abschnitte in eine gültige Form: nur bekannte
+ * Abschnitte, jeder genau einmal, fehlende hinten in der Standard-Reihenfolge.
+ * Nimmt eine Liste oder deren JSON-Text (so wie in der Datenbank gespeichert).
+ */
+export function normalizeSectionOrder(value: unknown): DocSection[] {
+  let list = value;
+  if (typeof value === 'string') {
+    try {
+      list = JSON.parse(value);
+    } catch {
+      list = null;
+    }
+  }
+  const order: DocSection[] = [];
+  if (Array.isArray(list)) {
+    for (const entry of list) {
+      const section = DOC_SECTIONS.find((s) => s === entry);
+      if (section && !order.includes(section)) order.push(section);
+    }
+  }
+  for (const section of DOC_SECTIONS) {
+    if (!order.includes(section)) order.push(section);
+  }
+  return order;
+}
+
+/**
  * Sichere Inline-Content-Types nach Dateiendung. NUR diese Typen werden direkt
  * im Browser angezeigt (Content-Disposition: inline). Alles andere – vor allem
  * HTML, SVG oder Skripte – wird ausschliesslich als Download ausgeliefert, damit

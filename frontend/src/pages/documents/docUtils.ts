@@ -1,8 +1,29 @@
-import { DocType, DocumentItem, fileUrl } from '../../api/client';
+import { DocSection, DocType, DocumentItem, fileUrl } from '../../api/client';
 import { formatBytes } from '../../lib/format';
 
 /** Dokumenttypen, die in der Ansicht (PDF/Bild/Video) durchgeblättert werden. */
 export const VIEWABLE: ReadonlySet<DocType> = new Set<DocType>(['pdf', 'image', 'video']);
+
+/** Abschnitte der Liste in der Standard-Reihenfolge: Dokumente oben, Audio darunter. */
+export const DEFAULT_SECTIONS: readonly DocSection[] = ['docs', 'audio'];
+
+/**
+ * Reihenfolge der Abschnitte vom Server (im Bearbeiten-Modus änderbar):
+ * Unbekanntes ignorieren, Fehlendes in der Standard-Reihenfolge anhängen.
+ */
+export function normalizeSections(value: unknown): DocSection[] {
+  const order: DocSection[] = [];
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const section = DEFAULT_SECTIONS.find((s) => s === entry);
+      if (section && !order.includes(section)) order.push(section);
+    }
+  }
+  for (const section of DEFAULT_SECTIONS) {
+    if (!order.includes(section)) order.push(section);
+  }
+  return order;
+}
 
 /** Angezeigter Titel: Dateiname ohne Endung („01 Ave Maria.pdf" → „01 Ave Maria"). */
 export function docTitle(doc: Pick<DocumentItem, 'name'>): string {

@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api, DocumentItem } from '../../api/client';
+import { api, DocSection, DocumentItem } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { uploadDocument } from '../../lib/uploader';
 import { formatBytes } from '../../lib/format';
 import { isDocumentsOnly, shareLink, spaceShareUrl } from '../../lib/spaceLinks';
 import DocViewer from './DocViewer';
 import { PlayerBar, useAudioPlayer } from './AudioPlayer';
-import { VIEWABLE, docMeta, docTitle, downloadUrl, sortFilesByName, zipUrl } from './docUtils';
+import {
+  DEFAULT_SECTIONS,
+  VIEWABLE,
+  docMeta,
+  docTitle,
+  downloadUrl,
+  normalizeSections,
+  sortFilesByName,
+  zipUrl,
+} from './docUtils';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -34,11 +43,15 @@ interface UploadEntry {
 
 let uploadKey = 0;
 
+const SECTION_TITLES: Record<DocSection, string> = { docs: 'Dokumente', audio: 'Audio' };
+
 /**
- * Dokumente-Modul: eine schlichte Liste – PDFs (und andere Dokumente) oben,
- * Musik/Audio darunter. Ein Tippen auf ein PDF öffnet es sofort im Vollbild
- * (weiterblättern per Wischen oder Pfeil), ein Tippen auf ein Lied spielt es
- * sofort ab; danach läuft automatisch das nächste.
+ * Dokumente-Modul: eine schlichte Liste in zwei Abschnitten – PDFs (und andere
+ * Dokumente) sowie Musik/Audio. Standardmässig stehen die Dokumente oben; im
+ * Bearbeiten-Modus lässt sich die Reihenfolge der Abschnitte ändern (gilt für
+ * alle). Ein Tippen auf ein PDF öffnet es sofort im Vollbild (weiterblättern
+ * per Wischen oder Pfeil), ein Tippen auf ein Lied spielt es sofort ab; danach
+ * läuft automatisch das nächste.
  *
  * Werkzeuge zum Hochladen, Sortieren, Umbenennen und Löschen sieht nur, wer
  * darf: ohne Upload-Sperre alle, mit Sperre nur der Administrator (Gerät mit
@@ -52,6 +65,7 @@ export default function DocumentsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [docs, setDocs] = useState<DocumentItem[] | null>(null);
+  const [sections, setSections] = useState<DocSection[]>(() => [...DEFAULT_SECTIONS]);
   const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState(false);
   const [deletedDocs, setDeletedDocs] = useState<DocumentItem[]>([]);
@@ -63,8 +77,12 @@ export default function DocumentsPage() {
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await api<{ documents: DocumentItem[] }>('/api/documents', { token });
+      const res = await api<{ documents: DocumentItem[]; sections?: DocSection[] }>(
+        '/api/documents',
+        { token },
+      );
       setDocs(res.documents);
+      setSections(normalizeSections(res.sections));
       setLoadError('');
     } catch (err) {
       setLoadError(
@@ -93,7 +111,11 @@ export default function DocumentsPage() {
   const otherDocs = all.filter((d) => d.docType !== 'audio');
   const audioDocs = all.filter((d) => d.docType === 'audio');
   const viewDocs = otherDocs.filter((d) => VIEWABLE.has(d.docType));
-  const showHeadings = otherDocs.length > 0 && audioDocs.length > 0;
+  const sectionDocs: Record<DocSection, DocumentItem[]> = { docs: otherDocs, audio: audioDocs };
+  // Abschnitte mit Inhalt, in der gespeicherten Reihenfolge. Überschriften
+  // (und im Bearbeiten-Modus die Pfeile dazu) nur, wenn es mehrere gibt.
+  const shownSections = sections.filter((key) => sectionDocs[key].length > 0);
+  const showHeadings = shownSections.length > 1;
 
   const player = useAudioPlayer(audioDocs, token, space?.name ?? '');
 
@@ -292,6 +314,28 @@ export default function DocumentsPage() {
         body: { order: order.map((d) => d.id) },
         ...authOpts,
       });
+    } catch (err) {
+      alert(
+        err instanceof Error ? err.message : 'Die Reihenfolge konnte nicht gespeichert werden.',
+      );
+      void load();
+    }
+  };
+
+  /** Abschnitt (Dokumente/Audio) mit dem davor bzw. danach tauschen. */
+  const moveSection = async (section: DocSection, delta: -1 | 1) => {
+    const i = shownSections.indexOf(section);
+    const other = shownSections[i + delta];
+    if (i < 0 || !other) return;
+    const next = sections.map((s) => (s === section ? other : s === other ? section : s));
+    setSections(next);
+    try {
+      const res = await api<{ sections: DocSection[] }>('/api/documents/sections', {
+        method: 'PATCH',
+        body: { order: next },
+        ...authOpts,
+      });
+      setSections(normalizeSections(res.sections));
     } catch (err) {
       alert(
         err instanceof Error ? err.message : 'Die Reihenfolge konnte nicht gespeichert werden.',
@@ -652,20 +696,44 @@ export default function DocumentsPage() {
           <div className="empty-hint">Hier wurden noch keine Dateien geteilt.</div>
         )
       ) : (
-        <>
-          {otherDocs.length > 0 && (
-            <section className="doc-section" aria-label="Dokumente">
-              {showHeadings && <h2 className="doc-section-title">Dokumente</h2>}
-              <ul className="doc-list">{otherDocs.map((d) => renderRow(d, otherDocs))}</ul>
+        shownSections.map((key, index) => {
+          const list = sectionDocs[key];
+          const title = SECTION_TITLES[key];
+          return (
+            <section key={key} className="doc-section" aria-label={title}>
+              {showHeadings && (
+                <div className="doc-section-head">
+                  <h2 className="doc-section-title">{title}</h2>
+                  {editing && (
+                    <span className="doc-row-edit">
+                      <button
+                        type="button"
+                        className="doc-icon-btn"
+                        onClick={() => void moveSection(key, -1)}
+                        disabled={index === 0}
+                        aria-label={`${title} nach oben`}
+                        title={`${title} nach oben`}
+                      >
+                        <ArrowUpIcon size={18} />
+                      </button>
+                      <button
+                        type="button"
+                        className="doc-icon-btn"
+                        onClick={() => void moveSection(key, 1)}
+                        disabled={index === shownSections.length - 1}
+                        aria-label={`${title} nach unten`}
+                        title={`${title} nach unten`}
+                      >
+                        <ArrowDownIcon size={18} />
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )}
+              <ul className="doc-list">{list.map((d) => renderRow(d, list))}</ul>
             </section>
-          )}
-          {audioDocs.length > 0 && (
-            <section className="doc-section" aria-label="Audio">
-              {showHeadings && <h2 className="doc-section-title">Audio</h2>}
-              <ul className="doc-list">{audioDocs.map((d) => renderRow(d, audioDocs))}</ul>
-            </section>
-          )}
-        </>
+          );
+        })
       )}
 
       {editing && isAdmin && deletedDocs.length > 0 && (

@@ -187,6 +187,9 @@ export interface Item {
  */
 export type DocType = 'pdf' | 'audio' | 'image' | 'video' | 'file';
 
+/** Abschnitte der Dokumente-Liste: „docs" (PDFs & Co.) und „audio". */
+export type DocSection = 'docs' | 'audio';
+
 export interface DocumentItem {
   id: string;
   /** Dateiname inkl. Endung (angezeigt wird er ohne Endung). */
