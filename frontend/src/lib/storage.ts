@@ -12,6 +12,7 @@ const VISITED_KEY = 'share.visitedSpaces';
 const PARTICIPANT_PREFIX = 'share.participant.'; // + slug
 const CALENDAR_VIEW_KEY = 'share.calendarView';
 const SHOPPING_SORT_PREFIX = 'share.shoppingSort.'; // + slug
+const MANIFEST_PREFIX = 'share.manifest.'; // + slug
 
 function safeGet(key: string): string | null {
   try {
@@ -146,6 +147,34 @@ export const shoppingSortStore = {
   set(slug: string, mode: ShoppingSortMode) {
     safeSet(SHOPPING_SORT_PREFIX + slug, mode);
   },
+};
+
+// Name und Beschreibung eines Bereichs für das Manifest der installierten App
+// (siehe pwaManifest) – damit es beim nächsten Start sofort gesetzt werden
+// kann, noch bevor das Backend geantwortet hat.
+export interface StoredSpaceManifest {
+  name: string;
+  description: string;
+}
+
+export const spaceManifestStore = {
+  get(slug: string): StoredSpaceManifest | null {
+    const raw = safeGet(MANIFEST_PREFIX + slug);
+    if (!raw) return null;
+    try {
+      const v = JSON.parse(raw) as Partial<StoredSpaceManifest> | null;
+      if (v && typeof v.name === 'string' && typeof v.description === 'string') {
+        return { name: v.name, description: v.description };
+      }
+    } catch {
+      /* ungültig – wie nicht gespeichert */
+    }
+    return null;
+  },
+  set(slug: string, value: StoredSpaceManifest) {
+    safeSet(MANIFEST_PREFIX + slug, JSON.stringify(value));
+  },
+  clear: (slug: string) => safeRemove(MANIFEST_PREFIX + slug),
 };
 
 export interface PendingUpload {

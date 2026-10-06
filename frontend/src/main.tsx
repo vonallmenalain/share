@@ -4,7 +4,13 @@ import { BrowserRouter } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import { UploadsProvider } from './context/Uploads';
+import { restoreSpaceManifest } from './lib/pwaManifest';
 import './index.css';
+
+// Ein schon bekannter Bereich bekommt sein Manifest noch vor dem fertigen
+// Laden der Seite – so kann Chrome eine installierte Bereichs-App
+// aktualisieren (siehe pwaManifest).
+restoreSpaceManifest(window.location.pathname);
 
 /**
  * Ist im Hintergrund eine neue App-Version aktiv geworden, lädt die Seite nur

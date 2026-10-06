@@ -4,6 +4,17 @@
 // (z. B. /s/ferien-tessin-…), ersetzen wir auf der Bereichsseite das Manifest
 // durch eines mit passender start_url/id. So landet man nach dem Öffnen der
 // installierten App direkt in diesem Bereich statt auf der Hauptdomain.
+//
+// Installierte App (Android): Chrome prüft beim Start höchstens einmal am Tag,
+// ob sich das Manifest geändert hat (Name, Farben …) – genau einmal, sobald die
+// Seite fertig geladen ist, und nur mit einem Manifest derselben `id` wie die
+// installierte App. Das Bereichs-Manifest erst nach der Antwort des Backends
+// zu setzen, war dafür zu spät: Chrome fand das allgemeine Manifest (id "/")
+// und liess die Prüfung aus. Darum wird ein schon bekanntes Bereichs-Manifest
+// gleich beim Start gesetzt (restoreSpaceManifest) und danach nur ersetzt,
+// wenn sich sein Inhalt ändert – eine neue Adresse bricht die Prüfung ab.
+
+import { spaceManifestStore } from './storage';
 
 const ICONS = [
   { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
@@ -11,7 +22,10 @@ const ICONS = [
   { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
 ];
 
+const DEFAULT_DESCRIPTION = 'Fotos & Videos einfach in einer privaten Gruppe teilen.';
+
 let currentBlobUrl: string | null = null;
+let currentJson: string | null = null;
 let originalManifestHref: string | null = null;
 let originalAppleTitle: string | null = null;
 
@@ -43,13 +57,14 @@ export function setSpaceManifest(
   if (originalManifestHref === null) originalManifestHref = link.getAttribute('href');
 
   const title = (name || '').trim() || 'share';
+  const description = opts.description ?? DEFAULT_DESCRIPTION;
   const manifest = {
     // Sowohl der vollständige Name als auch der Kurzname entsprechen exakt dem
     // Bereichsnamen, damit die installierte PWA genauso heisst wie der Bereich
     // (z. B. „Ferien Tessin") und nicht abgeschnitten wird.
     name: title,
     short_name: title,
-    description: opts.description ?? 'Fotos & Videos einfach in einer privaten Gruppe teilen.',
+    description,
     lang: 'de',
     id: `/s/${slug}`,
     start_url: absoluteUrl(`/s/${slug}`),
@@ -63,11 +78,17 @@ export function setSpaceManifest(
     icons: ICONS.map((i) => ({ ...i, src: absoluteUrl(i.src) })),
   };
 
-  const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
-  const url = URL.createObjectURL(blob);
-  link.setAttribute('href', url);
-  if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
-  currentBlobUrl = url;
+  // Unverändert und schon gesetzt: dieselbe Adresse behalten (siehe oben).
+  const json = JSON.stringify(manifest);
+  if (json !== currentJson || !currentBlobUrl || link.getAttribute('href') !== currentBlobUrl) {
+    const blob = new Blob([json], { type: 'application/manifest+json' });
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+    currentBlobUrl = url;
+    currentJson = json;
+    spaceManifestStore.set(slug, { name: title, description });
+  }
 
   // iOS „Zum Home-Bildschirm": Titel der Verknüpfung anpassen.
   const appleTitle = document.querySelector<HTMLMetaElement>(
@@ -87,10 +108,35 @@ export function resetManifest(): void {
     URL.revokeObjectURL(currentBlobUrl);
     currentBlobUrl = null;
   }
+  currentJson = null;
   const appleTitle = document.querySelector<HTMLMetaElement>(
     'meta[name="apple-mobile-web-app-title"]',
   );
   if (appleTitle && originalAppleTitle !== null) {
     appleTitle.setAttribute('content', originalAppleTitle);
   }
+}
+
+/**
+ * Beim Start der App, vor dem ersten Zeichnen: Ist der Bereich der
+ * aufgerufenen Adresse (/s/<bereich> bzw. /d/<bereich>) schon bekannt, sein
+ * Manifest sofort setzen – siehe oben.
+ */
+export function restoreSpaceManifest(pathname: string): void {
+  const match = /^\/[sd]\/([^/]+)/.exec(pathname);
+  if (!match) return;
+  let slug: string;
+  try {
+    slug = decodeURIComponent(match[1]);
+  } catch {
+    return;
+  }
+  const saved = spaceManifestStore.get(slug);
+  if (saved) setSpaceManifest(slug, saved.name, { description: saved.description });
+}
+
+/** Bereich gibt es nicht (mehr): gemerktes Manifest vergessen. */
+export function forgetSpaceManifest(slug: string): void {
+  spaceManifestStore.clear(slug);
+  resetManifest();
 }
