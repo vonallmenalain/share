@@ -119,6 +119,24 @@ export interface SpaceSessionValue {
 
 const SpaceSessionContext = createContext<SpaceSessionValue | null>(null);
 
+/**
+ * Führt eine Anfrage aus und versucht es bei einem Verbindungsproblem (kein
+ * Netz, Server kurz nicht erreichbar) nach einer kurzen Pause ein zweites Mal –
+ * damit ein Wackler im Mobilnetz beim Öffnen eines Links nicht gleich das
+ * Betreten-Formular zeigt. Klare Antworten wie „nicht gefunden" oder „falsches
+ * Passwort" gelten sofort.
+ */
+async function withRetry<T>(request: () => Promise<T>, cancelled: () => boolean): Promise<T> {
+  try {
+    return await request();
+  } catch (err) {
+    if (err instanceof ApiError && err.status < 500) throw err;
+    await new Promise((resolve) => window.setTimeout(resolve, 1000));
+    if (cancelled()) throw err;
+    return request();
+  }
+}
+
 export function useSpaceSessionContext(): SpaceSessionValue {
   const ctx = useContext(SpaceSessionContext);
   if (!ctx) throw new Error('useSpaceSessionContext must be used within SpaceSessionProvider');
@@ -198,26 +216,35 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
     (async () => {
       setPhase('loading');
       setChromeHidden(false);
+      const isCancelled = () => cancelled;
       const stored = tokenStore.get(slug);
       if (stored) {
         try {
           // Öffnen des Bereichs protokollieren (genau einmal pro Session).
-          const res = await api<{ space: SpaceType }>('/api/spaces/current', {
-            token: stored,
-            uploaderName: nameStore.get() || undefined,
-          });
+          const res = await withRetry(
+            () =>
+              api<{ space: SpaceType }>('/api/spaces/current', {
+                token: stored,
+                uploaderName: nameStore.get() || undefined,
+              }),
+            isCancelled,
+          );
           if (cancelled) return;
           setSpace(res.space);
           setToken(stored);
           setPhase('ready');
           return;
-        } catch {
-          tokenStore.clear(slug);
+        } catch (err) {
+          if (cancelled) return;
+          // Nur einen vom Server abgelehnten Zugang vergessen – bei einem
+          // Verbindungsproblem bleibt er für den nächsten Versuch gespeichert.
+          if (err instanceof ApiError && err.status < 500) tokenStore.clear(slug);
         }
       }
       try {
-        const res = await api<{ space: SpaceType }>(
-          `/api/spaces/by-slug/${encodeURIComponent(slug)}`,
+        const res = await withRetry(
+          () => api<{ space: SpaceType }>(`/api/spaces/by-slug/${encodeURIComponent(slug)}`),
+          isCancelled,
         );
         if (cancelled) return;
         setSpace(res.space);
@@ -232,9 +259,13 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
         const knownName = nameStore.get().trim();
         if (!res.space.hasPassword && (knownName || res.space.skipIdentityPrompt)) {
           try {
-            const accessRes = await api<{ space: SpaceType; accessToken: string }>(
-              `/api/spaces/by-slug/${encodeURIComponent(slug)}/access`,
-              { method: 'POST', body: { name: knownName || undefined } },
+            const accessRes = await withRetry(
+              () =>
+                api<{ space: SpaceType; accessToken: string }>(
+                  `/api/spaces/by-slug/${encodeURIComponent(slug)}/access`,
+                  { method: 'POST', body: { name: knownName || undefined } },
+                ),
+              isCancelled,
             );
             if (cancelled) return;
             tokenStore.set(slug, accessRes.accessToken);

@@ -72,6 +72,18 @@ export const ChevronRightIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const ChevronUpIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6 15l6-6 6 6" />
+  </Svg>
+);
+
+export const ChevronDownIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Svg>
+);
+
 export const DownloadIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" />

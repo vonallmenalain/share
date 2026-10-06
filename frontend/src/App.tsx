@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import Landing from './pages/Landing';
 import CreateSpace from './pages/CreateSpace';
 import Admin from './pages/Admin';
@@ -11,7 +11,6 @@ import NotesPage from './pages/notes/NotesPage';
 import NoteEditorPage from './pages/notes/NoteEditorPage';
 import CalendarPage from './pages/calendar/CalendarPage';
 import DocumentsPage from './pages/documents/DocumentsPage';
-import DocumentsEntry from './pages/documents/DocumentsEntry';
 
 export default function App() {
   return (
@@ -29,12 +28,18 @@ export default function App() {
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="docs" element={<DocumentsPage />} />
       </Route>
-      {/* Schlanker Ansichtslink für reine Dokumente-Bereiche (eigene, neutrale
-          Link-Vorschau – siehe vite.config.ts). */}
-      <Route path="/d/:slug" element={<SpaceLayout />}>
-        <Route index element={<DocumentsEntry />} />
-      </Route>
+      <Route path="/d/:slug" element={<LegacyDocumentsLink />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
+}
+
+/**
+ * Früher geteilte Dokumente-Links (`/d/<slug>`) führen auf den Bereich selbst:
+ * `/s/<slug>` zeigt reine Dokumente-Bereiche direkt als Dokumente.
+ */
+function LegacyDocumentsLink() {
+  const { slug = '' } = useParams();
+  const { search, hash } = useLocation();
+  return <Navigate to={`/s/${encodeURIComponent(slug)}${search}${hash}`} replace />;
 }

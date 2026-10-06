@@ -1,7 +1,15 @@
 import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { DocumentItem } from '../../api/client';
 import { docTitle, formatClock, viewUrl } from './docUtils';
-import { CloseIcon, NextTrackIcon, PauseIcon, PlayIcon, PrevTrackIcon } from './icons';
+import {
+  ChevronUpIcon,
+  CloseIcon,
+  NextTrackIcon,
+  PauseIcon,
+  PlayIcon,
+  PlayingBars,
+  PrevTrackIcon,
+} from './icons';
 
 export interface AudioPlayer {
   /** Das zu rendernde <audio>-Element (eines für die ganze Wiedergabeliste). */
@@ -228,6 +236,9 @@ export function useAudioPlayer(
  * Schlanke Player-Leiste am unteren Rand: Titel, Zeit, Fortschritt zum
  * Spulen, zurück / Play-Pause / weiter. Bleibt auch über der PDF-Ansicht
  * sichtbar – so lassen sich Noten oder Texte lesen, während das Lied läuft.
+ * Ein Tippen auf den Titel (bzw. den Pfeil daneben) klappt die Playlist nach
+ * oben auf: Dort lässt sich jedes Lied direkt wählen, ohne die Ansicht zu
+ * verlassen.
  */
 export function PlayerBar({ player, tracks }: { player: AudioPlayer; tracks: DocumentItem[] }) {
   const track = tracks.find((t) => t.id === player.currentId) ?? null;
@@ -237,11 +248,34 @@ export function PlayerBar({ player, tracks }: { player: AudioPlayer; tracks: Doc
   // Während des Ziehens am Fortschrittsbalken nur anzeigen, erst beim
   // Loslassen springen (spart unnötige Nachlade-Anfragen).
   const [scrub, setScrub] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const listRef = useRef<HTMLOListElement>(null);
 
   useEffect(() => {
     setDuration(track?.duration ?? 0);
     setTime(0);
   }, [track?.id, track?.duration]);
+
+  // Wiedergabe beendet → Playlist wieder zuklappen.
+  useEffect(() => {
+    if (!player.currentId) setExpanded(false);
+  }, [player.currentId]);
+
+  // Aufgeklappt: das laufende Lied sichtbar machen; Escape klappt zu (vor
+  // allen anderen Tasten-Aktionen, z. B. dem Schliessen der PDF-Ansicht).
+  useEffect(() => {
+    if (!expanded) return;
+    listRef.current
+      ?.querySelector('[aria-current="true"]')
+      ?.scrollIntoView({ block: 'nearest' });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setExpanded(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [expanded]);
 
   useEffect(() => {
     if (!audio) return;
@@ -276,77 +310,129 @@ export function PlayerBar({ player, tracks }: { player: AudioPlayer; tracks: Doc
     setScrub(null);
   };
 
+  const choose = (id: string) => {
+    player.playOrToggle(id);
+    setExpanded(false);
+  };
+
   return (
-    <div className="doc-player" role="region" aria-label="Musik-Wiedergabe">
-      <input
-        type="range"
-        className="doc-player-seek"
-        min={0}
-        max={max}
-        step={0.1}
-        value={shown}
-        style={{ '--progress': `${percent}%` } as React.CSSProperties}
-        onChange={(e) => setScrub(Number(e.target.value))}
-        onPointerUp={commit}
-        onTouchEnd={commit}
-        onKeyUp={commit}
-        onBlur={commit}
-        aria-label="Position im Lied"
-        aria-valuetext={`${formatClock(shown)} von ${formatClock(duration)}`}
-      />
-      <div className="doc-player-row">
-        <button
-          className="doc-player-btn"
-          onClick={player.prev}
-          aria-label="Vorheriges Lied"
-          title="Vorheriges Lied"
-        >
-          <PrevTrackIcon size={20} />
-        </button>
-        <button
-          className="doc-player-btn doc-player-main"
-          onClick={player.toggle}
-          aria-label={player.playing ? 'Pause' : 'Abspielen'}
-          title={player.playing ? 'Pause' : 'Abspielen'}
-        >
-          {player.loading && player.playing ? (
-            <span className="spinner white" />
-          ) : player.playing ? (
-            <PauseIcon size={22} />
-          ) : (
-            <PlayIcon size={22} />
-          )}
-        </button>
-        <button
-          className="doc-player-btn"
-          onClick={player.next}
-          disabled={index < 0 || index >= tracks.length - 1}
-          aria-label="Nächstes Lied"
-          title="Nächstes Lied"
-        >
-          <NextTrackIcon size={20} />
-        </button>
-        <div className="doc-player-info">
-          <strong className="doc-player-title">{docTitle(track)}</strong>
-          <span className="doc-player-time">
-            {player.error ? (
-              <span className="doc-player-error">{player.error}</span>
+    <>
+      {expanded && <div className="doc-player-backdrop" onClick={() => setExpanded(false)} />}
+      <div
+        className={`doc-player${expanded ? ' expanded' : ''}`}
+        role="region"
+        aria-label="Musik-Wiedergabe"
+      >
+        {expanded && (
+          <div className="doc-player-list" id="doc-player-list">
+            <div className="doc-player-list-head">
+              Playlist · {tracks.length} {tracks.length === 1 ? 'Lied' : 'Lieder'}
+            </div>
+            <ol ref={listRef}>
+              {tracks.map((t, i) => {
+                const isCurrent = t.id === track.id;
+                return (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      className={`doc-player-track${isCurrent ? ' current' : ''}`}
+                      aria-current={isCurrent ? 'true' : undefined}
+                      onClick={() => choose(t.id)}
+                    >
+                      <span className="doc-player-track-no">
+                        {isCurrent && player.playing ? <PlayingBars /> : i + 1}
+                      </span>
+                      <span className="doc-player-track-name">{docTitle(t)}</span>
+                      {t.duration ? (
+                        <span className="doc-player-track-time">{formatClock(t.duration)}</span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        )}
+        <input
+          type="range"
+          className="doc-player-seek"
+          min={0}
+          max={max}
+          step={0.1}
+          value={shown}
+          style={{ '--progress': `${percent}%` } as React.CSSProperties}
+          onChange={(e) => setScrub(Number(e.target.value))}
+          onPointerUp={commit}
+          onTouchEnd={commit}
+          onKeyUp={commit}
+          onBlur={commit}
+          aria-label="Position im Lied"
+          aria-valuetext={`${formatClock(shown)} von ${formatClock(duration)}`}
+        />
+        <div className="doc-player-row">
+          <button
+            className="doc-player-btn"
+            onClick={player.prev}
+            aria-label="Vorheriges Lied"
+            title="Vorheriges Lied"
+          >
+            <PrevTrackIcon size={20} />
+          </button>
+          <button
+            className="doc-player-btn doc-player-main"
+            onClick={player.toggle}
+            aria-label={player.playing ? 'Pause' : 'Abspielen'}
+            title={player.playing ? 'Pause' : 'Abspielen'}
+          >
+            {player.loading && player.playing ? (
+              <span className="spinner white" />
+            ) : player.playing ? (
+              <PauseIcon size={22} />
             ) : (
-              <>
-                {formatClock(shown)} / {formatClock(duration)}
-              </>
+              <PlayIcon size={22} />
             )}
-          </span>
+          </button>
+          <button
+            className="doc-player-btn"
+            onClick={player.next}
+            disabled={index < 0 || index >= tracks.length - 1}
+            aria-label="Nächstes Lied"
+            title="Nächstes Lied"
+          >
+            <NextTrackIcon size={20} />
+          </button>
+          <button
+            type="button"
+            className="doc-player-info"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-controls="doc-player-list"
+            title={expanded ? 'Playlist zuklappen' : 'Playlist anzeigen'}
+          >
+            <span className="doc-player-title-row">
+              <strong className="doc-player-title">{docTitle(track)}</strong>
+              <ChevronUpIcon size={16} className="doc-player-chevron" />
+            </span>
+            <span className="doc-player-time">
+              {player.error ? (
+                <span className="doc-player-error">{player.error}</span>
+              ) : (
+                <>
+                  {formatClock(shown)} / {formatClock(duration)}
+                </>
+              )}
+            </span>
+          </button>
+          <button
+            className="doc-player-btn doc-player-close"
+            onClick={player.stop}
+            aria-label="Wiedergabe beenden"
+            title="Wiedergabe beenden"
+          >
+            <CloseIcon size={18} />
+          </button>
         </div>
-        <button
-          className="doc-player-btn doc-player-close"
-          onClick={player.stop}
-          aria-label="Wiedergabe beenden"
-          title="Wiedergabe beenden"
-        >
-          <CloseIcon size={18} />
-        </button>
       </div>
-    </div>
+    </>
   );
 }

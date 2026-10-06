@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
-import { api, ModuleKey, Space } from '../api/client';
+import AdminLogin from '../components/AdminLogin';
+import { api, ApiError, ModuleKey, Space } from '../api/client';
 import { adminKeyStore } from '../lib/storage';
 import { isDocumentsOnly, spacePath, spaceShareUrl } from '../lib/spaceLinks';
 
@@ -31,7 +32,14 @@ const CURRENCIES = ['CHF', 'EUR', 'USD', 'GBP'];
 export default function CreateSpace() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
-  const [adminKey, setAdminKey] = useState(adminKeyStore.get());
+  // Neue Bereiche legt nur der Administrator an: Das Formular erscheint erst
+  // nach der Anmeldung mit dem Admin-Schlüssel (ein gespeicherter wird geprüft).
+  const [adminKey, setAdminKey] = useState('');
+  const [auth, setAuth] = useState<'checking' | 'login' | 'ok'>(() =>
+    adminKeyStore.get() ? 'checking' : 'login',
+  );
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
   const [modules, setModules] = useState<Set<ModuleKey>>(new Set(['photos']));
   const [currency, setCurrency] = useState('CHF');
   const [requireParticipantPin, setRequireParticipantPin] = useState(false);
@@ -46,7 +54,34 @@ export default function CreateSpace() {
   const [created, setCreated] = useState<Space | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const shareUrl = created ? spaceShareUrl(created.slug, created.modules) : '';
+  const shareUrl = created ? spaceShareUrl(created.slug) : '';
+
+  const verify = async (key: string, stored: boolean) => {
+    setAuthBusy(true);
+    setAuthError('');
+    try {
+      await api('/api/spaces/admin-check', { adminKey: key });
+      adminKeyStore.set(key);
+      setAdminKey(key);
+      setAuth('ok');
+    } catch (err) {
+      const rejected = err instanceof ApiError && err.status === 401;
+      if (rejected) adminKeyStore.clear();
+      // Ein nicht mehr gültiger gespeicherter Schlüssel: einfach neu anmelden.
+      if (!(rejected && stored)) {
+        setAuthError(err instanceof Error ? err.message : 'Anmeldung fehlgeschlagen.');
+      }
+      setAuth('login');
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    const stored = adminKeyStore.get();
+    if (stored) void verify(stored, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleModule = (key: ModuleKey) => {
     setModules((prev) => {
@@ -79,9 +114,14 @@ export default function CreateSpace() {
           uploadsLocked,
         },
       });
-      adminKeyStore.set(adminKey);
       setCreated(res.space);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        adminKeyStore.clear();
+        setAuthError(err.message);
+        setAuth('login');
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Fehler beim Erstellen.');
     } finally {
       setBusy(false);
@@ -97,6 +137,29 @@ export default function CreateSpace() {
       /* ignore */
     }
   };
+
+  if (auth === 'checking') {
+    return (
+      <>
+        <TopBar />
+        <div className="center-page">
+          <span className="spinner lg" />
+        </div>
+      </>
+    );
+  }
+
+  if (auth === 'login') {
+    return (
+      <AdminLogin
+        title="Neuen Bereich erstellen"
+        sub="Neue Bereiche legt nur der Administrator an. Bitte melde dich mit dem Admin-Schlüssel an."
+        busy={authBusy}
+        error={authError}
+        onSubmit={(key) => void verify(key, false)}
+      />
+    );
+  }
 
   return (
     <>
@@ -265,17 +328,6 @@ export default function CreateSpace() {
                   </div>
                 )}
 
-                <div className="field">
-                  <label className="label">Admin-Schlüssel</label>
-                  <input
-                    className="input"
-                    type="password"
-                    placeholder="ADMIN_KEY aus dem Backend"
-                    value={adminKey}
-                    onChange={(e) => setAdminKey(e.target.value)}
-                    required
-                  />
-                </div>
                 <button
                   className="btn btn-primary"
                   style={{ width: '100%' }}
@@ -301,7 +353,7 @@ export default function CreateSpace() {
                 <button className="btn btn-primary" onClick={copy}>
                   {copied ? 'Kopiert ✓' : 'Link kopieren'}
                 </button>
-                <Link className="btn" to={spacePath(created.slug, created.modules)}>
+                <Link className="btn" to={spacePath(created.slug)}>
                   {isDocumentsOnly(created.modules) ? 'Öffnen & Dateien hochladen' : 'Bereich öffnen'}
                 </Link>
                 <button

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
+import AdminLogin from '../components/AdminLogin';
 import ShareIcon from '../components/ShareIcon';
 import {
   AccessLog,
@@ -64,6 +65,8 @@ async function shareWithFallback(list: Item[], token: string): Promise<void> {
 export default function Admin() {
   const [adminKey, setAdminKey] = useState(adminKeyStore.get());
   const [authed, setAuthed] = useState(false);
+  // Gespeicherter Schlüssel wird beim Öffnen geprüft – so lange kein Formular.
+  const [checking, setChecking] = useState(() => !!adminKeyStore.get());
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -77,6 +80,7 @@ export default function Admin() {
     try {
       const res = await api<{ spaces: Space[] }>('/api/spaces', { adminKey: key });
       setSpaces(res.spaces);
+      setAdminKey(key);
       setAuthed(true);
       adminKeyStore.set(key);
     } catch (err) {
@@ -84,6 +88,7 @@ export default function Admin() {
       setAuthed(false);
     } finally {
       setBusy(false);
+      setChecking(false);
     }
   };
 
@@ -231,38 +236,25 @@ export default function Admin() {
     });
   };
 
-  if (!authed) {
+  if (checking) {
     return (
       <>
         <TopBar />
         <div className="center-page">
-          <div className="panel">
-            <h1>Admin</h1>
-            <p className="sub">Gib den Admin-Schlüssel ein, um alle Bereiche zu verwalten.</p>
-            {error && <div className="error-box">{error}</div>}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void load(adminKey);
-              }}
-            >
-              <div className="field">
-                <input
-                  className="input"
-                  type="password"
-                  placeholder="Admin-Schlüssel"
-                  value={adminKey}
-                  onChange={(e) => setAdminKey(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <button className="btn btn-primary" style={{ width: '100%' }} disabled={busy}>
-                {busy ? 'Prüfe…' : 'Anmelden'}
-              </button>
-            </form>
-          </div>
+          <span className="spinner lg" />
         </div>
       </>
+    );
+  }
+
+  if (!authed) {
+    return (
+      <AdminLogin
+        sub="Gib den Admin-Schlüssel ein, um Bereiche zu erstellen und zu verwalten."
+        busy={busy}
+        error={error}
+        onSubmit={(key) => void load(key)}
+      />
     );
   }
 
@@ -305,7 +297,7 @@ export default function Admin() {
                     <div className="grow">
                       <div className="nm">{s.name}</div>
                       <div className="faint" style={{ fontSize: 13 }}>
-                        {spacePath(s.slug, s.modules)} · {formatDate(s.createdAt)}
+                        {spacePath(s.slug)} · {formatDate(s.createdAt)}
                       </div>
                     </div>
                     {isDocumentsOnly(s.modules) ? (
@@ -332,7 +324,7 @@ export default function Admin() {
                   {isOpen && (
                     <div className="admin-space-body">
                       <div className="row wrap" style={{ marginBottom: 6 }}>
-                        <Link className="btn btn-sm" to={spacePath(s.slug, s.modules)}>
+                        <Link className="btn btn-sm" to={spacePath(s.slug)}>
                           {isDocumentsOnly(s.modules) ? 'Dokumente öffnen' : 'Galerie öffnen'}
                         </Link>
                         <button

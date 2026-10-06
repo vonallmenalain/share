@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ReactNode } from 'react';
+import AlaeMark from './AlaeMark';
 
 export default function TopBar({
   children,
@@ -35,7 +36,7 @@ export default function TopBar({
           </button>
         )}
         <Link to={brandTo} className="brand">
-          <span className="brand-dot" />
+          <AlaeMark className="brand-mark" />
           share
         </Link>
         <div className="spacer" />

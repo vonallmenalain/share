@@ -4,7 +4,7 @@ import { api, DocumentItem } from '../../api/client';
 import { useSpaceSessionContext } from '../../context/SpaceSessionContext';
 import { uploadDocument } from '../../lib/uploader';
 import { formatBytes } from '../../lib/format';
-import { isDocumentsOnly, shareLink } from '../../lib/spaceLinks';
+import { isDocumentsOnly, shareLink, spaceShareUrl } from '../../lib/spaceLinks';
 import DocViewer from './DocViewer';
 import { PlayerBar, useAudioPlayer } from './AudioPlayer';
 import { VIEWABLE, docMeta, docTitle, downloadUrl, sortFilesByName } from './docUtils';
@@ -362,8 +362,11 @@ export default function DocumentsPage() {
 
   const shareSpace = async () => {
     if (!space) return;
-    const path = isDocumentsOnly(space.modules) ? `/d/${slug}` : `/s/${slug}/docs`;
-    const outcome = await shareLink(`${window.location.origin}${path}`, space.name);
+    // Reine Dokumente-Bereiche zeigen ihre Dokumente direkt unter /s/<slug>.
+    const url = isDocumentsOnly(space.modules)
+      ? spaceShareUrl(slug)
+      : `${spaceShareUrl(slug)}/docs`;
+    const outcome = await shareLink(url, space.name);
     if (outcome === 'copied') {
       setNotice('Link kopiert – du kannst ihn jetzt z. B. in WhatsApp einfügen.');
       window.setTimeout(() => setNotice(''), 3500);

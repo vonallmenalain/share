@@ -63,6 +63,11 @@ korrigieren:
 
 > Diese Variable wird **beim Build** eingebacken. Wenn du sie änderst, musst du
 > **neu deployen** (Deploys → Trigger deploy → Clear cache and deploy site).
+>
+> Dieselbe Variable nutzt auch die Edge Function für die Link-Vorschau
+> (`frontend/netlify/edge-functions/link-preview.ts`, wird automatisch mit
+> deployt). Steht sie in Netlify nur für „Builds" zur Verfügung, nimmt die
+> Funktion `https://api.alae.app`.
 
 ## 3.4 Eigene Domain (share.alae.app)
 
@@ -92,7 +97,8 @@ docker compose up -d backend
 ## 3.6 Test
 
 1. `https://share.alae.app` öffnen → Startseite.
-2. `https://share.alae.app/new` → Bereich erstellen (Admin-Schlüssel = `ADMIN_KEY`).
+2. `https://share.alae.app/new` (oder Startseite → „Login") → mit dem
+   Admin-Schlüssel (`ADMIN_KEY`) anmelden → Bereich erstellen.
 3. Link öffnen, Namen eingeben, ein Foto hochladen → erscheint in der Galerie.
 
 Zeigt der Upload/Login „Failed to fetch“: meist falsche `VITE_API_BASE_URL`,

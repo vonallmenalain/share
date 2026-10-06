@@ -125,12 +125,14 @@ deaktiviertes Modul wird nur ausgeblendet – vorhandene Daten bleiben erhalten.
 
 - **Dokumente** – Beliebige Dateien teilen, optimiert für **PDFs und Musik**:
   Ein Tippen auf ein PDF öffnet es sofort im Vollbild (auch auf Android und
-  iPhone), per **Wischen** oder **Pfeil** geht es zum nächsten PDF. Ein Tippen auf
-  eine MP3 spielt sie **sofort** in einem schlanken Player ab; am Ende startet
-  automatisch das **nächste Lied**. Besteht ein Bereich nur aus Dokumenten, gibt
-  es dafür einen schlanken Link `/d/<bereich>` – oben nur das Logo, ohne
-  Profil-Icon (wenn nicht nach einem Namen gefragt wird) und mit einer
-  **neutralen Link-Vorschau** (z. B. in WhatsApp) ohne Bezug zur Foto-App.
+  iPhone), per **Wischen** oder **Pfeil** geht es zum nächsten PDF, ein Tippen auf
+  den Titel zeigt die Liste aller Dokumente. Ein Tippen auf eine MP3 spielt sie
+  **sofort** in einem schlanken Player ab; am Ende startet automatisch das
+  **nächste Lied**, und über den Titel im Player klappt die **Playlist** auf – auch
+  über einem offenen PDF. Besteht ein Bereich nur aus Dokumenten, öffnet sein
+  Link `/s/<bereich>` direkt die Dokumente – oben nur das Logo, ohne Profil-Icon
+  (wenn nicht nach einem Namen gefragt wird) – und die **Link-Vorschau** (z. B. in
+  WhatsApp) zeigt den Namen des Bereichs statt der Foto-App.
 - **Finanzen** – Gemeinsame Ausgaben erfassen, **gleichmässig** (unter allen
   oder ausgewählten Personen) oder mit **manuellen Beträgen** aufteilen und mit
   möglichst **wenigen Ausgleichszahlungen** abrechnen („Peter zahlt Alain
@@ -208,8 +210,10 @@ npm install
 npm run dev                 # App auf http://localhost:5173
 ```
 
-Dann im Browser `http://localhost:5173/new` öffnen, Admin-Schlüssel (dein
-`ADMIN_KEY`) eingeben, einen Bereich erstellen und den Link teilen.
+Dann im Browser `http://localhost:5173/new` öffnen, mit dem Admin-Schlüssel (dein
+`ADMIN_KEY`) anmelden, einen Bereich erstellen und den Link teilen. Neue Bereiche
+legt nur der Administrator an; die Startseite verweist alle anderen an ihn
+(„Login" führt zur Anmeldung).
 
 ---
 

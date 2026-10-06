@@ -1,8 +1,9 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { ModuleKey } from '../api/client';
 import { useSpaceSessionContext } from '../context/SpaceSessionContext';
 import { isDocumentsOnly } from '../lib/spaceLinks';
 import Space from './Space';
+import DocumentsPage from './documents/DocumentsPage';
 
 /** Pfad (relativ zum Bereich) des jeweiligen Moduls – leer = Galerie (index). */
 const MODULE_PATH: Partial<Record<ModuleKey, string>> = {
@@ -15,15 +16,15 @@ const MODULE_PATH: Partial<Record<ModuleKey, string>> = {
 
 /**
  * Startseite eines Bereichs (Route-Index von `/s/:slug`). Ist die Galerie
- * (Fotos & Videos) aktiv, wird sie wie bisher direkt angezeigt. Ist sie für
- * diesen Bereich abgewählt (z. B. ein reiner Finanz-Bereich), wird stattdessen
- * zum ersten aktivierten Modul weitergeleitet, damit der Bereich beim Öffnen
- * nicht auf einer nicht existierenden Galerie landet. Reine Dokumente-Bereiche
- * landen auf ihrem schlanken Ansichtslink `/d/<slug>`.
+ * (Fotos & Videos) aktiv, wird sie wie bisher direkt angezeigt. Reine
+ * Dokumente-Bereiche zeigen ihre Dokumente direkt hier – ohne Weiterleitung,
+ * damit der geteilte Link genau diese Seite öffnet. Ist die Galerie sonst
+ * abgewählt (z. B. ein reiner Finanz-Bereich), wird zum ersten aktivierten
+ * Modul weitergeleitet, damit der Bereich beim Öffnen nicht auf einer nicht
+ * existierenden Galerie landet.
  */
 export default function SpaceIndex() {
   const { slug, space } = useSpaceSessionContext();
-  const location = useLocation();
   const modules = space?.modules ?? ['photos'];
 
   if (modules.includes('photos') || modules.length === 0) {
@@ -31,7 +32,7 @@ export default function SpaceIndex() {
   }
 
   if (isDocumentsOnly(modules)) {
-    return <Navigate to={`/d/${slug}${location.search}`} replace />;
+    return <DocumentsPage />;
   }
 
   const path = MODULE_PATH[modules[0]];

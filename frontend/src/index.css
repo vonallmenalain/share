@@ -5,9 +5,19 @@
   --ink-soft: #475569;
   --ink-faint: #94a3b8;
   --line: #e6e8ec;
-  --brand: #4f46e5;
+  /* Farben des alae.app-Logos: Schwarz für Hauptaktionen, Rot als Akzent.
+     --brand ist eine dunklere Stufe des Logo-Rots (#fe7971), damit Links und
+     Beschriftungen auf Weiss gut lesbar bleiben. */
+  --primary: #111015;
+  --primary-hover: #2c2b33;
+  --brand: #c93a33;
+  --brand-hover: #ad2f29;
   --brand-ink: #ffffff;
-  --brand-soft: #eef2ff;
+  --brand-soft: #fff0ee;
+  --brand-line: #fbd3cf;
+  --logo-red: #fe7971;
+  /* Ausgewählte Elemente: schwarz umrandet auf zartem Grau (Rot wirkt wie ein Fehler). */
+  --select-bg: #f1f1f4;
   --danger: #dc2626;
   --ok: #16a34a;
   --radius: 16px;
@@ -74,12 +84,12 @@ button {
   cursor: not-allowed;
 }
 .btn-primary {
-  background: var(--brand);
-  border-color: var(--brand);
-  color: var(--brand-ink);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
 }
 .btn-primary:hover {
-  background: #4338ca;
+  background: var(--primary-hover);
 }
 .btn-ghost {
   background: transparent;
@@ -126,8 +136,9 @@ button {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .input:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--brand-soft);
+  /* Schwarz statt Rot – ein roter Rahmen sähe wie ein Fehler aus. */
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(17, 16, 21, 0.1);
 }
 .label {
   display: block;
@@ -193,12 +204,11 @@ button {
 .brand:hover {
   text-decoration: none;
 }
-.brand-dot {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6 60%, #ec4899);
-  box-shadow: var(--shadow-sm);
+.brand-mark {
+  width: 34px;
+  height: auto;
+  flex-shrink: 0;
+  color: var(--primary);
 }
 .spacer {
   flex: 1;
@@ -225,9 +235,13 @@ button {
   justify-content: center;
   padding: 24px;
   background:
-    radial-gradient(1200px 600px at 100% -10%, #eef2ff 0%, transparent 55%),
-    radial-gradient(1000px 600px at -10% 10%, #fdf2f8 0%, transparent 50%),
+    radial-gradient(1200px 600px at 100% -10%, #fdecea 0%, transparent 55%),
+    radial-gradient(1000px 600px at -10% 10%, #ececf1 0%, transparent 50%),
     var(--bg);
+}
+/* Mit Kopfzeile darüber nicht unnötig scrollen. */
+.topbar + .center-page {
+  min-height: calc(100vh - var(--topbar-h) - 1px);
 }
 .panel {
   width: 100%;
@@ -322,7 +336,7 @@ button {
   line-height: 1.5;
   color: var(--ink-soft);
   background: var(--brand-soft);
-  border: 1px solid #dfe3ff;
+  border: 1px solid var(--brand-line);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
 }
@@ -610,9 +624,9 @@ button {
   flex-shrink: 0;
 }
 .group-select-btn.active {
-  background: var(--brand-soft);
-  border-color: var(--brand);
-  color: var(--brand);
+  background: var(--select-bg);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .grid {
@@ -694,12 +708,12 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--brand);
+  color: var(--primary);
   font-size: 14px;
   box-shadow: var(--shadow-sm);
 }
 .tile.selected {
-  outline: 3px solid var(--brand);
+  outline: 3px solid var(--primary);
   outline-offset: -3px;
 }
 .tile-fav {
@@ -800,7 +814,7 @@ button {
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  border: 3px solid rgba(79, 70, 229, 0.25);
+  border: 3px solid rgba(201, 58, 51, 0.2);
   border-top-color: var(--brand);
   animation: spin 0.8s linear infinite;
 }
@@ -1095,7 +1109,7 @@ button {
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: rgba(79, 70, 229, 0.12);
+  background: rgba(201, 58, 51, 0.1);
   border: 3px dashed var(--brand);
   display: flex;
   align-items: center;
@@ -1333,8 +1347,8 @@ button {
   cursor: pointer;
 }
 .te-chip.active {
-  background: var(--brand);
-  border-color: var(--brand);
+  background: var(--primary);
+  border-color: var(--primary);
 }
 .te-foot {
   display: flex;
@@ -1393,6 +1407,15 @@ button {
   height: 1px;
   background: var(--line);
   margin: 20px 0;
+}
+.landing-admin {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.landing-admin .hint {
+  margin: 0;
 }
 .banner {
   background: #fffbeb;
@@ -1473,8 +1496,9 @@ button {
 }
 .admin-space-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   width: 100%;
   padding: 14px 16px;
   border: none;
@@ -1488,7 +1512,8 @@ button {
   background: #fafbfc;
 }
 .admin-space-head .grow {
-  flex: 1;
+  /* Schmale Bildschirme: Name behält Platz, Markierungen rutschen darunter. */
+  flex: 1 1 220px;
   min-width: 0;
 }
 .admin-space-head .nm {
@@ -1543,7 +1568,7 @@ button {
   flex-direction: column;
 }
 .admin-tile.selected {
-  outline: 3px solid var(--brand);
+  outline: 3px solid var(--primary);
   outline-offset: -1px;
 }
 .admin-thumb {
@@ -1574,7 +1599,7 @@ button {
   box-shadow: var(--shadow-sm);
 }
 .admin-check.on {
-  background: var(--brand);
+  background: var(--primary);
   color: #fff;
 }
 .admin-thumb img {
@@ -2857,8 +2882,8 @@ button {
   border-color: var(--brand-soft);
 }
 .calendar-cell.selected {
-  background: var(--brand-soft);
-  border-color: var(--brand);
+  background: var(--select-bg);
+  border-color: var(--primary);
 }
 .calendar-cell-daynum {
   flex-shrink: 0;
@@ -2888,8 +2913,8 @@ button {
   padding: 3px 7px;
 }
 .cal-chip.allday {
-  background: #eef2ff;
-  color: #4338ca;
+  background: var(--brand-soft);
+  color: var(--brand-hover);
   font-weight: 600;
 }
 .cal-chip-more {
@@ -2941,8 +2966,8 @@ button {
   color: var(--brand);
 }
 .calendar-strip-cell.selected {
-  background: var(--brand-soft);
-  border-color: var(--brand);
+  background: var(--select-bg);
+  border-color: var(--primary);
 }
 .agenda-list {
   list-style: none;
@@ -3031,8 +3056,8 @@ button {
   border-color: var(--brand);
 }
 .module-option.active {
-  border-color: var(--brand);
-  background: var(--brand-soft);
+  border-color: var(--primary);
+  background: var(--select-bg);
 }
 .module-option-icon {
   font-size: 22px;
@@ -3048,7 +3073,7 @@ button {
 .module-option-check {
   width: 22px;
   text-align: center;
-  color: var(--brand);
+  color: var(--primary);
   font-weight: 800;
 }
 
@@ -3075,9 +3100,9 @@ button {
   background: var(--bg-elevated);
 }
 .tag-toggle.active {
-  background: var(--brand-soft);
-  color: var(--brand);
-  border-color: var(--brand);
+  background: var(--select-bg);
+  color: var(--primary);
+  border-color: var(--primary);
 }
 
 /* ---- Admin: Personen &amp; Codes ------------------------------------------ */
@@ -3133,7 +3158,7 @@ button {
 }
 .btn-active {
   background: var(--brand-soft);
-  border-color: #c7d2fe;
+  border-color: var(--brand-line);
   color: var(--brand);
 }
 .doc-tools-hint {
@@ -3244,9 +3269,10 @@ button.doc-row-main:hover .doc-row-name {
   background: #fef2f2;
   color: #dc2626;
 }
+/* Musik in Logo-Schwarz, PDFs in Rot – die zwei Farben des alae-Logos. */
 .doc-badge-audio {
-  background: var(--brand-soft);
-  color: var(--brand);
+  background: #ededf1;
+  color: var(--primary);
 }
 .doc-badge-image {
   background: #ecfdf5;
@@ -3496,12 +3522,12 @@ button.doc-row-main:hover .doc-row-name {
 .doc-player-main {
   width: 46px;
   height: 46px;
-  background: var(--brand);
+  background: var(--primary);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+  box-shadow: 0 4px 14px rgba(17, 16, 21, 0.3);
 }
 .doc-player-main:hover {
-  background: #4338ca;
+  background: var(--primary-hover);
 }
 .doc-player-main .spinner {
   width: 18px;
@@ -3512,13 +3538,136 @@ button.doc-row-main:hover .doc-row-name {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  margin-left: 8px;
+  align-items: flex-start;
+  margin-left: 4px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.doc-player-info:hover {
+  background: rgba(148, 163, 184, 0.14);
+}
+.doc-player-title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
 }
 .doc-player-title {
+  min-width: 0;
   font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Pfeil nach oben: Playlist lässt sich aufklappen. */
+.doc-player-chevron {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  transition: transform 0.2s ease;
+}
+.doc-player.expanded .doc-player-chevron {
+  transform: rotate(180deg);
+}
+.doc-player.expanded {
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -12px 40px rgba(15, 23, 42, 0.18);
+}
+.doc-player-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 109;
+  background: rgba(17, 16, 21, 0.28);
+  animation: doc-fade-in 0.18s ease-out;
+}
+.doc-player-list {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 0 2px;
+  animation: doc-player-list-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.doc-player-list-head {
+  padding: 0 10px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.doc-player-list ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(52vh, 430px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.doc-player-track {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 10px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.doc-player-track:hover {
+  background: rgba(148, 163, 184, 0.14);
+}
+.doc-player-track.current {
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 700;
+}
+.doc-player-track-no {
+  width: 22px;
+  flex-shrink: 0;
+  display: inline-flex;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.doc-player-track.current .doc-player-track-no {
+  color: var(--brand);
+}
+.doc-player-track-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.doc-player-track-time {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+@keyframes doc-player-list-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .doc-player-time {
   font-size: 12px;
@@ -3533,13 +3682,33 @@ button.doc-row-main:hover .doc-row-name {
 }
 /* Über der (dunklen) Dokument-Ansicht dunkel statt weiss. */
 .doc-page.viewer-open .doc-player {
-  background: #1b1d23;
+  background: #1c1b22;
   border-top-color: rgba(255, 255, 255, 0.1);
   color: #fff;
 }
 .doc-page.viewer-open .doc-player-time,
-.doc-page.viewer-open .doc-player-close {
-  color: rgba(255, 255, 255, 0.65);
+.doc-page.viewer-open .doc-player-close,
+.doc-page.viewer-open .doc-player-chevron,
+.doc-page.viewer-open .doc-player-list-head,
+.doc-page.viewer-open .doc-player-track-no,
+.doc-page.viewer-open .doc-player-track-time {
+  color: rgba(255, 255, 255, 0.6);
+}
+.doc-page.viewer-open .doc-player-info:hover,
+.doc-page.viewer-open .doc-player-track:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.doc-page.viewer-open .doc-player-track.current,
+.doc-page.viewer-open .doc-player-track.current .doc-player-track-no {
+  background: rgba(254, 121, 113, 0.14);
+  color: var(--logo-red);
+}
+.doc-page.viewer-open .doc-player-track.current .doc-player-track-no {
+  background: transparent;
+}
+.doc-page.viewer-open .doc-player-main {
+  background: #fff;
+  color: var(--primary);
 }
 
 /* Vollbild-Ansicht (PDF, Bild, Video) */
@@ -3549,16 +3718,18 @@ button.doc-row-main:hover .doc-row-name {
   z-index: 100;
   display: flex;
   flex-direction: column;
-  background: #121318;
+  background: #111015;
   color: #fff;
 }
 .doc-viewer-bar {
+  position: relative;
+  z-index: 3;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 2px;
   padding: calc(6px + env(safe-area-inset-top, 0px)) 8px 6px;
-  background: rgba(18, 19, 24, 0.96);
+  background: rgba(17, 16, 21, 0.96);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .doc-viewer-btn {
@@ -3588,18 +3759,131 @@ button.doc-row-main:hover .doc-row-name {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   padding: 0 6px;
 }
 .doc-viewer-title strong {
+  min-width: 0;
+  max-width: 100%;
   font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.doc-viewer-title span {
+/* Titel als Knopf: öffnet die Liste aller Dokumente. */
+.doc-viewer-title-btn {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.doc-viewer-title-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.doc-viewer-title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+.doc-viewer-chevron {
+  flex-shrink: 0;
+  opacity: 0.75;
+  transition: transform 0.2s ease;
+}
+.doc-viewer-title-btn[aria-expanded='true'] .doc-viewer-chevron {
+  transform: rotate(180deg);
+}
+.doc-viewer-count {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.6);
   font-variant-numeric: tabular-nums;
+}
+/* Fängt Klicks neben der Liste ab (schliesst sie), liegt unter der Kopfzeile. */
+.doc-viewer-list-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
+.doc-viewer-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  width: min(460px, calc(100% - 16px));
+  padding: 6px;
+  transform: translateX(-50%);
+  background: #1c1b22;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  animation: doc-viewer-list-in 0.16s ease-out;
+}
+.doc-viewer-list ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(60vh, 460px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.doc-viewer-list-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.doc-viewer-list-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.doc-viewer-list-item.current {
+  background: rgba(254, 121, 113, 0.14);
+  color: var(--logo-red);
+  font-weight: 700;
+}
+.doc-viewer-list-no {
+  width: 22px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+.doc-viewer-list-item.current .doc-viewer-list-no {
+  color: var(--logo-red);
+}
+.doc-viewer-list-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@keyframes doc-viewer-list-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 .doc-viewer-scroll {
   flex: 1;
@@ -3659,19 +3943,6 @@ button.doc-row-main:hover .doc-row-name {
   max-height: calc(100vh - 170px);
   border-radius: 4px;
   background: #000;
-}
-.doc-viewer-end {
-  display: flex;
-  justify-content: center;
-  padding: 26px 8px 8px;
-}
-.doc-viewer-next {
-  max-width: 100%;
-}
-.doc-viewer-next-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .doc-viewer-side {
   display: none;
@@ -3744,7 +4015,10 @@ button.doc-row-main:hover .doc-row-name {
   .doc-slide-open,
   .doc-slide-next,
   .doc-slide-prev,
-  .doc-playing-bars i {
+  .doc-playing-bars i,
+  .doc-player-list,
+  .doc-player-backdrop,
+  .doc-viewer-list {
     animation: none;
   }
 }

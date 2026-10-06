@@ -8,7 +8,7 @@
 const ICONS = [
   { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
   { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-  { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+  { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
 ];
 
 let currentBlobUrl: string | null = null;
@@ -37,13 +37,12 @@ function getManifestLink(): HTMLLinkElement {
 export function setSpaceManifest(
   slug: string,
   name: string,
-  opts: { startPath?: string; description?: string } = {},
+  opts: { description?: string } = {},
 ): void {
   const link = getManifestLink();
   if (originalManifestHref === null) originalManifestHref = link.getAttribute('href');
 
   const title = (name || '').trim() || 'share';
-  const startPath = opts.startPath ?? `/s/${slug}`;
   const manifest = {
     // Sowohl der vollständige Name als auch der Kurzname entsprechen exakt dem
     // Bereichsnamen, damit die installierte PWA genauso heisst wie der Bereich
@@ -52,17 +51,15 @@ export function setSpaceManifest(
     short_name: title,
     description: opts.description ?? 'Fotos & Videos einfach in einer privaten Gruppe teilen.',
     lang: 'de',
-    // Die ID bleibt pro Bereich gleich (auch für den Dokumente-Link), damit
-    // bereits installierte Verknüpfungen erhalten bleiben.
     id: `/s/${slug}`,
-    start_url: absoluteUrl(startPath),
+    start_url: absoluteUrl(`/s/${slug}`),
     scope: absoluteUrl('/'),
     display: 'standalone',
     // 'any' statt 'portrait': So darf die installierte PWA dem Gerät ins
     // Querformat folgen (z. B. für quer aufgenommene Videos im Vollbild).
     orientation: 'any',
     background_color: '#f6f7f9',
-    theme_color: '#4f46e5',
+    theme_color: '#111015',
     icons: ICONS.map((i) => ({ ...i, src: absoluteUrl(i.src) })),
   };
 
