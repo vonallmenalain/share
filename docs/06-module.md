@@ -330,9 +330,16 @@ dazu passende MP3s.
   **Pfeiltasten**. Ein Tippen auf den **Titel** (mit kleinem Pfeil nach unten)
   öffnet die Liste aller Dokumente – bei vielen scrollbar – zum direkten
   Springen. Die Ansicht hat eine eigene URL (`?doc=<id>`), „Zurück" schliesst
-  sie. Nachbar-PDFs werden im Hintergrund
-  vorgeladen; beim Zwei-Finger-Zoom rendern die sichtbaren Seiten schärfer nach.
-  Bilder und Videos öffnen in derselben Ansicht.
+  sie. Nachbar-PDFs werden im Hintergrund vorgeladen. Bilder und Videos öffnen
+  in derselben Ansicht.
+- **Zoomen** (PDFs und Bilder): mit zwei Fingern, per Doppeltippen (hinein bzw.
+  zurück auf die ganze Breite) oder am Computer mit Ctrl + Mausrad bzw. dem
+  Trackpad. Gezoomt wird in der Ansicht selbst, nicht die ganze Seite: Das
+  Dokument wird grösser und lässt sich danach in alle Richtungen verschieben;
+  Kopfzeile und Player bleiben gleich gross. Die sichtbaren Seiten rendern kurz
+  danach schärfer nach (`frontend/src/pages/documents/usePinchZoom.ts`).
+  Wischen blättert nur in der ganzen Breite zum nächsten Dokument – gezoomt
+  verschiebt es den Ausschnitt.
 - **Musik:** Ein Tippen auf eine Audiodatei spielt sie **sofort** ab, ein
   weiteres Tippen pausiert. Am Ende eines Liedes startet automatisch das
   **nächste** (nach dem letzten ist Schluss). Die schmale Player-Leiste unten

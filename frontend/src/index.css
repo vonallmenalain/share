@@ -3760,6 +3760,9 @@ button.doc-row-main:hover .doc-row-name {
   flex-direction: column;
   background: #111015;
   color: #fff;
+  /* Zoomen übernimmt die Ansicht selbst (usePinchZoom) – der Browser soll
+     hier nur verschieben, nicht die ganze Seite vergrössern. */
+  touch-action: pan-x pan-y;
 }
 .doc-viewer-bar {
   position: relative;
@@ -3927,8 +3930,8 @@ button.doc-row-main:hover .doc-row-name {
 }
 .doc-viewer-scroll {
   flex: 1;
-  overflow-x: hidden;
-  overflow-y: auto;
+  /* In alle Richtungen – gezoomte Dokumente sind breiter als der Bildschirm. */
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 12px 10px 28px;
@@ -3938,14 +3941,12 @@ button.doc-row-main:hover .doc-row-name {
 }
 .pdf-view {
   width: 100%;
-  max-width: 980px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
 }
+/* Mittig, solange die Seite schmaler ist als die Ansicht; gezoomt beginnt sie
+   links und lässt sich ganz nach rechts verschieben (auto-Ränder werden nie
+   negativ – anders als bei Flexbox-Zentrierung). */
 .pdf-page {
+  margin: 0 auto 12px;
   position: relative;
   overflow: hidden;
   border-radius: 2px;
@@ -3973,16 +3974,25 @@ button.doc-row-main:hover .doc-row-name {
 }
 .doc-viewer-media {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 50vh;
+  min-height: 100%;
 }
+/* margin: auto zentriert und bleibt beim Hineinzoomen am Rand statt ins
+   Negative zu rutschen – so lässt sich das ganze Bild erreichen. */
 .doc-viewer-media img,
+.doc-viewer-media video {
+  margin: auto;
+  border-radius: 4px;
+  background: #000;
+}
 .doc-viewer-media video {
   max-width: 100%;
   max-height: calc(100vh - 170px);
-  border-radius: 4px;
-  background: #000;
+}
+.doc-viewer-image img {
+  display: block;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 .doc-viewer-side {
   display: none;
