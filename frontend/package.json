@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test netlify/shared/linkPreview.test.ts"
   },
   "dependencies": {
     "pdfjs-dist": "^6.4.299",

@@ -47,15 +47,13 @@ function SpaceShell() {
   const [showIdentityManager, setShowIdentityManager] = useState(false);
 
   // PWA-Manifest auf den aktuellen Bereich zeigen lassen (wie bisher). Reine
-  // Dokumente-Bereiche starten auf ihrem Ansichtslink – mit neutraler Beschreibung.
+  // Dokumente-Bereiche bekommen eine neutrale Beschreibung.
   useEffect(() => {
     if (!slug || !space) return;
     setSpaceManifest(
       slug,
       space.name,
-      isDocumentsOnly(space.modules)
-        ? { startPath: spacePath(slug, space.modules), description: 'Geteilte Dokumente' }
-        : {},
+      isDocumentsOnly(space.modules) ? { description: 'Geteilte Dokumente' } : {},
     );
     return () => resetManifest();
   }, [slug, space]);
@@ -88,18 +86,14 @@ function SpaceShell() {
   }
 
   if (phase === 'notfound') {
-    // Über einen Dokumente-Link (/d/…) bewusst ohne Verweis auf die Startseite.
-    const viaDocumentLink = location.pathname.startsWith('/d/');
     return (
       <div className="center-page">
         <div className="panel">
-          <h1>{viaDocumentLink ? 'Link nicht gefunden' : 'Bereich nicht gefunden'}</h1>
+          <h1>Bereich nicht gefunden</h1>
           <p className="sub">Der Link ist ungültig oder der Bereich wurde gelöscht.</p>
-          {!viaDocumentLink && (
-            <Link className="btn" to="/">
-              Zur Startseite
-            </Link>
-          )}
+          <Link className="btn" to="/">
+            Zur Startseite
+          </Link>
         </div>
       </div>
     );
@@ -190,7 +184,7 @@ function SpaceShell() {
     !identity.current.hasPin;
 
   const shareSpaceLink = async () => {
-    const url = spaceShareUrl(slug, modules);
+    const url = spaceShareUrl(slug);
     const title = space?.name || 'Bereich teilen';
     if (typeof navigator.share === 'function') {
       try {
@@ -212,7 +206,7 @@ function SpaceShell() {
     <>
       <TopBar
         hidden={chromeHidden}
-        brandTo={spacePath(slug, modules)}
+        brandTo={spacePath(slug)}
         onMenuClick={showNav ? () => setNavOpen((o) => !o) : undefined}
         menuOpen={navOpen}
       >

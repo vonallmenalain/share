@@ -4,8 +4,30 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { documentsPreviewHtml } from './netlify/shared/linkPreview';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Kennung dieses Builds: im App-Code als `__APP_VERSION__` und zusätzlich als
+ * /version.json. So erkennt eine offene Seite nach einem Update des Service
+ * Workers, ob sie wirklich neu laden muss (siehe src/main.tsx).
+ */
+const appVersion = Date.now().toString(36);
+
+function appVersionFile(): Plugin {
+  return {
+    name: 'app-version-file',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ version: appVersion }),
+      });
+    },
+  };
+}
 
 /**
  * Hilfsdateien von pdf.js (PDF-Anzeige im Dokumente-Modul) unter /pdfjs/
@@ -50,29 +72,14 @@ function pdfjsAssets(): Plugin {
 }
 
 /**
- * Neutrale Link-Vorschau für Dokumente-Links (/d/<bereich>): WhatsApp & Co.
- * lesen nur das statische HTML (ohne JavaScript). Deshalb entsteht beim Build
- * eine Kopie von index.html als d/index.html – mit Titel, Beschreibung und
- * Vorschaubild ohne Bezug zur Foto-App. Die App selbst ist identisch. Netlify
- * liefert sie für /d/* aus (Regel `/d/*  /d/index.html  200` in
- * public/_redirects, vor der allgemeinen SPA-Regel).
+ * Link-Vorschau für früher geteilte Dokumente-Links (/d/<bereich>): WhatsApp &
+ * Co. lesen nur das statische HTML. Beim Build entsteht deshalb eine Kopie von
+ * index.html als d/index.html – mit dem Titel „Dokumente", dem Dokumente-Bild
+ * und ohne Beschreibung. Netlify liefert sie für /d/* aus (Regel in
+ * public/_redirects). Neue Links (/s/<bereich>) bekommen ihre Vorschau mit dem
+ * Namen des Bereichs von der Edge Function (netlify/edge-functions/).
  */
 function documentsEntryHtml(): Plugin {
-  const title = 'Geteilte Dokumente';
-  const description = 'Direkt im Browser ansehen und anhören.';
-  const replacements: Array<[RegExp, string]> = [
-    [/<title>[^<]*<\/title>/, `<title>${title}</title>`],
-    [/(<meta name="description" content=")[^"]*(")/, `$1${description}$2`],
-    [/(<meta property="og:title" content=")[^"]*(")/, `$1${title}$2`],
-    [/(<meta property="og:description" content=")[^"]*(")/, `$1${description}$2`],
-    [/(<meta property="og:image" content="[^"]*)og-image\.png(")/, '$1og-docs.png$2'],
-    [/(<meta property="og:image:alt" content=")[^"]*(")/, `$1${title}$2`],
-    [/(<meta name="twitter:title" content=")[^"]*(")/, `$1${title}$2`],
-    [/(<meta name="twitter:description" content=")[^"]*(")/, `$1${description}$2`],
-    [/(<meta name="twitter:image" content="[^"]*)og-image\.png(")/, '$1og-docs.png$2'],
-    // Die kanonische URL der Startseite gilt hier nicht.
-    [/\s*<meta property="og:url" content="[^"]*" \/>/, ''],
-  ];
   return {
     name: 'documents-entry-html',
     apply: 'build',
@@ -82,12 +89,15 @@ function documentsEntryHtml(): Plugin {
       if (!index || index.type !== 'asset') {
         this.error('documents-entry-html: index.html fehlt im Build.');
       }
-      let html = String(index.source);
-      for (const [pattern, replacement] of replacements) {
-        if (!pattern.test(html)) {
-          this.error(`documents-entry-html: ${pattern} nicht in index.html gefunden.`);
-        }
-        html = html.replace(pattern, replacement);
+      const source = String(index.source);
+      const ogImage = /<meta property="og:image" content="([^"]*)og-image\.png([^"]*)"/.exec(source);
+      if (!ogImage) this.error('documents-entry-html: og:image nicht in index.html gefunden.');
+      const { html, missing } = documentsPreviewHtml(source, {
+        title: 'Dokumente',
+        imageUrl: `${ogImage[1]}og-docs.png${ogImage[2]}`,
+      });
+      if (missing.length) {
+        this.error(`documents-entry-html: ${missing.join(', ')} nicht in index.html gefunden.`);
       }
       this.emitFile({ type: 'asset', fileName: 'd/index.html', source: html });
     },
@@ -99,6 +109,7 @@ export default defineConfig({
     react(),
     pdfjsAssets(),
     documentsEntryHtml(),
+    appVersionFile(),
     VitePWA({
       // Service Worker automatisch im Hintergrund aktualisieren, sobald ein
       // neues Deploy verfügbar ist – so bekommen Nutzer Updates ohne manuelles
@@ -126,25 +137,49 @@ export default defineConfig({
         // Bildschirm aufs Hochformat gesperrt, obwohl der Browser dreht.
         orientation: 'any',
         background_color: '#f6f7f9',
-        theme_color: '#4f46e5',
+        // Farbe des alae.app-Logos (auch Statusleiste der installierten App).
+        theme_color: '#111015',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          // Vollflächig, Zeichen innerhalb der Schutzzone – für runde/geformte Icons.
+          { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
         // Alle gebauten Assets vorab in den Cache legen (Offline-Start & schneller Start).
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff,woff2}'],
-        // Ausnahme: die PDF-Anzeige (pdf.js, gut 1.8 MB) und ihre Hilfsdateien.
-        // Sie werden erst beim Öffnen eines PDFs geladen – nicht vorab bei allen,
-        // die die App nur für Fotos & Co. nutzen.
-        globIgnores: ['**/pdf-*.js', '**/pdfWorker-*.js', 'pdfjs/**', 'og-docs.png'],
-        // Single-Page-App: unbekannte Navigationsrouten auf index.html zurückfallen lassen.
-        navigateFallback: '/index.html',
-        // API-Aufrufe und den Netlify-SPA-Redirect nicht abfangen.
-        navigateFallbackDenylist: [/^\/api\//],
+        // Ausnahmen: die PDF-Anzeige (pdf.js, gut 1.8 MB) und ihre Hilfsdateien –
+        // sie werden erst beim Öffnen eines PDFs geladen, nicht vorab bei allen,
+        // die die App nur für Fotos & Co. nutzen. Dazu alles, was nur Link-
+        // Vorschauen (WhatsApp & Co.) brauchen. Je kleiner dieser Cache, desto
+        // schneller ist eine neue App-Version auf dem Gerät aktiv.
+        globIgnores: [
+          '**/pdf-*.js',
+          '**/pdfWorker-*.js',
+          'pdfjs/**',
+          'og-*.png',
+          'd/index.html',
+        ],
+        // Seitenaufrufe (Links öffnen, neu laden) kommen immer zuerst aus dem
+        // Netz – so zeigt ein geteilter Link sofort die aktuelle App, auch wenn
+        // auf dem Gerät noch eine ältere Version gespeichert ist. Nur ohne Netz
+        // startet die gespeicherte App. Früher kam die App zuerst aus dem
+        // Cache: Eine alte Version, die einen neuen Link noch nicht kannte,
+        // landete so auf der Startseite.
+        navigateFallback: null,
+        runtimeCaching: [
+          {
+            urlPattern: ({ request, url }) =>
+              request.mode === 'navigate' && !url.pathname.startsWith('/api/'),
+            handler: 'NetworkOnly',
+            options: {
+              precacheFallback: { fallbackURL: 'index.html' },
+            },
+          },
+        ],
         cleanupOutdatedCaches: true,
+        skipWaiting: true,
         clientsClaim: true,
       },
       // Ermöglicht das Testen des Service Workers auch im Dev-/Preview-Modus.
@@ -154,6 +189,9 @@ export default defineConfig({
       },
     }),
   ],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   // Der PDF-Worker wird als ES-Modul gestartet (`new Worker(url, { type: 'module' })`).
   worker: {
     format: 'es',

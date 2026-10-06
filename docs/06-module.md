@@ -324,25 +324,35 @@ dazu passende MP3s.
   funktioniert – auch auf Android (kein eingebauter PDF-Viewer) und auf dem
   iPhone (dort zeigt ein eingebettetes PDF sonst nur die erste Seite). Zum
   nächsten bzw. vorherigen PDF geht es per **Wischen** nach links/rechts, über
-  die **Pfeile** oben (am Desktop zusätzlich seitlich), die **Pfeiltasten** oder
-  den **„Weiter: …"-Knopf** am Ende eines PDFs. Die Ansicht hat eine eigene URL
-  (`?doc=<id>`), „Zurück" schliesst sie. Nachbar-PDFs werden im Hintergrund
+  die **Pfeile** oben (am Desktop zusätzlich seitlich) oder die
+  **Pfeiltasten**. Ein Tippen auf den **Titel** (mit kleinem Pfeil nach unten)
+  öffnet die Liste aller Dokumente – bei vielen scrollbar – zum direkten
+  Springen. Die Ansicht hat eine eigene URL (`?doc=<id>`), „Zurück" schliesst
+  sie. Nachbar-PDFs werden im Hintergrund
   vorgeladen; beim Zwei-Finger-Zoom rendern die sichtbaren Seiten schärfer nach.
   Bilder und Videos öffnen in derselben Ansicht.
 - **Musik:** Ein Tippen auf eine Audiodatei spielt sie **sofort** ab, ein
   weiteres Tippen pausiert. Am Ende eines Liedes startet automatisch das
   **nächste** (nach dem letzten ist Schluss). Die schmale Player-Leiste unten
   (zurück, Play/Pause, weiter, Spulen) bleibt auch über der PDF-Ansicht
-  sichtbar – Noten oder Texte lassen sich so lesen, während das Lied läuft. Über
-  die Media-Session-API funktionieren auch die Tasten auf dem Sperrbildschirm
-  bzw. am Kopfhörer.
+  sichtbar – Noten oder Texte lassen sich so lesen, während das Lied läuft. Ein
+  Tippen auf den Titel im Player (oder den kleinen Pfeil nach oben daneben)
+  klappt die **Playlist** nach oben auf: Dort lässt sich jedes Lied direkt
+  wählen, ohne das offene PDF zu verlassen; danach klappt sie wieder zu
+  (ebenso mit Escape oder einem Tippen daneben). Über die Media-Session-API
+  funktionieren auch die Tasten auf dem Sperrbildschirm bzw. am Kopfhörer.
 - **Andere Dateien** (z. B. Word, ZIP) werden beim Antippen heruntergeladen.
 
-**Schlanker Ansichtslink `/d/<slug>`.** Besteht ein Bereich **nur** aus dem
-Dokumente-Modul, wird er unter `/d/<slug>` geteilt und geöffnet (`/s/<slug>`
-leitet dorthin weiter). Fragt der Bereich zusätzlich nicht nach einem Namen,
-zeigt die Kopfzeile nur das Logo – ohne Profil-/Bereichsmenü. Der Tab-Titel ist
-der Name des Bereichs.
+**Link eines reinen Dokumente-Bereichs.** Besteht ein Bereich **nur** aus dem
+Dokumente-Modul, zeigt sein Link `/s/<slug>` direkt die Dokumente – ohne
+Weiterleitung und ohne Zwischenschritt. Fragt der Bereich zusätzlich nicht nach
+einem Namen, zeigt die Kopfzeile nur das Logo – ohne Profil-/Bereichsmenü. Der
+Tab-Titel ist der Name des Bereichs. Früher wurden solche Bereiche als
+`/d/<slug>` geteilt; diese Links leiten weiterhin auf `/s/<slug>` um. Neue
+Links verwenden bewusst wieder `/s/`: Diese Form versteht auch eine ältere, auf
+einem Gerät noch gespeicherte App-Version – mit `/d/` landete eine solche
+Version auf der Startseite („Link oder Code einfügen"), siehe
+[4. Betrieb](04-betrieb.md#app-updates-auf-den-geräten).
 
 **Hochladen & Verwalten** (für alle, oder mit Upload-Sperre nur für den
 Administrator): „Dateien hinzufügen" (oder Dateien auf die Seite ziehen). Die
@@ -367,13 +377,22 @@ Datei als Webseite auf der API-Domain ausgeführt wird. Downloads enthalten den
 Dateinamen jetzt zusätzlich nach RFC 5987, sodass auch Namen mit „–" oder
 Emojis funktionieren.
 
-**Neutrale Link-Vorschau.** WhatsApp &amp; Co. lesen beim Teilen nur das
-statische HTML. Beim Build entsteht deshalb neben `index.html` eine Kopie
-`d/index.html` mit neutralem Titel („Geteilte Dokumente"), Beschreibung und
-Vorschaubild (`og-docs.png`) – ohne Bezug zur Foto-App
-(`frontend/vite.config.ts`). Netlify liefert diese Datei für `/d/*` aus – dafür
-steht in `frontend/public/_redirects` vor der allgemeinen SPA-Regel die Zeile
-`/d/*  /d/index.html  200`.
+**Link-Vorschau mit dem Namen des Bereichs.** WhatsApp &amp; Co. lesen beim
+Teilen nur das HTML (ohne JavaScript). Für reine Dokumente-Bereiche zeigt die
+Vorschau das Dokumente-Bild (`og-docs.png`), darunter den **Namen des
+Bereichs** (z. B. „Lieder DKA 2026") und **keine Beschreibung** – ohne Bezug zur
+Foto-App. Das erledigt die Netlify Edge Function
+`frontend/netlify/edge-functions/link-preview.ts`: Sie läuft für `/s/*` und
+`/d/*`, aber nur für Vorschau-Programme (WhatsApp, iMessage, Telegram, Signal,
+Facebook, Slack, Suchmaschinen …) – Browser laufen ohne Umweg durch. Sie
+schlägt den Bereich beim Backend nach (`GET /api/spaces/by-slug/:slug`, mit
+`VITE_API_BASE_URL`, sonst `https://api.alae.app`; höchstens 2,5 s) und passt
+nur bei reinen Dokumente-Bereichen Titel und Bild an. Ist das Backend nicht
+erreichbar, kommt die normale Seite. Die HTML-Anpassung selbst steckt in
+`frontend/netlify/shared/linkPreview.ts` (Tests: `npm test` im Ordner
+`frontend`). Für früher geteilte `/d/`-Links entsteht beim Build zusätzlich
+`d/index.html` mit dem Titel „Dokumente" als Rückfall (Regel
+`/d/*  /d/index.html  200` in `frontend/public/_redirects`).
 
 ## Upload-Sperre (reiner Ansichtslink)
 

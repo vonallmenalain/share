@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import TopBar from '../components/TopBar';
 
 /** Extrahiert einen Slug aus einer eingegebenen URL oder direktem Slug. */
 function parseSlug(input: string): string {
@@ -21,39 +22,43 @@ export default function Landing() {
   };
 
   return (
-    <div className="center-page">
-      <div className="panel">
-        <span className="hero-badge">Fotos &amp; Videos · privat geteilt</span>
-        <h1>Eure Erinnerungen, an einem Ort.</h1>
-        <p className="sub">
-          Erstellt einen privaten Bereich (z.&nbsp;B. „Ferien Tessin“), teilt den Link mit der
-          Familie und ladet eure Original-Fotos und -Videos hoch – von iPhone und Android. Schöne
-          Galerie, einfache Up- &amp; Downloads.
-        </p>
+    <>
+      <TopBar />
+      <div className="center-page">
+        <div className="panel">
+          <span className="hero-badge">Fotos &amp; Videos · privat geteilt</span>
+          <h1>Eure Erinnerungen, an einem Ort.</h1>
+          <p className="sub">
+            Erstellt einen privaten Bereich (z.&nbsp;B. „Ferien Tessin“), teilt den Link mit der
+            Familie und ladet eure Original-Fotos und -Videos hoch – von iPhone und Android. Schöne
+            Galerie, einfache Up- &amp; Downloads.
+          </p>
 
-        <form onSubmit={open}>
-          <div className="field">
-            <label className="label">Bereich öffnen</label>
-            <input
-              className="input"
-              placeholder="Link oder Code einfügen"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              autoFocus
-            />
+          <form onSubmit={open}>
+            <div className="field">
+              <label className="label">Bereich öffnen</label>
+              <input
+                className="input"
+                placeholder="Link oder Code einfügen"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <button className="btn btn-primary" style={{ width: '100%' }} type="submit">
+              Bereich öffnen
+            </button>
+          </form>
+
+          <div className="divider" />
+          <div className="landing-admin">
+            <p className="hint">Neuen Bereich anlegen? Wende dich an den Administrator Alä.</p>
+            <Link className="btn btn-sm" to="/admin">
+              Login
+            </Link>
           </div>
-          <button className="btn btn-primary" style={{ width: '100%' }} type="submit">
-            Bereich öffnen
-          </button>
-        </form>
-
-        <div className="divider" />
-        <p className="hint">
-          Neuen Bereich anlegen?{' '}
-          <Link to="/new">Hier erstellen</Link> (Admin-Schlüssel nötig). Übersicht aller Bereiche:{' '}
-          <Link to="/admin">Admin</Link>.
-        </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
