@@ -8,7 +8,7 @@ import ModuleNavigation from '../components/ModuleNavigation';
 import ParticipantGate from '../components/ParticipantGate';
 import ParticipantPinSetup from '../components/ParticipantPinSetup';
 import ParticipantPinManager from '../components/ParticipantPinManager';
-import { setSpaceManifest, resetManifest } from '../lib/pwaManifest';
+import { setSpaceManifest, resetManifest, forgetSpaceManifest } from '../lib/pwaManifest';
 import { isDocumentsOnly, spacePath, spaceShareUrl } from '../lib/spaceLinks';
 import {
   SpaceSessionProvider,
@@ -47,7 +47,9 @@ function SpaceShell() {
   const [showIdentityManager, setShowIdentityManager] = useState(false);
 
   // PWA-Manifest auf den aktuellen Bereich zeigen lassen (wie bisher). Reine
-  // Dokumente-Bereiche bekommen eine neutrale Beschreibung.
+  // Dokumente-Bereiche bekommen eine neutrale Beschreibung. Ist es schon beim
+  // Start gesetzt worden und unverändert, bleibt es, wie es ist (siehe
+  // pwaManifest) – zurück zum allgemeinen Manifest erst beim Verlassen.
   useEffect(() => {
     if (!slug || !space) return;
     setSpaceManifest(
@@ -55,8 +57,11 @@ function SpaceShell() {
       space.name,
       isDocumentsOnly(space.modules) ? { description: 'Geteilte Dokumente' } : {},
     );
-    return () => resetManifest();
   }, [slug, space]);
+  useEffect(() => () => resetManifest(), [slug]);
+  useEffect(() => {
+    if (slug && phase === 'notfound') forgetSpaceManifest(slug);
+  }, [slug, phase]);
 
   // Beim Wechsel zwischen Modulen den „Vollbild"-Zustand zurücksetzen, damit
   // TopBar & Navigation auf den anderen Seiten immer sichtbar sind, und das

@@ -66,7 +66,10 @@ Alle Metadaten (auch der neuen Module) bleiben in derselben lokalen
   einen Bereich (z. B. `share.alae.app/s/ferien-tessin-…`) und fügt ihn zum
   Startbildschirm hinzu, öffnet die installierte Verknüpfung direkt diesen Bereich
   statt der Startseite. Die installierte App heisst dabei **genau wie der Bereich**
-  (z. B. „Ferien Tessin“) – der Name wird nicht mehr abgeschnitten.
+  (z. B. „Ferien Tessin“) – der Name wird nicht mehr abgeschnitten. Ein neues
+  App-Symbol übernimmt Chrome auf Android bei schon installierten Apps nicht
+  von selbst: dafür die App entfernen und neu hinzufügen (siehe
+  [Betrieb](docs/04-betrieb.md#installierte-app-startbildschirm)).
 - **Zwischen Bereichen wechseln**: Öffnet man nach und nach mehrere Bereiche per
   Link, merkt sich die App diese **nur lokal im Browser**. Über das Profil-Menü
   oben rechts sieht man dann, in welchem Bereich man gerade ist (z. B. „Ferien

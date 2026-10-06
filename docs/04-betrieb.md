@@ -37,6 +37,28 @@ und zeigt dafür die Startseite („Link oder Code einfügen") – deshalb werde
 Bereiche wieder als `/s/<bereich>` geteilt. Wer einen `/d/`-Link bekommen hat
 und auf der Startseite landet: Link einfach nochmals öffnen.
 
+### Installierte App (Startbildschirm)
+
+Wer die App oder einen Bereich auf Android zum Startbildschirm hinzugefügt hat,
+hat eine kleine eigene App auf dem Gerät. Links auf share.alae.app öffnen sich
+dann darin, und zuerst erscheint kurz ein Startbild mit dem App-Symbol. Dieses
+Symbol speichert Android beim Installieren.
+
+- **Name und Farben** übernimmt Chrome von selbst (bei einem neuen Namen
+  fragt es vorher nach): Beim Öffnen der App prüft es höchstens einmal am Tag
+  das Manifest, das Update folgt, sobald das Gerät lädt und im WLAN ist. Bei
+  einer Bereichs-App klappt das, wenn sie über ihr Symbol oder einen Link auf
+  denselben Bereich geöffnet wird. Die App setzt das Manifest eines schon
+  besuchten Bereichs dafür gleich beim Start (siehe
+  `frontend/src/lib/pwaManifest.ts`).
+- **Ein ganz neues Symbol** übernimmt Chrome auf Android aus
+  Sicherheitsgründen **nicht** automatisch. Wer nach dem Wechsel zum
+  alae-Design noch das alte, violette Symbol sieht, entfernt die App vom
+  Startbildschirm (Symbol lange drücken → „Deinstallieren“). Danach den Link in
+  Chrome öffnen und über das Menü ⋮ → „Zum Startbildschirm hinzufügen“ bzw.
+  „App installieren“ neu hinzufügen. Die Inhalte bleiben erhalten: Sie liegen
+  auf dem Server, nicht in der App.
+
 ## Backups
 
 Sichere den App-Datenordner (`.../share-app/data`). Er enthält Fotos, Videos und
@@ -53,6 +75,7 @@ die SQLite-DB. Tipp: QNAP **Hybrid Backup Sync**.
 | „Zugang abgelaufen“ | Der Bereichs-Token ist abgelaufen (`ACCESS_TOKEN_TTL_DAYS`, Standard 60 Tage). Einfach Link erneut öffnen / Passwort erneut eingeben. |
 | Neue Bereiche lassen sich nicht anlegen | Falscher `ADMIN_KEY`. Wert in `.env` prüfen. |
 | Link öffnet die Startseite „Link oder Code einfügen“ | Alte App-Version auf dem Gerät mit einem `/d/`-Link (siehe „App-Updates auf den Geräten“). Link nochmals öffnen bzw. den Link im Format `/s/<bereich>` verschicken. |
+| Beim Öffnen eines Links erscheint kurz das alte (violette) Symbol | Die App ist auf dem Gerät installiert und zeigt das Symbol von damals – ein neues Symbol übernimmt Android nicht von selbst. App vom Startbildschirm entfernen und neu hinzufügen (siehe „Installierte App“). |
 
 ## Logs ansehen
 
