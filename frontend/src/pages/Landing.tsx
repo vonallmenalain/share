@@ -5,7 +5,7 @@ import { useNavigate, Link } from 'react-router-dom';
 function parseSlug(input: string): string {
   const v = input.trim();
   if (!v) return '';
-  const m = v.match(/\/s\/([^/?#]+)/);
+  const m = v.match(/\/[sd]\/([^/?#]+)/);
   if (m) return m[1];
   return v.replace(/^\/+|\/+$/g, '');
 }

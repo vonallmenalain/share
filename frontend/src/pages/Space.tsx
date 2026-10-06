@@ -31,7 +31,14 @@ export default function Space() {
     uploaderName: sessionUploaderName,
     chromeHidden,
     setChromeHidden,
+    canManage,
+    isAdmin,
+    adminKey,
   } = useSpaceSessionContext();
+  // Upload-Sperre: Ohne Änderungsrecht ist die Galerie ein reiner Ansichtslink
+  // (kein Hochladen, Löschen, Favorisieren oder Anpassen). Der Administrator
+  // schickt in gesperrten Bereichen seinen Schlüssel mit.
+  const lockKey = space?.uploadsLocked && isAdmin ? adminKey : undefined;
   const uploadHref = `/s/${slug}/upload`;
   const goUpload = useCallback(() => navigate(uploadHref), [navigate, uploadHref]);
 
@@ -129,14 +136,15 @@ export default function Space() {
         if (!uploaderName) return;
         setName(uploaderName);
       }
-      uploads.addFiles(files, { spaceId: space.id, token, uploaderName });
+      uploads.addFiles(files, { spaceId: space.id, token, uploaderName, adminKey: lockKey });
     },
-    [space, token, sessionUploaderName, uploads, setName],
+    [space, token, sessionUploaderName, uploads, setName, lockKey],
   );
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
+    if (!canManage) return;
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       startUpload(Array.from(e.dataTransfer.files));
       navigate(uploadHref);
@@ -257,6 +265,7 @@ export default function Space() {
             method: 'POST',
             token,
             uploaderName: sessionUploaderName || undefined,
+            adminKey: lockKey,
           });
           ok.push(id);
         } catch {
@@ -272,7 +281,7 @@ export default function Space() {
         );
       }
     },
-    [token, sessionUploaderName],
+    [token, sessionUploaderName, lockKey],
   );
 
   const deleteSelected = async () => {
@@ -307,12 +316,13 @@ export default function Space() {
           token,
           body: { favorite: next },
           uploaderName: sessionUploaderName || undefined,
+          adminKey: lockKey,
         });
       } catch {
         setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, favorite: !next } : i)));
       }
     },
-    [token, sessionUploaderName],
+    [token, sessionUploaderName, lockKey],
   );
 
   const handleThumbUpdated = useCallback((updated: Item) => {
@@ -376,7 +386,7 @@ export default function Space() {
         style={{ paddingBottom: 80 }}
         onDragOver={(e) => {
           e.preventDefault();
-          setDragOver(true);
+          if (canManage) setDragOver(true);
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
@@ -393,9 +403,11 @@ export default function Space() {
         </div>
 
         <div className={`toolbar${chromeHidden ? ' toolbar-hidden' : ''}`}>
-          <button className="btn btn-primary" onClick={goUpload}>
-            ↑ Hochladen
-          </button>
+          {canManage && (
+            <button className="btn btn-primary" onClick={goUpload}>
+              ↑ Hochladen
+            </button>
+          )}
 
           <Dropdown
             align="start"
@@ -463,13 +475,15 @@ export default function Space() {
               >
                 ↓ ZIP
               </button>
-              <button
-                className="btn btn-sm btn-danger"
-                disabled={selected.size === 0}
-                onClick={deleteSelected}
-              >
-                Löschen
-              </button>
+              {canManage && (
+                <button
+                  className="btn btn-sm btn-danger"
+                  disabled={selected.size === 0}
+                  onClick={deleteSelected}
+                >
+                  Löschen
+                </button>
+              )}
               <button
                 className="btn btn-sm btn-ghost"
                 onClick={() => {
@@ -492,17 +506,24 @@ export default function Space() {
         </div>
 
         {readyItems.length === 0 ? (
-          <div
-            className={`dropzone${dragOver ? ' over' : ''}`}
-            style={{ marginTop: 24 }}
-            onClick={goUpload}
-          >
-            <div style={{ fontSize: 40, marginBottom: 8 }}>📷</div>
-            <strong>Noch keine Medien</strong>
-            <div className="hint" style={{ marginTop: 6 }}>
-              Ziehe Fotos &amp; Videos hierher oder klicke zum Hochladen.
+          canManage ? (
+            <div
+              className={`dropzone${dragOver ? ' over' : ''}`}
+              style={{ marginTop: 24 }}
+              onClick={goUpload}
+            >
+              <div style={{ fontSize: 40, marginBottom: 8 }}>📷</div>
+              <strong>Noch keine Medien</strong>
+              <div className="hint" style={{ marginTop: 6 }}>
+                Ziehe Fotos &amp; Videos hierher oder klicke zum Hochladen.
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="dropzone" style={{ marginTop: 24, cursor: 'default' }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>📷</div>
+              <strong>Noch keine Medien</strong>
+            </div>
+          )
         ) : view === 'gallery' ? (
           <CollageGrid
             items={readyItems}
@@ -624,17 +645,18 @@ export default function Space() {
           index={lightboxIndex}
           token={token}
           currentName={sessionUploaderName}
+          adminKey={lockKey}
           onClose={() => setLightboxId(null)}
           onNavigate={(i) => setLightboxId(flatOrder[i]?.id ?? null)}
           onDownload={downloadOriginal}
           onShare={(item) => shareItemsWithFallback([item])}
-          onDelete={deleteOne}
-          onToggleFavorite={toggleFavorite}
-          onThumbUpdated={handleThumbUpdated}
+          onDelete={canManage ? deleteOne : undefined}
+          onToggleFavorite={canManage ? toggleFavorite : undefined}
+          onThumbUpdated={canManage ? handleThumbUpdated : undefined}
         />
       )}
 
-      {dragOver && (
+      {dragOver && canManage && (
         <div className="drag-overlay">
           <div className="drag-overlay-inner">
             <div style={{ fontSize: 44 }}>⬆️</div>

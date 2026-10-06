@@ -19,6 +19,7 @@ import financeRoutes from './routes/finance';
 import shoppingRoutes from './routes/shopping';
 import notesRoutes from './routes/notes';
 import calendarRoutes from './routes/calendar';
+import documentsRoutes from './routes/documents';
 
 function buildApp() {
   const app = express();
@@ -55,6 +56,7 @@ function buildApp() {
   app.use('/api/shopping', express.json({ limit: '1mb' }), shoppingRoutes);
   app.use('/api/notes', express.json({ limit: '1mb' }), notesRoutes);
   app.use('/api/calendar', express.json({ limit: '1mb' }), calendarRoutes);
+  app.use('/api/documents', express.json({ limit: '1mb' }), documentsRoutes);
   app.use('/files', filesRoutes);
 
   app.use(notFound);

@@ -7,6 +7,8 @@ interface Props {
   item: Item;
   token: string;
   uploaderName?: string;
+  /** Admin-Schlüssel – nötig in Bereichen mit Upload-Sperre. */
+  adminKey?: string;
   onClose: () => void;
   onSaved: (item: Item) => void;
 }
@@ -29,7 +31,14 @@ const PRESETS: Array<{ key: string; label: string; value: AspectValue }> = [
  * neues Thumbnail gespeichert und in der Galerie sowie den anderen Ansichten
  * angezeigt. Das Original bleibt unverändert.
  */
-export default function ThumbEditor({ item, token, uploaderName, onClose, onSaved }: Props) {
+export default function ThumbEditor({
+  item,
+  token,
+  uploaderName,
+  adminKey,
+  onClose,
+  onSaved,
+}: Props) {
   const [srcUrl, setSrcUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -91,7 +100,7 @@ export default function ThumbEditor({ item, token, uploaderName, onClose, onSave
     setBusy(true);
     try {
       const blob = await renderCroppedImage(srcUrl, croppedAreaPixels, rotation);
-      const updated = await uploadThumb(item.id, blob, { token, uploaderName });
+      const updated = await uploadThumb(item.id, blob, { token, uploaderName, adminKey });
       onSaved(updated);
     } catch {
       setBusy(false);
@@ -106,6 +115,7 @@ export default function ThumbEditor({ item, token, uploaderName, onClose, onSave
         method: 'DELETE',
         token,
         uploaderName,
+        adminKey,
       });
       onSaved(res.item);
     } catch {
