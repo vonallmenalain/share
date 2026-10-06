@@ -53,10 +53,9 @@ function pdfjsAssets(): Plugin {
  * Neutrale Link-Vorschau für Dokumente-Links (/d/<bereich>): WhatsApp & Co.
  * lesen nur das statische HTML (ohne JavaScript). Deshalb entsteht beim Build
  * eine Kopie von index.html als d/index.html – mit Titel, Beschreibung und
- * Vorschaubild ohne Bezug zur Foto-App. Die App selbst ist identisch. Damit
- * Netlify sie für /d/* ausliefert, braucht es in public/_redirects vor der
- * allgemeinen SPA-Regel die Zeile `/d/*  /d/index.html  200` – ohne sie läuft
- * der Link genauso, nur mit der allgemeinen Vorschau.
+ * Vorschaubild ohne Bezug zur Foto-App. Die App selbst ist identisch. Netlify
+ * liefert sie für /d/* aus (Regel `/d/*  /d/index.html  200` in
+ * public/_redirects, vor der allgemeinen SPA-Regel).
  */
 function documentsEntryHtml(): Plugin {
   const title = 'Geteilte Dokumente';

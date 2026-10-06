@@ -371,9 +371,9 @@ Emojis funktionieren.
 statische HTML. Beim Build entsteht deshalb neben `index.html` eine Kopie
 `d/index.html` mit neutralem Titel („Geteilte Dokumente"), Beschreibung und
 Vorschaubild (`og-docs.png`) – ohne Bezug zur Foto-App
-(`frontend/vite.config.ts`). Damit Netlify diese Datei für `/d/*` ausliefert,
-braucht es in `frontend/public/_redirects` vor der allgemeinen SPA-Regel die
-Zeile `/d/*  /d/index.html  200`.
+(`frontend/vite.config.ts`). Netlify liefert diese Datei für `/d/*` aus – dafür
+steht in `frontend/public/_redirects` vor der allgemeinen SPA-Regel die Zeile
+`/d/*  /d/index.html  200`.
 
 ## Upload-Sperre (reiner Ansichtslink)
 
