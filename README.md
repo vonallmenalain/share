@@ -132,10 +132,12 @@ deaktiviertes Modul wird nur ausgeblendet – vorhandene Daten bleiben erhalten.
   den Titel zeigt die Liste aller Dokumente. Ein Tippen auf eine MP3 spielt sie
   **sofort** in einem schlanken Player ab; am Ende startet automatisch das
   **nächste Lied**, und über den Titel im Player klappt die **Playlist** auf – auch
-  über einem offenen PDF. Besteht ein Bereich nur aus Dokumenten, öffnet sein
-  Link `/s/<bereich>` direkt die Dokumente – oben nur das Logo, ohne Profil-Icon
-  (wenn nicht nach einem Namen gefragt wird) – und die **Link-Vorschau** (z. B. in
-  WhatsApp) zeigt den Namen des Bereichs statt der Foto-App.
+  über einem offenen PDF. Ob zuerst die Dokumente oder die Audiodateien
+  erscheinen, legt man unter „Bearbeiten" fest. Besteht ein Bereich nur aus
+  Dokumenten, öffnet sein Link `/s/<bereich>` direkt die Dokumente – oben nur das
+  Logo, ohne Profil-Icon (wenn nicht nach einem Namen gefragt wird) – und die
+  **Link-Vorschau** (z. B. in WhatsApp) zeigt den Namen des Bereichs statt der
+  Foto-App.
 - **Finanzen** – Gemeinsame Ausgaben erfassen, **gleichmässig** (unter allen
   oder ausgewählten Personen) oder mit **manuellen Beträgen** aufteilen und mit
   möglichst **wenigen Ausgleichszahlungen** abrechnen („Peter zahlt Alain

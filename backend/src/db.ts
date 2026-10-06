@@ -434,6 +434,11 @@ function migrate(database: Database.Database) {
   // dem Link können nur ansehen, abspielen und herunterladen. Nachträglich
   // ergänzt, daher per Migration; bestehende Bereiche bleiben offen (0).
   addColumn('spaces', spaceCols, 'uploads_locked', `uploads_locked INTEGER NOT NULL DEFAULT 0`);
+
+  // Dokumente-Modul: Reihenfolge der Abschnitte („docs" = PDFs & Co., „audio")
+  // als JSON-Liste, z. B. ["audio","docs"] für Audio zuerst. NULL = Standard
+  // (Dokumente oben). Nachträglich ergänzt, daher per Migration.
+  addColumn('spaces', spaceCols, 'documents_sections', `documents_sections TEXT`);
 }
 
 export function getDb(): Database.Database {
@@ -452,6 +457,8 @@ export interface SpaceRow {
   skip_identity_prompt: number;
   /** Upload-Sperre: nur Admin darf hochladen/löschen/ändern? 0 = nein, 1 = ja. */
   uploads_locked: number;
+  /** Dokumente: Reihenfolge der Abschnitte als JSON-Liste, NULL = Standard. */
+  documents_sections: string | null;
   created_at: string;
 }
 

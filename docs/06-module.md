@@ -48,6 +48,8 @@ Die Migration:
 - trägt bei **allen bestehenden Bereichen** das Fotomodul (`photos`) ein;
 - ergänzt `spaces.uploads_locked` (Upload-Sperre, Standard `0` = wie bisher
   offen) – siehe „Upload-Sperre" unten;
+- ergänzt `spaces.documents_sections` (Reihenfolge der Abschnitte im
+  Dokumente-Modul, Standard leer = Dokumente oben);
 - erstellt Indizes (u. a. auf `space_id`, `status`, `expense_date`, `note_id`,
   `checked`, `start_at`, `deleted_at`).
 
@@ -317,7 +319,9 @@ Drumherum gedacht – typischer Fall: ein paar PDFs (Noten, Texte, Programme) un
 dazu passende MP3s.
 
 - **Liste:** PDFs und andere Dokumente oben, Musik/Audio darunter (die
-  Überschriften „Dokumente"/„Audio" erscheinen nur, wenn es beides gibt). Pro
+  Überschriften „Dokumente"/„Audio" erscheinen nur, wenn es beides gibt). Die
+  Reihenfolge der beiden Abschnitte lässt sich unter „Bearbeiten" ändern, z. B.
+  Audio zuerst – sie gilt für alle, die den Bereich öffnen. Pro
   Eintrag gibt es einen Download-Knopf; rechts neben dem Titel des Bereichs lädt
   **„Alles herunterladen"** alle Dateien als ZIP („Lieder DKA 2026.zip“) –
   für alle mit dem Link, auch bei Upload-Sperre.
@@ -367,7 +371,9 @@ Version auf der Startseite („Link oder Code einfügen"), siehe
 Administrator): „Dateien hinzufügen" (oder Dateien auf die Seite ziehen). Die
 Dateien werden **nacheinander** und nach Namen sortiert hochgeladen
 („2 …" vor „10 …"), damit die Reihenfolge stimmt. Unter „Bearbeiten" lassen sich
-Einträge verschieben, umbenennen (die Endung bleibt erhalten) und löschen. Der
+Einträge verschieben, umbenennen (die Endung bleibt erhalten) und löschen; die
+Pfeile neben den Überschriften „Dokumente" und „Audio" tauschen die beiden
+Abschnitte (gespeichert pro Bereich in `spaces.documents_sections`). Der
 Administrator sieht dort auch gelöschte Dokumente und kann sie
 wiederherstellen oder endgültig löschen. „Link teilen" öffnet das Teilen-Menü
 des Geräts (bzw. kopiert den Link).
@@ -479,11 +485,14 @@ eingeschränkt. Modulrouten prüfen zusätzlich, ob das Modul aktiviert ist
 **Dokumente** (ändernde Endpunkte: mit Upload-Sperre nur mit `X-Admin-Key`)
 
 - `GET /api/documents` – aktive Dokumente in Reihenfolge (inkl. `docType`:
-  `pdf` | `audio` | `image` | `video` | `file`)
+  `pdf` | `audio` | `image` | `video` | `file`) und `sections`, die Reihenfolge
+  der Abschnitte (z. B. `["audio", "docs"]`)
 - `GET /api/documents/deleted` – gelöschte Dokumente (nur Admin)
 - `GET /api/documents/zip` – alle aktiven Dokumente als ZIP (gestreamt, ohne
   Kompression; als Download-Link mit `?token=`)
 - `PATCH /api/documents/order` – Body `{ "order": ["<id>", …] }`
+- `PATCH /api/documents/sections` – Reihenfolge der Abschnitte, Body
+  `{ "order": ["audio", "docs"] }`
 - `PATCH /api/documents/:id` – umbenennen, Body `{ "name": "..." }`
 - `POST /api/documents/:id/delete` – weich löschen
 - Hochladen über `POST /api/uploads` mit `scope: 'document'`
