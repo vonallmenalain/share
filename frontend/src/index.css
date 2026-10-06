@@ -1501,20 +1501,48 @@ button {
   gap: 8px 12px;
   width: 100%;
   padding: 14px 16px;
-  border: none;
-  background: transparent;
   cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: inherit;
 }
 .admin-space-head:hover {
   background: #fafbfc;
 }
-.admin-space-head .grow {
+.admin-space-toggle {
   /* Schmale Bildschirme: Name behält Platz, Markierungen rutschen darunter. */
   flex: 1 1 220px;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-space-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+.admin-space-toggle .grow {
+  flex: 1;
+  min-width: 0;
+}
+.admin-space-toggle .nm,
+.admin-space-slug {
+  display: block;
+}
+.admin-space-slug {
+  font-size: 13px;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+/* Rechts in der Kopfzeile – bricht auf dem Handy mit den Markierungen um. */
+.admin-copy-link {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .admin-space-head .nm {
   font-weight: 700;
