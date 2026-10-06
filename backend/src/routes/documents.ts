@@ -6,6 +6,7 @@ import { requireEnabledModule } from '../middleware/module';
 import { manageGuard } from '../middleware/manage';
 import { adminLimiter } from '../middleware/rateLimit';
 import { docTypeOf, renameKeepingExtension } from '../lib/documents';
+import { sendOriginalsZip, zipFileName } from '../lib/zip';
 
 /**
  * Dokumente-Modul: Dateien aller Art (v. a. PDFs und Musik), die direkt im
@@ -74,6 +75,22 @@ router.get(
   '/',
   asyncHandler(async (req, res) => {
     res.json({ documents: documentsOf(req.spaceId!, 'active').map(publicDocument) });
+  }),
+);
+
+/**
+ * „Alles herunterladen": alle (nicht gelöschten) Dokumente als ZIP, in der
+ * Reihenfolge der Liste. Wird als Download-Link mit `?token=` geöffnet.
+ */
+router.get(
+  '/zip',
+  asyncHandler(async (req, res) => {
+    const items = documentsOf(req.spaceId!, 'active');
+    if (items.length === 0) throw new ApiError(404, 'Keine Dokumente zum Herunterladen.');
+    const space = getDb().prepare('SELECT name FROM spaces WHERE id = ?').get(req.spaceId) as
+      | { name: string }
+      | undefined;
+    await sendOriginalsZip(res, items, zipFileName(space?.name, 'dokumente'));
   }),
 );
 

@@ -3171,10 +3171,22 @@ button {
   padding-bottom: calc(var(--player-h) + 40px + env(safe-area-inset-bottom, 0px));
 }
 .doc-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 14px;
 }
 .doc-head .space-title {
+  flex: 1;
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+/* „Alles herunterladen" rechts auf der Höhe des Titels. */
+.doc-zip {
+  flex-shrink: 0;
+}
+.doc-zip svg {
+  flex-shrink: 0;
 }
 .doc-tools {
   display: flex;

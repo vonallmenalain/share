@@ -318,7 +318,9 @@ dazu passende MP3s.
 
 - **Liste:** PDFs und andere Dokumente oben, Musik/Audio darunter (die
   Überschriften „Dokumente"/„Audio" erscheinen nur, wenn es beides gibt). Pro
-  Eintrag gibt es einen Download-Knopf.
+  Eintrag gibt es einen Download-Knopf; rechts neben dem Titel des Bereichs lädt
+  **„Alles herunterladen"** alle Dateien als ZIP („Lieder DKA 2026.zip“) –
+  für alle mit dem Link, auch bei Upload-Sperre.
 - **PDF-Ansicht:** Ein Tippen öffnet das PDF im Vollbild. Gerendert wird mit
   **pdf.js** (wird erst beim ersten PDF nachgeladen), damit es überall gleich
   funktioniert – auch auf Android (kein eingebauter PDF-Viewer) und auf dem
@@ -472,6 +474,8 @@ eingeschränkt. Modulrouten prüfen zusätzlich, ob das Modul aktiviert ist
 - `GET /api/documents` – aktive Dokumente in Reihenfolge (inkl. `docType`:
   `pdf` | `audio` | `image` | `video` | `file`)
 - `GET /api/documents/deleted` – gelöschte Dokumente (nur Admin)
+- `GET /api/documents/zip` – alle aktiven Dokumente als ZIP (gestreamt, ohne
+  Kompression; als Download-Link mit `?token=`)
 - `PATCH /api/documents/order` – Body `{ "order": ["<id>", …] }`
 - `PATCH /api/documents/:id` – umbenennen, Body `{ "name": "..." }`
 - `POST /api/documents/:id/delete` – weich löschen
