@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import AdminLogin from '../components/AdminLogin';
@@ -16,7 +16,8 @@ import {
 } from '../api/client';
 import { shareItems } from '../lib/share';
 import { adminKeyStore } from '../lib/storage';
-import { isDocumentsOnly, spacePath } from '../lib/spaceLinks';
+import { isDocumentsOnly, spacePath, spaceShareUrl } from '../lib/spaceLinks';
+import { LinkIcon } from './documents/icons';
 import {
   formatBytes,
   formatDate,
@@ -116,6 +117,22 @@ export default function Admin() {
           error: err instanceof Error ? err.message : 'Laden fehlgeschlagen.',
         },
       }));
+    }
+  };
+
+  // „Link kopieren" direkt in der Kopfzeile jedes Bereichs – auch eingeklappt.
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copiedTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
+  const copyLink = async (space: Space) => {
+    const url = spaceShareUrl(space.slug);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(space.id);
+      window.clearTimeout(copiedTimer.current);
+      copiedTimer.current = window.setTimeout(() => setCopiedId(null), 1800);
+    } catch {
+      window.prompt('Link zum Kopieren:', url);
     }
   };
 
@@ -292,14 +309,22 @@ export default function Admin() {
               const detail = details[s.id];
               return (
                 <div className={`admin-space${isOpen ? ' open' : ''}`} key={s.id}>
-                  <button className="admin-space-head" onClick={() => toggle(s.id)}>
-                    <span className={`chevron${isOpen ? ' open' : ''}`}>▸</span>
-                    <div className="grow">
-                      <div className="nm">{s.name}</div>
-                      <div className="faint" style={{ fontSize: 13 }}>
-                        {spacePath(s.slug)} · {formatDate(s.createdAt)}
-                      </div>
-                    </div>
+                  {/* Die ganze Kopfzeile klappt auf/zu; der Knopf darin dient Tastatur
+                      und Screenreader. „Link kopieren" klappt nichts auf. */}
+                  <div className="admin-space-head" onClick={() => toggle(s.id)}>
+                    <button
+                      type="button"
+                      className="admin-space-toggle"
+                      aria-expanded={isOpen}
+                    >
+                      <span className={`chevron${isOpen ? ' open' : ''}`}>▸</span>
+                      <span className="grow">
+                        <span className="nm">{s.name}</span>
+                        <span className="admin-space-slug">
+                          {spacePath(s.slug)} · {formatDate(s.createdAt)}
+                        </span>
+                      </span>
+                    </button>
                     {isDocumentsOnly(s.modules) ? (
                       <span className="tag">📄 {s.documentCount ?? 0}</span>
                     ) : (
@@ -319,7 +344,22 @@ export default function Admin() {
                         nur ansehen
                       </span>
                     )}
-                  </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm admin-copy-link"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void copyLink(s);
+                      }}
+                      aria-label={
+                        copiedId === s.id ? 'Link kopiert' : `Link von „${s.name}“ kopieren`
+                      }
+                      title={spaceShareUrl(s.slug)}
+                    >
+                      <LinkIcon size={15} />
+                      {copiedId === s.id ? 'Kopiert ✓' : 'Link kopieren'}
+                    </button>
+                  </div>
 
                   {isOpen && (
                     <div className="admin-space-body">

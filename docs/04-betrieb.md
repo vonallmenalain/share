@@ -6,6 +6,8 @@
   „+ Neuer Bereich"), mit dem Admin-Schlüssel (`ADMIN_KEY`) anmelden,
   Name (z.&nbsp;B. „Ferien Tessin“) und optional ein Passwort vergeben. Du erhältst
   einen teilbaren Link `share.alae.app/s/<slug>`.
+- **Link kopieren:** In der Übersicht (`share.alae.app/admin`) hat jeder Bereich
+  rechts einen Knopf „Link kopieren“ – auch eingeklappt, ohne ihn zu öffnen.
 - **Übersicht / Löschen:** `share.alae.app/admin`. Beim Löschen eines Bereichs
   werden **alle** zugehörigen Dateien auf dem QNAP entfernt.
 
