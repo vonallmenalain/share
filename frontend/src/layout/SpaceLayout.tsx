@@ -9,6 +9,7 @@ import ParticipantGate from '../components/ParticipantGate';
 import ParticipantPinSetup from '../components/ParticipantPinSetup';
 import ParticipantPinManager from '../components/ParticipantPinManager';
 import { setSpaceManifest, resetManifest } from '../lib/pwaManifest';
+import { isDocumentsOnly, spacePath, spaceShareUrl } from '../lib/spaceLinks';
 import {
   SpaceSessionProvider,
   useSpaceSessionContext,
@@ -45,10 +46,17 @@ function SpaceShell() {
   const [navOpen, setNavOpen] = useState(false);
   const [showIdentityManager, setShowIdentityManager] = useState(false);
 
-  // PWA-Manifest auf den aktuellen Bereich zeigen lassen (wie bisher).
+  // PWA-Manifest auf den aktuellen Bereich zeigen lassen (wie bisher). Reine
+  // Dokumente-Bereiche starten auf ihrem Ansichtslink – mit neutraler Beschreibung.
   useEffect(() => {
     if (!slug || !space) return;
-    setSpaceManifest(slug, space.name);
+    setSpaceManifest(
+      slug,
+      space.name,
+      isDocumentsOnly(space.modules)
+        ? { startPath: spacePath(slug, space.modules), description: 'Geteilte Dokumente' }
+        : {},
+    );
     return () => resetManifest();
   }, [slug, space]);
 
@@ -80,14 +88,18 @@ function SpaceShell() {
   }
 
   if (phase === 'notfound') {
+    // Über einen Dokumente-Link (/d/…) bewusst ohne Verweis auf die Startseite.
+    const viaDocumentLink = location.pathname.startsWith('/d/');
     return (
       <div className="center-page">
         <div className="panel">
-          <h1>Bereich nicht gefunden</h1>
+          <h1>{viaDocumentLink ? 'Link nicht gefunden' : 'Bereich nicht gefunden'}</h1>
           <p className="sub">Der Link ist ungültig oder der Bereich wurde gelöscht.</p>
-          <Link className="btn" to="/">
-            Zur Startseite
-          </Link>
+          {!viaDocumentLink && (
+            <Link className="btn" to="/">
+              Zur Startseite
+            </Link>
+          )}
         </div>
       </div>
     );
@@ -149,6 +161,9 @@ function SpaceShell() {
   const modules = space?.modules ?? ['photos'];
   const showNav = modules.length > 1;
   const otherSpaces = visitedSpaces.filter((s) => s.slug !== slug);
+  // Reiner Dokumente-Bereich ohne Namensabfrage: absolut schlicht – oben nur
+  // das Logo, kein Profil-/Bereichsmenü (es gibt nichts zu wählen).
+  const minimalChrome = isDocumentsOnly(modules) && !!space?.skipIdentityPrompt;
 
   // Die geräteweite Identität wird automatisch im Hintergrund aufgelöst bzw.
   // angelegt (siehe useParticipants) – normalerweise ohne jede Rückfrage.
@@ -175,7 +190,7 @@ function SpaceShell() {
     !identity.current.hasPin;
 
   const shareSpaceLink = async () => {
-    const url = `${window.location.origin}/s/${slug}`;
+    const url = spaceShareUrl(slug, modules);
     const title = space?.name || 'Bereich teilen';
     if (typeof navigator.share === 'function') {
       try {
@@ -197,94 +212,96 @@ function SpaceShell() {
     <>
       <TopBar
         hidden={chromeHidden}
-        brandTo={`/s/${slug}`}
+        brandTo={spacePath(slug, modules)}
         onMenuClick={showNav ? () => setNavOpen((o) => !o) : undefined}
         menuOpen={navOpen}
       >
-        <div className="topbar-actions">
-          <Dropdown
-            align="end"
-            ariaLabel="Bereich & Identität"
-            title={identity.current?.name || name || 'Gast'}
-            triggerClassName="btn icon-btn"
-            label={<UserIcon size={19} />}
-          >
-            {(close) => (
-              <>
-                <div className="dropdown-label">Bereich</div>
-                <div className="dropdown-current-space">
-                  <span className="dropdown-space-dot" aria-hidden="true" />
-                  <strong>{space?.name || slug}</strong>
-                </div>
-                <button
-                  type="button"
-                  className="dropdown-item"
-                  onClick={() => {
-                    close();
-                    void shareSpaceLink();
-                  }}
-                >
-                  <ShareIcon size={16} />
-                  Bereich teilen
-                </button>
-                {otherSpaces.length > 0 && (
-                  <>
-                    <div className="dropdown-divider" />
-                    <div className="dropdown-label">Andere Bereiche</div>
-                    {otherSpaces.map((s) => (
-                      <div key={s.slug} className="dropdown-space-row">
-                        <Link
-                          to={`/s/${s.slug}`}
-                          className="dropdown-item dropdown-space-link"
-                          onClick={() => close()}
-                          title={`Zu „${s.name}" wechseln`}
-                        >
-                          <span className="dropdown-item-text">{s.name}</span>
-                        </Link>
-                        <button
-                          type="button"
-                          className="dropdown-space-remove"
-                          title={`„${s.name}" verlassen (aus dieser Liste entfernen)`}
-                          aria-label={`„${s.name}" verlassen`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeVisitedSpace(s.slug);
-                          }}
-                        >
-                          ✕
-                        </button>
+        {!minimalChrome && (
+          <div className="topbar-actions">
+            <Dropdown
+              align="end"
+              ariaLabel="Bereich & Identität"
+              title={identity.current?.name || name || 'Gast'}
+              triggerClassName="btn icon-btn"
+              label={<UserIcon size={19} />}
+            >
+              {(close) => (
+                <>
+                  <div className="dropdown-label">Bereich</div>
+                  <div className="dropdown-current-space">
+                    <span className="dropdown-space-dot" aria-hidden="true" />
+                    <strong>{space?.name || slug}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => {
+                      close();
+                      void shareSpaceLink();
+                    }}
+                  >
+                    <ShareIcon size={16} />
+                    Bereich teilen
+                  </button>
+                  {otherSpaces.length > 0 && (
+                    <>
+                      <div className="dropdown-divider" />
+                      <div className="dropdown-label">Andere Bereiche</div>
+                      {otherSpaces.map((s) => (
+                        <div key={s.slug} className="dropdown-space-row">
+                          <Link
+                            to={`/s/${s.slug}`}
+                            className="dropdown-item dropdown-space-link"
+                            onClick={() => close()}
+                            title={`Zu „${s.name}" wechseln`}
+                          >
+                            <span className="dropdown-item-text">{s.name}</span>
+                          </Link>
+                          <button
+                            type="button"
+                            className="dropdown-space-remove"
+                            title={`„${s.name}" verlassen (aus dieser Liste entfernen)`}
+                            aria-label={`„${s.name}" verlassen`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeVisitedSpace(s.slug);
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {identity.current && !needsIdentity && !needsPinSetup && (
+                    <>
+                      <div className="dropdown-divider" />
+                      <div className="dropdown-label">Deine Identität</div>
+                      <div className="dropdown-name">
+                        <strong>{identity.current.name}</strong>
+                        {identity.current.hasPin && (
+                          <span className="participant-choice-lock" title="Mit Code geschützt">
+                            🔒
+                          </span>
+                        )}
                       </div>
-                    ))}
-                  </>
-                )}
-                {identity.current && !needsIdentity && !needsPinSetup && (
-                  <>
-                    <div className="dropdown-divider" />
-                    <div className="dropdown-label">Deine Identität</div>
-                    <div className="dropdown-name">
-                      <strong>{identity.current.name}</strong>
-                      {identity.current.hasPin && (
-                        <span className="participant-choice-lock" title="Mit Code geschützt">
-                          🔒
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      className="dropdown-item"
-                      onClick={() => {
-                        close();
-                        setShowIdentityManager(true);
-                      }}
-                    >
-                      Identität ändern
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </Dropdown>
-        </div>
+                      <button
+                        type="button"
+                        className="dropdown-item"
+                        onClick={() => {
+                          close();
+                          setShowIdentityManager(true);
+                        }}
+                      >
+                        Identität ändern
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </Dropdown>
+          </div>
+        )}
       </TopBar>
 
       {showNav &&

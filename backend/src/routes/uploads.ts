@@ -3,13 +3,17 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import { config, paths } from '../config';
-import { getDb, ItemRow, UploadRow } from '../db';
+import { getDb, ItemRow, ItemScope, UploadRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireSpace } from '../middleware/auth';
+import { detectAdmin, isUploadsLocked, LOCKED_MESSAGE } from '../middleware/manage';
 import { newId } from '../lib/ids';
 import { variantPath } from '../lib/media';
+import { docTypeOf } from '../lib/documents';
+import { probeAudioDuration } from '../lib/video';
 import { detectKind, enqueueProcessing, extFromFilename } from '../services/process';
 import { publicItem } from './items';
+import { publicDocument } from './documents';
 import { isModuleEnabled } from '../lib/modules';
 import { NoteRow } from '../db';
 
@@ -85,6 +89,18 @@ function formatMaxFileSize(): string {
   return `${Math.round(mb)} MB`;
 }
 
+/** Gespeicherten Upload-Kontext auf einen bekannten Scope abbilden. */
+function scopeOf(value: unknown): ItemScope {
+  return value === 'note' ? 'note' : value === 'document' ? 'document' : 'gallery';
+}
+
+/** Antwort für ein fertiges Item – Dokumente zusätzlich im Dokument-Format. */
+function completedPayload(item: ItemRow) {
+  return item.scope === 'document'
+    ? { item: publicItem(item), document: publicDocument(item) }
+    : { item: publicItem(item) };
+}
+
 function getUpload(uploadId: string, spaceId: string): UploadRow {
   const db = getDb();
   const upload = db.prepare('SELECT * FROM uploads WHERE id = ?').get(uploadId) as
@@ -98,18 +114,22 @@ function getUpload(uploadId: string, spaceId: string): UploadRow {
  * Upload-Session anlegen (oder eine passende offene Session wiederverwenden,
  * damit ein abgebrochener Upload nach Browser-Neustart fortgesetzt werden kann).
  * Body: { filename, mime, size }. Header X-Uploader-Name trägt den Namen.
+ * Ein optionaler Header X-Admin-Key erlaubt das Hochladen auch in Bereichen
+ * mit Upload-Sperre (siehe middleware/manage.ts).
  */
 router.post(
   '/',
   requireSpace,
+  detectAdmin,
   asyncHandler(async (req, res) => {
     const filename = String(req.body?.filename ?? '').trim();
     const mime = String(req.body?.mime ?? 'application/octet-stream');
     const size = Number(req.body?.size);
     const uploaderName = String(req.body?.uploaderName ?? '').trim() || 'Unbekannt';
-    // Kontext des Uploads: 'gallery' (Fotogalerie, Standard) oder 'note'
-    // (Bildanhang einer Notiz). Notiz-Uploads erscheinen NICHT in der Galerie.
-    const scope = req.body?.scope === 'note' ? 'note' : 'gallery';
+    // Kontext des Uploads: 'gallery' (Fotogalerie, Standard), 'note'
+    // (Bildanhang einer Notiz) oder 'document' (Dokumente-Modul). Notiz-Bilder
+    // und Dokumente erscheinen NICHT in der Galerie.
+    const scope = scopeOf(req.body?.scope);
     const noteId = scope === 'note' ? String(req.body?.noteId ?? '').trim() : '';
 
     if (!filename) throw new ApiError(400, 'Dateiname fehlt.');
@@ -125,6 +145,16 @@ router.post(
     // optional und kann z. B. für einen reinen Finanz-Bereich fehlen.
     if (scope === 'gallery' && !isModuleEnabled(req.spaceId!, 'photos')) {
       throw new ApiError(403, 'Die Galerie ist in diesem Bereich nicht aktiviert.');
+    }
+    if (scope === 'document' && !isModuleEnabled(req.spaceId!, 'documents')) {
+      throw new ApiError(403, 'Das Dokumente-Modul ist in diesem Bereich nicht aktiviert.');
+    }
+
+    // Upload-Sperre („reiner Ansichtslink"): Galerie und Dokumente nehmen dann
+    // nur noch Dateien vom Administrator an. Notiz-Bilder gehören zum
+    // gemeinsamen Bearbeiten einer Notiz und sind davon nicht betroffen.
+    if ((scope === 'gallery' || scope === 'document') && !req.isAdmin && isUploadsLocked(req.spaceId!)) {
+      throw new ApiError(403, LOCKED_MESSAGE);
     }
 
     // Notiz-Uploads verlangen ein aktiviertes Notiz-Modul und eine gültige,
@@ -263,7 +293,7 @@ router.post(
       const existingItem = getDb()
         .prepare('SELECT * FROM items WHERE id = ?')
         .get(upload.item_id) as ItemRow | undefined;
-      if (existingItem) return res.json({ item: publicItem(existingItem) });
+      if (existingItem) return res.json(completedPayload(existingItem));
     }
 
     const received = await computeReceived(upload);
@@ -273,8 +303,12 @@ router.post(
       throw new ApiError(409, `Es fehlen noch Chunks: ${missing.slice(0, 20).join(', ')}`);
     }
 
+    const scope = scopeOf(upload.scope);
+    // Dokumente werden nicht verarbeitet (keine Varianten): Sie sind sofort
+    // bereit und werden direkt als Original angezeigt bzw. abgespielt.
+    const isDocument = scope === 'document';
     const ext = extFromFilename(upload.filename);
-    const kind = detectKind(upload.mime, ext);
+    const kind = isDocument ? 'document' : detectKind(upload.mime, ext);
     const itemId = newId();
     const storageKey = `${upload.space_id}/${itemId}`;
     const originalDest = variantPath('original', storageKey, ext);
@@ -312,26 +346,34 @@ router.post(
     }
     await fsp.rename(tmpOriginal, originalDest);
 
+    // Für Musik/Audio die Spieldauer gleich hier ermitteln (ffprobe, schnell),
+    // damit die Liste „3:45" anzeigen kann, ohne jede Datei vorab zu laden.
+    const duration =
+      isDocument && docTypeOf(ext, upload.mime) === 'audio'
+        ? await probeAudioDuration(originalDest)
+        : null;
+
     const db = getDb();
     const now = new Date().toISOString();
-    const scope = upload.scope === 'note' ? 'note' : 'gallery';
     const maxPos = db
       .prepare(`SELECT COALESCE(MAX(position), -1) AS m FROM items WHERE space_id = ? AND scope = ?`)
       .get(upload.space_id, scope) as { m: number };
     const insertItemAndLink = db.transaction(() => {
       db.prepare(
-        `INSERT INTO items (id, space_id, kind, status, uploader_name, original_filename, ext, mime, storage_key, size_bytes, position, scope, note_id, created_at)
-         VALUES (?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO items (id, space_id, kind, status, uploader_name, original_filename, ext, mime, storage_key, size_bytes, duration, position, scope, note_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         itemId,
         upload.space_id,
         kind,
+        isDocument ? 'ready' : 'processing',
         upload.uploader_name,
         upload.filename,
         ext,
         upload.mime,
         storageKey,
         upload.size_bytes,
+        duration,
         maxPos.m + 1,
         scope,
         upload.note_id ?? null,
@@ -364,11 +406,11 @@ router.post(
     fsp.rm(uploadDir(upload.id), { recursive: true, force: true }).catch(() => undefined);
 
     // Verarbeitung (Varianten/Transcode) einreihen – die Warteschlange begrenzt
-    // die gleichzeitige Last (siehe services/process.ts).
-    enqueueProcessing(itemId);
+    // die gleichzeitige Last (siehe services/process.ts). Dokumente brauchen keine.
+    if (!isDocument) enqueueProcessing(itemId);
 
     const item = db.prepare('SELECT * FROM items WHERE id = ?').get(itemId) as ItemRow;
-    res.status(201).json({ item: publicItem(item) });
+    res.status(201).json(completedPayload(item));
   }),
 );
 

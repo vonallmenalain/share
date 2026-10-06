@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import { api, ModuleKey, Space } from '../api/client';
 import { adminKeyStore } from '../lib/storage';
+import { isDocumentsOnly, spacePath, spaceShareUrl } from '../lib/spaceLinks';
 
 interface ModuleOption {
   key: ModuleKey;
@@ -13,6 +14,12 @@ interface ModuleOption {
 
 const MODULE_OPTIONS: ModuleOption[] = [
   { key: 'photos', label: 'Fotos & Videos', icon: '🖼️', desc: 'Gemeinsame Galerie zum Hoch- und Herunterladen.' },
+  {
+    key: 'documents',
+    label: 'Dokumente',
+    icon: '📄',
+    desc: 'PDFs, Musik & andere Dateien – direkt ansehen und anhören.',
+  },
   { key: 'finance', label: 'Finanzen', icon: '💰', desc: 'Ausgaben erfassen, aufteilen und fair abrechnen.' },
   { key: 'shopping', label: 'Einkaufsliste', icon: '🛒', desc: 'Gemeinsame Liste – abhaken, was erledigt ist.' },
   { key: 'notes', label: 'Notizen', icon: '📝', desc: 'Text- und Checklisten-Notizen, auch mit Bildern.' },
@@ -31,12 +38,15 @@ export default function CreateSpace() {
   // „Nicht nach einem Namen fragen": schliesst den Pflicht-Code aus – ohne
   // Identität gibt es nichts, was ein Code schützen könnte.
   const [skipIdentityPrompt, setSkipIdentityPrompt] = useState(false);
+  // Upload-Sperre: nur ich (Admin) darf Dateien hochladen – für alle anderen
+  // ein reiner Ansichtslink.
+  const [uploadsLocked, setUploadsLocked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState<Space | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const shareUrl = created ? `${window.location.origin}/s/${created.slug}` : '';
+  const shareUrl = created ? spaceShareUrl(created.slug, created.modules) : '';
 
   const toggleModule = (key: ModuleKey) => {
     setModules((prev) => {
@@ -66,6 +76,7 @@ export default function CreateSpace() {
           financeCurrency: modules.has('finance') ? currency : undefined,
           requireParticipantPin: skipIdentityPrompt ? false : requireParticipantPin,
           skipIdentityPrompt,
+          uploadsLocked,
         },
       });
       adminKeyStore.set(adminKey);
@@ -217,6 +228,23 @@ export default function CreateSpace() {
                   </p>
                 </div>
 
+                <div className="field">
+                  <label className="checkbox-line">
+                    <input
+                      type="checkbox"
+                      checked={uploadsLocked}
+                      onChange={(e) => setUploadsLocked(e.target.checked)}
+                    />
+                    Nur ich (Admin) darf Dateien hochladen
+                  </label>
+                  <p className="hint" style={{ marginTop: 6 }}>
+                    Für alle anderen ist der Link dann ein reiner Ansichtslink: Fotos, Videos und
+                    Dokumente lassen sich ansehen, abspielen und herunterladen – aber nicht
+                    hochladen, löschen oder ändern. Du selbst siehst die Werkzeuge weiterhin auf
+                    diesem Gerät (erkannt am gespeicherten Admin-Schlüssel).
+                  </p>
+                </div>
+
                 {modules.has('finance') && (
                   <div className="field">
                     <label className="label">Abrechnungswährung</label>
@@ -273,8 +301,8 @@ export default function CreateSpace() {
                 <button className="btn btn-primary" onClick={copy}>
                   {copied ? 'Kopiert ✓' : 'Link kopieren'}
                 </button>
-                <Link className="btn" to={`/s/${created.slug}`}>
-                  Bereich öffnen
+                <Link className="btn" to={spacePath(created.slug, created.modules)}>
+                  {isDocumentsOnly(created.modules) ? 'Öffnen & Dateien hochladen' : 'Bereich öffnen'}
                 </Link>
                 <button
                   className="btn btn-ghost"
@@ -282,6 +310,7 @@ export default function CreateSpace() {
                     setCreated(null);
                     setName('');
                     setPassword('');
+                    setUploadsLocked(false);
                   }}
                 >
                   Weiteren erstellen

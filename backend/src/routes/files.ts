@@ -6,6 +6,8 @@ import { getDb, ItemRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireSpace } from '../middleware/auth';
 import { variantPath, Variant } from '../lib/media';
+import { inlineContentType } from '../lib/documents';
+import { contentDisposition } from '../lib/httpHeaders';
 
 const router = Router();
 
@@ -19,14 +21,14 @@ function getItem(id: string, spaceId: string): ItemRow {
 
 /**
  * Liefert eine Datei aus – mit Unterstützung für HTTP-Range (wichtig für das
- * Scrubben/Streamen von Videos und schnelle Downloads grosser Dateien).
+ * Scrubben/Streamen von Videos und Musik und schnelle Downloads grosser Dateien).
  */
 function sendFile(
   req: Request,
   res: Response,
   filePath: string,
   contentType: string,
-  opts: { downloadName?: string; immutable?: boolean } = {},
+  opts: { downloadName?: string; inlineName?: string; immutable?: boolean } = {},
 ) {
   if (!fs.existsSync(filePath)) throw new ApiError(404, 'Datei nicht gefunden.');
   const stat = fs.statSync(filePath);
@@ -41,8 +43,9 @@ function sendFile(
     res.setHeader('Cache-Control', 'private, no-store');
   }
   if (opts.downloadName) {
-    const safe = opts.downloadName.replace(/["\\\r\n]/g, '_');
-    res.setHeader('Content-Disposition', `attachment; filename="${safe}"`);
+    res.setHeader('Content-Disposition', contentDisposition('attachment', opts.downloadName));
+  } else if (opts.inlineName) {
+    res.setHeader('Content-Disposition', contentDisposition('inline', opts.inlineName));
   }
 
   const range = req.headers.range;
@@ -121,6 +124,30 @@ router.get(
     sendFile(req, res, variantPath('original', item.storage_key, item.ext), contentType, {
       downloadName: safeName,
     });
+  }),
+);
+
+/**
+ * Original zum direkten Anzeigen/Abspielen im Browser (Dokumente-Modul: PDF,
+ * Musik, Bilder, Videos). Anders als `/original` wird die Datei inline
+ * ausgeliefert – aber NUR für sichere Medientypen, deren Content-Type der
+ * Server selbst festlegt (siehe lib/documents.ts). Alles andere (z. B. HTML
+ * oder SVG) kommt ausschliesslich als Download, damit nie eine hochgeladene
+ * Datei als Webseite auf der API-Domain ausgeführt werden kann.
+ */
+router.get(
+  '/view/:id',
+  requireSpace,
+  asyncHandler(async (req, res) => {
+    const item = getItem(req.params.id, req.spaceId!);
+    const filePath = variantPath('original', item.storage_key, item.ext);
+    const name = path.basename(item.original_filename) || `datei.${item.ext}`;
+    const contentType = inlineContentType(item.ext, item.mime);
+    if (!contentType) {
+      sendFile(req, res, filePath, 'application/octet-stream', { downloadName: name });
+      return;
+    }
+    sendFile(req, res, filePath, contentType, { inlineName: name, immutable: true });
   }),
 );
 

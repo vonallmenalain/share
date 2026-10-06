@@ -13,6 +13,12 @@ export async function processItem(itemId: string): Promise<void> {
   const db = getDb();
   const item = db.prepare('SELECT * FROM items WHERE id = ?').get(itemId) as ItemRow | undefined;
   if (!item) return;
+  // Dokumente haben keine Varianten (sie werden als Original angezeigt) – nur
+  // sicherstellen, dass sie nicht im Verarbeitungs-Zustand hängen bleiben.
+  if (item.kind === 'document') {
+    if (item.status !== 'ready') db.prepare(`UPDATE items SET status='ready' WHERE id=?`).run(itemId);
+    return;
+  }
 
   const originalPath = variantPath('original', item.storage_key, item.ext);
 

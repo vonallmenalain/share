@@ -1,4 +1,4 @@
-import { API_BASE, Item } from '../api/client';
+import { API_BASE, DocumentItem, Item } from '../api/client';
 
 export interface CreateSessionResult {
   uploadId: string;
@@ -72,21 +72,27 @@ async function withRetry<T>(
 }
 
 /** Legt eine Upload-Session an (oder setzt eine offene fort) und liefert,
- *  welche Chunks bereits auf dem Server liegen. */
+ *  welche Chunks bereits auf dem Server liegen. Mit `adminKey` darf auch in
+ *  Bereichen mit Upload-Sperre hochgeladen werden (nur Administrator). */
 export async function createSession(
   token: string,
   file: File,
   uploaderName: string,
   signal?: AbortSignal,
-  extra?: { scope?: 'gallery' | 'note'; noteId?: string },
+  extra?: { scope?: 'gallery' | 'note' | 'document'; noteId?: string; adminKey?: string },
 ): Promise<CreateSessionResult> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+  if (extra?.adminKey) headers['X-Admin-Key'] = extra.adminKey;
   return withRetry(
     async () => {
       let res: Response;
       try {
         res = await fetch(`${API_BASE}/api/uploads`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers,
           body: JSON.stringify({
             filename: file.name,
             mime: file.type || 'application/octet-stream',
@@ -234,11 +240,68 @@ export async function uploadNoteImage(
   return completeUpload(token, session.uploadId, signal);
 }
 
+/**
+ * Lädt eine Datei ins Dokumente-Modul hoch (derselbe fortsetzbare
+ * Chunk-Upload wie bei der Galerie). `onProgress` meldet die bereits
+ * übertragenen Bytes. Dokumente sind nach dem Abschluss sofort verfügbar –
+ * es gibt keine Verarbeitung, auf die gewartet werden müsste.
+ */
+export async function uploadDocument(
+  token: string,
+  file: File,
+  uploaderName: string,
+  opts: { adminKey?: string; onProgress?: (loadedBytes: number) => void; signal?: AbortSignal } = {},
+): Promise<DocumentItem> {
+  const { adminKey, onProgress, signal } = opts;
+  // 409 = Server meldet fehlende Chunks: Ein neuer Durchgang setzt die
+  // Session fort und lädt nur den fehlenden Rest nach.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const session = await createSession(token, file, uploaderName, signal, {
+        scope: 'document',
+        adminKey,
+      });
+      const { chunkSize, totalChunks } = session;
+      const received = new Set(session.received);
+      const chunkLength = (index: number) =>
+        Math.min(chunkSize, file.size - index * chunkSize);
+      let done = 0;
+      for (const index of received) done += chunkLength(index);
+      onProgress?.(done);
+      for (let index = 0; index < totalChunks; index++) {
+        if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+        if (received.has(index)) continue;
+        const start = index * chunkSize;
+        const blob = file.slice(start, start + chunkLength(index));
+        const base = done;
+        await putChunk(token, session.uploadId, index, blob, (loaded) => onProgress?.(base + loaded), signal);
+        done += chunkLength(index);
+        onProgress?.(done);
+      }
+      const payload = await completeUploadPayload(token, session.uploadId, signal);
+      if (!payload.document) throw new UploadError('Unerwartete Antwort des Servers.');
+      return payload.document;
+    } catch (err) {
+      if (attempt < 2 && err instanceof UploadError && err.status === 409) continue;
+      throw err;
+    }
+  }
+}
+
 export async function completeUpload(
   token: string,
   uploadId: string,
   signal?: AbortSignal,
 ): Promise<Item> {
+  return (await completeUploadPayload(token, uploadId, signal)).item;
+}
+
+/** Schliesst einen Upload ab; Dokumente kommen zusätzlich im Dokument-Format zurück. */
+async function completeUploadPayload(
+  token: string,
+  uploadId: string,
+  signal?: AbortSignal,
+): Promise<{ item: Item; document?: DocumentItem }> {
   return withRetry(
     async () => {
       let res: Response;
@@ -259,8 +322,7 @@ export async function completeUpload(
         // sondern der Aufrufer lädt die fehlenden Chunks erneut.
         throw new UploadError(msg, { retryable: res.status >= 500, status: res.status });
       }
-      const data = (await res.json()) as { item: Item };
-      return data.item;
+      return (await res.json()) as { item: Item; document?: DocumentItem };
     },
     { attempts: 3, signal },
   );

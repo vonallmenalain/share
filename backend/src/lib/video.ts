@@ -95,6 +95,54 @@ async function probe(input: string): Promise<{
   }
 }
 
+/**
+ * Spieldauer einer Audiodatei in Sekunden (per ffprobe) – für die Anzeige in
+ * der Dokumentliste (z. B. „3:45"). Liefert null, wenn ffprobe fehlt, die
+ * Video-/Medienverarbeitung abgeschaltet ist oder die Datei nicht lesbar ist.
+ * Mit Zeitlimit, damit eine kaputte Datei den Upload-Abschluss nie blockiert.
+ */
+export function probeAudioDuration(input: string, timeoutMs = 15000): Promise<number | null> {
+  if (!config.video.enabled) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer: NodeJS.Timeout | undefined;
+    const finish = (value: number | null) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(
+        config.video.ffprobePath,
+        ['-v', 'quiet', '-print_format', 'json', '-show_entries', 'format=duration', input],
+        { stdio: ['ignore', 'pipe', 'ignore'] },
+      );
+    } catch {
+      finish(null);
+      return;
+    }
+    let stdout = '';
+    child.stdout?.on('data', (d) => (stdout += d.toString()));
+    child.on('error', () => finish(null));
+    child.on('close', (code) => {
+      if (code !== 0) return finish(null);
+      try {
+        const data = JSON.parse(stdout) as { format?: { duration?: string } };
+        const seconds = parseFloat(data.format?.duration ?? '');
+        finish(Number.isFinite(seconds) && seconds > 0 ? seconds : null);
+      } catch {
+        finish(null);
+      }
+    });
+    timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(null);
+    }, timeoutMs);
+  });
+}
+
 /** Ermittelt die effektive Rotation (0/90/180/270) eines Video-Streams. */
 function videoRotation(stream?: {
   tags?: Record<string, string>;

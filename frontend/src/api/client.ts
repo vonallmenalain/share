@@ -67,13 +67,14 @@ export function fileUrl(path: string, token: string): string {
 export async function uploadThumb(
   itemId: string,
   blob: Blob,
-  opts: { token: string; uploaderName?: string },
+  opts: { token: string; uploaderName?: string; adminKey?: string },
 ): Promise<Item> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${opts.token}`,
     'Content-Type': blob.type || 'image/jpeg',
   };
   if (opts.uploaderName) headers['X-Uploader-Name'] = encodeURIComponent(opts.uploaderName);
+  if (opts.adminKey) headers['X-Admin-Key'] = opts.adminKey;
   const res = await fetch(`${API_BASE}/api/items/${itemId}/thumb`, {
     method: 'POST',
     headers,
@@ -88,7 +89,7 @@ export async function uploadThumb(
 
 // ---- Typen -----------------------------------------------------------------
 
-export type ModuleKey = 'photos' | 'finance' | 'shopping' | 'notes' | 'calendar';
+export type ModuleKey = 'photos' | 'documents' | 'finance' | 'shopping' | 'notes' | 'calendar';
 
 export interface Space {
   id: string;
@@ -108,8 +109,15 @@ export interface Space {
    * ohne „Wer bist du?" und ohne Namensfeld beim Betreten.
    */
   skipIdentityPrompt: boolean;
+  /**
+   * Upload-Sperre („reiner Ansichtslink"): Hochladen, Löschen und Ändern in
+   * Galerie und Dokumenten nur durch den Administrator.
+   */
+  uploadsLocked: boolean;
   itemCount?: number;
   deletedCount?: number;
+  /** Anzahl aktiver Dokumente (nur in der Admin-Übersicht). */
+  documentCount?: number;
   accessCount?: number;
   lastAccessAt?: string | null;
 }
@@ -164,11 +172,36 @@ export interface Item {
   /** Masse des (ggf. angepassten) Thumbnails – bestimmen das Kachel-Seitenverhältnis. */
   thumbW: number | null;
   thumbH: number | null;
-  scope?: 'gallery' | 'note';
+  scope?: 'gallery' | 'note' | 'document';
   noteId?: string | null;
   createdAt: string;
   hasPreview: boolean;
   hasPoster: boolean;
+}
+
+// ---- Dokumente -------------------------------------------------------------
+
+/**
+ * Art der Anzeige eines Dokuments: PDF-Ansicht, Musik-Player, Bild, Video –
+ * oder (`file`) nur herunterladen.
+ */
+export type DocType = 'pdf' | 'audio' | 'image' | 'video' | 'file';
+
+export interface DocumentItem {
+  id: string;
+  /** Dateiname inkl. Endung (angezeigt wird er ohne Endung). */
+  name: string;
+  ext: string;
+  mime: string;
+  docType: DocType;
+  sizeBytes: number;
+  /** Spieldauer in Sekunden (nur Audio, sofern ermittelbar). */
+  duration: number | null;
+  position: number;
+  state: ItemState;
+  stateBy: string | null;
+  stateAt: string | null;
+  createdAt: string;
 }
 
 // ---- Teilnehmer ------------------------------------------------------------

@@ -34,21 +34,28 @@ function getManifestLink(): HTMLLinkElement {
  * diesen Bereich zeigt. `id` ist ebenfalls bereichsspezifisch, damit sich pro
  * Bereich eine eigene installierte App erzeugen lässt.
  */
-export function setSpaceManifest(slug: string, name: string): void {
+export function setSpaceManifest(
+  slug: string,
+  name: string,
+  opts: { startPath?: string; description?: string } = {},
+): void {
   const link = getManifestLink();
   if (originalManifestHref === null) originalManifestHref = link.getAttribute('href');
 
   const title = (name || '').trim() || 'share';
+  const startPath = opts.startPath ?? `/s/${slug}`;
   const manifest = {
     // Sowohl der vollständige Name als auch der Kurzname entsprechen exakt dem
     // Bereichsnamen, damit die installierte PWA genauso heisst wie der Bereich
     // (z. B. „Ferien Tessin") und nicht abgeschnitten wird.
     name: title,
     short_name: title,
-    description: 'Fotos & Videos einfach in einer privaten Gruppe teilen.',
+    description: opts.description ?? 'Fotos & Videos einfach in einer privaten Gruppe teilen.',
     lang: 'de',
+    // Die ID bleibt pro Bereich gleich (auch für den Dokumente-Link), damit
+    // bereits installierte Verknüpfungen erhalten bleiben.
     id: `/s/${slug}`,
-    start_url: absoluteUrl(`/s/${slug}`),
+    start_url: absoluteUrl(startPath),
     scope: absoluteUrl('/'),
     display: 'standalone',
     // 'any' statt 'portrait': So darf die installierte PWA dem Gerät ins

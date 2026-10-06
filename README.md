@@ -7,7 +7,8 @@ sehen eine übersichtliche Galerie, können nach Person oder chronologisch
 filtern, die Galerie **selbst anordnen** und Originale wieder herunterladen.
 
 Aus der Foto-App ist eine allgemeine **Ferien- und Gruppen-App** geworden: Ein
-Bereich kann optional zusätzliche **Module** aktivieren – **Finanzen**
+Bereich kann optional zusätzliche **Module** aktivieren – **Dokumente** (PDFs,
+Musik &amp; andere Dateien direkt im Browser ansehen und anhören), **Finanzen**
 (gemeinsame Ausgaben fair abrechnen), **Einkaufsliste**, **Notizen** (Text &amp;
 Checklisten, auch mit Bildern) und einen **Kalender**. Fotos &amp; Videos sind
 immer dabei; alle anderen Module sind pro Bereich frei wählbar. Bestehende
@@ -106,6 +107,12 @@ Alle Metadaten (auch der neuen Module) bleiben in derselben lokalen
   gratis aus den Cloudflare-Geo-Headern (siehe
   [docs/02-cloudflare-tunnel.md](docs/02-cloudflare-tunnel.md#26-standort-header-für-die-zugriffsstatistik-optional-empfohlen)).
   Für normale Nutzer:innen ist davon **nichts** sichtbar.
+- **Upload-Sperre (reiner Ansichtslink)**: Pro Bereich lässt sich festlegen,
+  dass **nur der Administrator** Dateien hochladen, löschen oder ändern darf
+  (Galerie und Dokumente). Alle anderen mit dem Link können dann nur ansehen,
+  abspielen und herunterladen. Der Administrator wird am Admin-Schlüssel erkannt,
+  der beim Anlegen eines Bereichs bzw. im Adminbereich ohnehin auf seinem Gerät
+  gespeichert wird – auf diesem Gerät erscheinen die Werkzeuge weiterhin.
 - **Lokale Speicherung** auf dem QNAP, Metadaten in einer einzelnen SQLite-Datei.
 
 ## Module (optional pro Bereich)
@@ -116,6 +123,14 @@ jedes andere und lassen sich abwählen (z.&nbsp;B. für einen reinen
 Finanz-Bereich). Es muss aber immer mindestens ein Modul aktiv bleiben. Ein
 deaktiviertes Modul wird nur ausgeblendet – vorhandene Daten bleiben erhalten.
 
+- **Dokumente** – Beliebige Dateien teilen, optimiert für **PDFs und Musik**:
+  Ein Tippen auf ein PDF öffnet es sofort im Vollbild (auch auf Android und
+  iPhone), per **Wischen** oder **Pfeil** geht es zum nächsten PDF. Ein Tippen auf
+  eine MP3 spielt sie **sofort** in einem schlanken Player ab; am Ende startet
+  automatisch das **nächste Lied**. Besteht ein Bereich nur aus Dokumenten, gibt
+  es dafür einen schlanken Link `/d/<bereich>` – oben nur das Logo, ohne
+  Profil-Icon (wenn nicht nach einem Namen gefragt wird) und mit einer
+  **neutralen Link-Vorschau** (z. B. in WhatsApp) ohne Bezug zur Foto-App.
 - **Finanzen** – Gemeinsame Ausgaben erfassen, **gleichmässig** (unter allen
   oder ausgewählten Personen) oder mit **manuellen Beträgen** aufteilen und mit
   möglichst **wenigen Ausgleichszahlungen** abrechnen („Peter zahlt Alain
@@ -155,8 +170,8 @@ die Fotogalerie) funktionieren unverändert.
 - `backend/`: Node.js + Express + TypeScript, läuft als **Docker-Container** auf dem QNAP.
   - Bildvarianten mit **sharp**, Video-Poster/Vorschau mit **ffmpeg**.
   - **SQLite** (`better-sqlite3`) als lokale Metadaten-DB – keine externe Datenbank nötig.
-  - Getrennte Router pro Modul (`participants`, `finance`, `shopping`, `notes`,
-    `calendar`); die Finanzberechnung liegt als reine, getestete Funktion in
+  - Getrennte Router pro Modul (`participants`, `documents`, `finance`,
+    `shopping`, `notes`, `calendar`); die Finanzberechnung liegt als reine, getestete Funktion in
     `backend/src/lib/finance.ts` (`npm test`).
 - `docker-compose.yml` für das QNAP (inkl. optionalem Cloudflare-Tunnel &amp; Auto-Update).
 - GitHub Actions baut das Backend-Image automatisch nach GHCR.
@@ -207,7 +222,7 @@ Folge den Anleitungen in `docs/` in dieser Reihenfolge:
 3. **[Netlify](docs/03-netlify.md)** – Frontend als `share.alae.app` hosten.
 4. **[Betrieb &amp; Troubleshooting](docs/04-betrieb.md)** – Updates, Backups, häufige Fehler.
 5. **[Uploads &amp; Videos – wie es funktioniert](docs/05-uploads-und-videos.md)** – Hintergrund zu grossen Dateien.
-6. **[Module: Finanzen, Einkauf, Notizen &amp; Kalender](docs/06-module.md)** – die optionalen Bereichs-Module, Migration und neue API.
+6. **[Module: Dokumente, Finanzen, Einkauf, Notizen &amp; Kalender](docs/06-module.md)** – die optionalen Bereichs-Module, Upload-Sperre, Migration und neue API.
 
 > Eine kompakte Checkliste „Was muss ich zusätzlich zum Code selbst erstellen?“
 > findest du am Ende von [docs/01-qnap.md](docs/01-qnap.md#checkliste).

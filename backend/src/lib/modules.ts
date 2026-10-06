@@ -1,7 +1,9 @@
 import type Database from 'better-sqlite3';
 import { getDb, ModuleKey, SpaceModuleRow } from '../db';
 
-export const MODULE_KEYS: ModuleKey[] = ['photos', 'finance', 'shopping', 'notes', 'calendar'];
+// Reihenfolge = Anzeige-Reihenfolge in der Navigation. Ohne Galerie öffnet ein
+// Bereich beim ersten aktivierten Modul dieser Liste.
+export const MODULE_KEYS: ModuleKey[] = ['photos', 'documents', 'finance', 'shopping', 'notes', 'calendar'];
 
 /**
  * Immer aktivierte Module, die nicht deaktiviert werden dürfen. Fotos &

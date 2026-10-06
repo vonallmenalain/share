@@ -15,6 +15,7 @@ import {
 } from '../api/client';
 import { shareItems } from '../lib/share';
 import { adminKeyStore } from '../lib/storage';
+import { isDocumentsOnly, spacePath } from '../lib/spaceLinks';
 import {
   formatBytes,
   formatDate,
@@ -126,8 +127,10 @@ export default function Admin() {
     });
   };
 
+  // Zusammenführen statt ersetzen: Antworten einzelner Einstellungen enthalten
+  // die Zähler der Übersicht (aktiv, gelöscht, Zugriffe …) nicht.
   const updateSpace = (updated: Space) => {
-    setSpaces((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    setSpaces((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
   };
 
   const removeSpace = async (space: Space) => {
@@ -302,10 +305,14 @@ export default function Admin() {
                     <div className="grow">
                       <div className="nm">{s.name}</div>
                       <div className="faint" style={{ fontSize: 13 }}>
-                        /s/{s.slug} · {formatDate(s.createdAt)}
+                        {spacePath(s.slug, s.modules)} · {formatDate(s.createdAt)}
                       </div>
                     </div>
-                    <span className="tag">{s.itemCount ?? 0} aktiv</span>
+                    {isDocumentsOnly(s.modules) ? (
+                      <span className="tag">📄 {s.documentCount ?? 0}</span>
+                    ) : (
+                      <span className="tag">{s.itemCount ?? 0} aktiv</span>
+                    )}
                     {(s.deletedCount ?? 0) > 0 && (
                       <span className="tag tag-danger">{s.deletedCount} gelöscht</span>
                     )}
@@ -315,13 +322,18 @@ export default function Admin() {
                       </span>
                     )}
                     {s.hasPassword && <span className="tag">🔒</span>}
+                    {s.uploadsLocked && (
+                      <span className="tag" title="Nur der Admin darf hochladen (reiner Ansichtslink)">
+                        nur ansehen
+                      </span>
+                    )}
                   </button>
 
                   {isOpen && (
                     <div className="admin-space-body">
                       <div className="row wrap" style={{ marginBottom: 6 }}>
-                        <Link className="btn btn-sm" to={`/s/${s.slug}`}>
-                          Galerie öffnen
+                        <Link className="btn btn-sm" to={spacePath(s.slug, s.modules)}>
+                          {isDocumentsOnly(s.modules) ? 'Dokumente öffnen' : 'Galerie öffnen'}
                         </Link>
                         <button
                           className="btn btn-sm btn-ghost"
@@ -337,7 +349,9 @@ export default function Admin() {
 
                       <AdminRenamePanel space={s} adminKey={adminKey} onUpdateSpace={updateSpace} />
 
-                      <AdminModulePanel spaceId={s.id} adminKey={adminKey} />
+                      <AdminModulePanel spaceId={s.id} adminKey={adminKey} onUpdateSpace={updateSpace} />
+
+                      <AdminUploadPolicyPanel space={s} adminKey={adminKey} onUpdateSpace={updateSpace} />
 
                       <AdminParticipantsPanel
                         space={s}
@@ -378,6 +392,7 @@ export default function Admin() {
 
 const MODULE_META: { key: ModuleKey; label: string; icon: string }[] = [
   { key: 'photos', label: 'Fotos & Videos', icon: '🖼️' },
+  { key: 'documents', label: 'Dokumente', icon: '📄' },
   { key: 'finance', label: 'Finanzen', icon: '💰' },
   { key: 'shopping', label: 'Einkaufsliste', icon: '🛒' },
   { key: 'notes', label: 'Notizen', icon: '📝' },
@@ -466,7 +481,15 @@ function AdminRenamePanel({
 }
 
 /** Adminbereich: aktivierte Module eines Bereichs anzeigen und ändern. */
-function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: string }) {
+function AdminModulePanel({
+  spaceId,
+  adminKey,
+  onUpdateSpace,
+}: {
+  spaceId: string;
+  adminKey: string;
+  onUpdateSpace: (space: Space) => void;
+}) {
   const [modules, setModules] = useState<Set<ModuleKey>>(new Set(['photos']));
   const [currency, setCurrency] = useState('CHF');
   const [loading, setLoading] = useState(true);
@@ -513,7 +536,7 @@ function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: st
     setSaving(true);
     setMsg('');
     try {
-      const res = await api<{ modules: ModuleKey[]; financeCurrency: string | null }>(
+      const res = await api<{ space: Space; modules: ModuleKey[]; financeCurrency: string | null }>(
         `/api/spaces/${spaceId}/modules`,
         {
           method: 'PATCH',
@@ -524,6 +547,7 @@ function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: st
           },
         },
       );
+      onUpdateSpace(res.space);
       setModules(new Set(res.modules));
       if (res.financeCurrency) setCurrency(res.financeCurrency);
       setMsg('Gespeichert ✓');
@@ -581,6 +605,75 @@ function AdminModulePanel({ spaceId, adminKey }: { spaceId: string; adminKey: st
       <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 10 }}>
         <button className="btn btn-sm btn-primary" disabled={saving || modules.size === 0} onClick={save}>
           {saving ? 'Speichere…' : 'Module speichern'}
+        </button>
+        {msg && <span className="muted" style={{ fontSize: 13 }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Adminbereich: Upload-Sperre. Mit Sperre ist der Link für alle anderen ein
+ * reiner Ansichtslink (Galerie & Dokumente ansehen, abspielen, herunterladen);
+ * hochladen, löschen und ändern kann nur noch der Administrator – auf Geräten,
+ * auf denen der Admin-Schlüssel gespeichert ist.
+ */
+function AdminUploadPolicyPanel({
+  space,
+  adminKey,
+  onUpdateSpace,
+}: {
+  space: Space;
+  adminKey: string;
+  onUpdateSpace: (space: Space) => void;
+}) {
+  const [locked, setLocked] = useState(space.uploadsLocked);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    setLocked(space.uploadsLocked);
+  }, [space.uploadsLocked]);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg('');
+    try {
+      const res = await api<{ space: Space }>(`/api/spaces/${space.id}/upload-policy`, {
+        method: 'PATCH',
+        adminKey,
+        body: { uploadsLocked: locked },
+      });
+      onUpdateSpace(res.space);
+      setMsg('Gespeichert ✓');
+      setTimeout(() => setMsg(''), 1800);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="admin-module-panel">
+      <div className="admin-module-title">Hochladen</div>
+      <label className="checkbox-line">
+        <input type="checkbox" checked={locked} onChange={(e) => setLocked(e.target.checked)} />
+        Nur ich (Admin) darf Dateien hochladen
+      </label>
+      <p className="hint" style={{ marginTop: 6 }}>
+        Für alle anderen ist der Link dann ein reiner Ansichtslink: Fotos, Videos und Dokumente
+        lassen sich ansehen, abspielen und herunterladen – aber nicht hochladen, löschen oder
+        ändern. Du siehst die Werkzeuge weiterhin auf Geräten, auf denen der Admin-Schlüssel
+        gespeichert ist.
+      </p>
+      <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 10 }}>
+        <button
+          className="btn btn-sm btn-primary"
+          disabled={saving || locked === space.uploadsLocked}
+          onClick={save}
+        >
+          {saving ? 'Speichere…' : 'Einstellung speichern'}
         </button>
         {msg && <span className="muted" style={{ fontSize: 13 }}>{msg}</span>}
       </div>

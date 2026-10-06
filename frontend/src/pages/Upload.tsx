@@ -34,7 +34,18 @@ const isUploaded = (s: string) => s === 'processing' || s === 'done';
  */
 export default function UploadPage() {
   const uploads = useUploads();
-  const { slug, space, token, uploaderName: sessionUploaderName, setName } = useSpaceSessionContext();
+  const {
+    slug,
+    space,
+    token,
+    uploaderName: sessionUploaderName,
+    setName,
+    canManage,
+    isAdmin,
+    adminKey,
+  } = useSpaceSessionContext();
+  // In Bereichen mit Upload-Sperre lädt nur der Administrator hoch (mit Schlüssel).
+  const lockKey = space?.uploadsLocked && isAdmin ? adminKey : undefined;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -51,9 +62,9 @@ export default function UploadPage() {
         setName(uploaderName);
         nameStore.set(uploaderName);
       }
-      uploads.addFiles(files, { spaceId: space.id, token, uploaderName });
+      uploads.addFiles(files, { spaceId: space.id, token, uploaderName, adminKey: lockKey });
     },
-    [space, token, sessionUploaderName, uploads, setName],
+    [space, token, sessionUploaderName, uploads, setName, lockKey],
   );
 
   const pick = () => fileInputRef.current?.click();
@@ -124,6 +135,25 @@ export default function UploadPage() {
   const eta = speed > 0 && activeCount > 0 ? remainingBytes / speed : null;
 
   // ---- Render --------------------------------------------------------------
+  if (!canManage) {
+    return (
+      <div className="container upload-page">
+        <div className="space-head">
+          <h1 className="space-title">Hochladen</h1>
+        </div>
+        <div className="empty-hint">
+          In diesem Bereich kann nur der Ersteller Dateien hochladen – der Link ist zum Ansehen
+          da.
+          <div style={{ marginTop: 14 }}>
+            <Link className="btn btn-sm" to={`/s/${slug}`}>
+              Zurück zur Galerie
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div

@@ -8,7 +8,13 @@ import {
   ReactNode,
 } from 'react';
 import { api, ApiError, ModuleKey, Participant, Space as SpaceType } from '../api/client';
-import { nameStore, tokenStore, visitedSpacesStore, VisitedSpace } from '../lib/storage';
+import {
+  adminKeyStore,
+  nameStore,
+  tokenStore,
+  visitedSpacesStore,
+  VisitedSpace,
+} from '../lib/storage';
 import { GUEST_NAME, useParticipants } from '../lib/useParticipants';
 
 export type SessionPhase = 'loading' | 'gate' | 'ready' | 'notfound';
@@ -96,6 +102,19 @@ export interface SpaceSessionValue {
   removeVisitedSpace: (slug: string) => void;
   hasModule: (key: ModuleKey) => boolean;
   identity: IdentityValue;
+  /**
+   * Ist dieses Gerät als Administrator erkannt (gültiger, lokal gespeicherter
+   * Admin-Schlüssel – z. B. vom Anlegen eines Bereichs)? Dann erscheinen auch
+   * in gesperrten Bereichen die Werkzeuge zum Hochladen und Verwalten.
+   */
+  isAdmin: boolean;
+  /** Der geprüfte Admin-Schlüssel (leer, wenn kein Admin) – für X-Admin-Key. */
+  adminKey: string;
+  /**
+   * Darf hier hochgeladen, gelöscht und geändert werden? Ohne Upload-Sperre
+   * jede Person (wie bisher), mit Sperre nur der Administrator.
+   */
+  canManage: boolean;
 }
 
 const SpaceSessionContext = createContext<SpaceSessionValue | null>(null);
@@ -250,6 +269,27 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
     }
   }, [slug, space]);
 
+  // Administrator erkennen: Ein auf diesem Gerät gespeicherter Admin-Schlüssel
+  // wird einmal pro Bereich geprüft. Nur dann erscheinen in gesperrten
+  // Bereichen die Werkzeuge zum Hochladen/Verwalten – für alle anderen bleibt
+  // der Link ein reiner Ansichtslink.
+  const [verifiedAdminKey, setVerifiedAdminKey] = useState('');
+  useEffect(() => {
+    setVerifiedAdminKey('');
+    if (phase !== 'ready') return;
+    const key = adminKeyStore.get();
+    if (!key) return;
+    let cancelled = false;
+    api('/api/spaces/admin-check', { adminKey: key })
+      .then(() => {
+        if (!cancelled) setVerifiedAdminKey(key);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, slug]);
+
   const removeVisitedSpace = useCallback((s: string) => {
     visitedSpacesStore.remove(s);
     setVisitedSpaces(visitedSpacesStore.all());
@@ -316,6 +356,9 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
     (key: ModuleKey) => (key === 'photos' ? true : !!space?.modules?.includes(key)),
     [space],
   );
+
+  const isAdmin = !!verifiedAdminKey;
+  const canManage = isAdmin || !space?.uploadsLocked;
 
   const identity = useMemo<IdentityValue>(
     () => ({
@@ -384,6 +427,9 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       removeVisitedSpace,
       hasModule,
       identity,
+      isAdmin,
+      adminKey: verifiedAdminKey,
+      canManage,
     }),
     [
       slug,
@@ -404,6 +450,9 @@ export function SpaceSessionProvider({ slug, children }: { slug: string; childre
       removeVisitedSpace,
       hasModule,
       identity,
+      isAdmin,
+      verifiedAdminKey,
+      canManage,
     ],
   );
 

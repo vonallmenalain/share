@@ -1,4 +1,4 @@
-# Module: Finanzen, Einkaufsliste, Notizen &amp; Kalender
+# Module: Dokumente, Finanzen, Einkaufsliste, Notizen &amp; Kalender
 
 Aus der Foto-Share-App ist eine allgemeine Ferien- und Gruppen-App geworden.
 Ein Bereich kann eines oder mehrere der folgenden Module aktivieren. Alle
@@ -10,6 +10,7 @@ Daten bleiben in derselben lokalen **SQLite-Datei** auf dem QNAP – es kommt
 | Modul | Schlüssel | Zweck |
 | --- | --- | --- |
 | Fotos &amp; Videos | `photos` | Gemeinsame Galerie |
+| Dokumente | `documents` | PDFs, Musik &amp; andere Dateien direkt ansehen/anhören |
 | Finanzen | `finance` | Ausgaben erfassen, aufteilen, abrechnen |
 | Einkaufsliste | `shopping` | Gemeinsame Liste zum Abhaken |
 | Notizen | `notes` | Text-/Checklisten-Notizen mit Bildanhängen |
@@ -45,6 +46,8 @@ Die Migration:
   `finance_settlement_transfers`, `shopping_items`, `notes`,
   `note_checklist_items`, `note_attachments`, `calendar_events`);
 - trägt bei **allen bestehenden Bereichen** das Fotomodul (`photos`) ein;
+- ergänzt `spaces.uploads_locked` (Upload-Sperre, Standard `0` = wie bisher
+  offen) – siehe „Upload-Sperre" unten;
 - erstellt Indizes (u. a. auf `space_id`, `status`, `expense_date`, `note_id`,
   `checked`, `start_at`, `deleted_at`).
 
@@ -307,6 +310,95 @@ gespeichert und mit der Notiz verknüpft (`note_attachments`). Wichtig:
 - Beim Löschen einer Notiz (oder eines Anhangs) wird das Medium **soft-deleted**;
   die Originaldatei auf dem QNAP bleibt erhalten.
 
+## Dokumente
+
+Das Dokumente-Modul ist für das Teilen von Dateien mit möglichst wenig
+Drumherum gedacht – typischer Fall: ein paar PDFs (Noten, Texte, Programme) und
+dazu passende MP3s.
+
+- **Liste:** PDFs und andere Dokumente oben, Musik/Audio darunter (die
+  Überschriften „Dokumente"/„Audio" erscheinen nur, wenn es beides gibt). Pro
+  Eintrag gibt es einen Download-Knopf.
+- **PDF-Ansicht:** Ein Tippen öffnet das PDF im Vollbild. Gerendert wird mit
+  **pdf.js** (wird erst beim ersten PDF nachgeladen), damit es überall gleich
+  funktioniert – auch auf Android (kein eingebauter PDF-Viewer) und auf dem
+  iPhone (dort zeigt ein eingebettetes PDF sonst nur die erste Seite). Zum
+  nächsten bzw. vorherigen PDF geht es per **Wischen** nach links/rechts, über
+  die **Pfeile** oben (am Desktop zusätzlich seitlich), die **Pfeiltasten** oder
+  den **„Weiter: …"-Knopf** am Ende eines PDFs. Die Ansicht hat eine eigene URL
+  (`?doc=<id>`), „Zurück" schliesst sie. Nachbar-PDFs werden im Hintergrund
+  vorgeladen; beim Zwei-Finger-Zoom rendern die sichtbaren Seiten schärfer nach.
+  Bilder und Videos öffnen in derselben Ansicht.
+- **Musik:** Ein Tippen auf eine Audiodatei spielt sie **sofort** ab, ein
+  weiteres Tippen pausiert. Am Ende eines Liedes startet automatisch das
+  **nächste** (nach dem letzten ist Schluss). Die schmale Player-Leiste unten
+  (zurück, Play/Pause, weiter, Spulen) bleibt auch über der PDF-Ansicht
+  sichtbar – Noten oder Texte lassen sich so lesen, während das Lied läuft. Über
+  die Media-Session-API funktionieren auch die Tasten auf dem Sperrbildschirm
+  bzw. am Kopfhörer.
+- **Andere Dateien** (z. B. Word, ZIP) werden beim Antippen heruntergeladen.
+
+**Schlanker Ansichtslink `/d/<slug>`.** Besteht ein Bereich **nur** aus dem
+Dokumente-Modul, wird er unter `/d/<slug>` geteilt und geöffnet (`/s/<slug>`
+leitet dorthin weiter). Fragt der Bereich zusätzlich nicht nach einem Namen,
+zeigt die Kopfzeile nur das Logo – ohne Profil-/Bereichsmenü. Der Tab-Titel ist
+der Name des Bereichs.
+
+**Hochladen & Verwalten** (für alle, oder mit Upload-Sperre nur für den
+Administrator): „Dateien hinzufügen" (oder Dateien auf die Seite ziehen). Die
+Dateien werden **nacheinander** und nach Namen sortiert hochgeladen
+(„2 …" vor „10 …"), damit die Reihenfolge stimmt. Unter „Bearbeiten" lassen sich
+Einträge verschieben, umbenennen (die Endung bleibt erhalten) und löschen. Der
+Administrator sieht dort auch gelöschte Dokumente und kann sie
+wiederherstellen oder endgültig löschen. „Link teilen" öffnet das Teilen-Menü
+des Geräts (bzw. kopiert den Link).
+
+**Technik.** Dokumente sind Medien (`items`) mit `scope = 'document'` und
+`kind = 'document'`. Sie nutzen denselben fortsetzbaren Chunk-Upload
+(`POST /api/uploads` mit `scope: 'document'`) und dieselbe Ablage, werden aber
+**nicht verarbeitet** (keine Varianten) und sind nach dem Upload sofort
+verfügbar. Für Audio wird beim Abschluss die Spieldauer per `ffprobe` ermittelt
+(mit Zeitlimit). Dokumente erscheinen nie in der Galerie. Zum Anzeigen gibt es
+`GET /files/view/:id`: Die Datei wird **inline** ausgeliefert – aber nur für
+sichere Medientypen (PDF, Audio, Bilder ohne SVG, Video), deren Content-Type der
+Server selbst aus der Endung bestimmt (`backend/src/lib/documents.ts`). Alles
+andere (z. B. HTML oder SVG) kommt nur als Download, damit nie eine hochgeladene
+Datei als Webseite auf der API-Domain ausgeführt wird. Downloads enthalten den
+Dateinamen jetzt zusätzlich nach RFC 5987, sodass auch Namen mit „–" oder
+Emojis funktionieren.
+
+**Neutrale Link-Vorschau.** WhatsApp &amp; Co. lesen beim Teilen nur das
+statische HTML. Beim Build entsteht deshalb neben `index.html` eine Kopie
+`d/index.html` mit neutralem Titel („Geteilte Dokumente"), Beschreibung und
+Vorschaubild (`og-docs.png`) – ohne Bezug zur Foto-App
+(`frontend/vite.config.ts`). Damit Netlify diese Datei für `/d/*` ausliefert,
+braucht es in `frontend/public/_redirects` vor der allgemeinen SPA-Regel die
+Zeile `/d/*  /d/index.html  200`.
+
+## Upload-Sperre (reiner Ansichtslink)
+
+Pro Bereich lässt sich beim Erstellen (und später im Adminbereich unter
+„Hochladen") festlegen: **„Nur ich (Admin) darf Dateien hochladen"**
+(`spaces.uploads_locked`, im API `uploadsLocked`). Dann gilt für alle anderen
+mit dem Link:
+
+- **Galerie:** ansehen, Videos abspielen, herunterladen, teilen – aber nicht
+  hochladen, löschen, Favoriten setzen oder Vorschaubilder anpassen.
+- **Dokumente:** ansehen, anhören, herunterladen – aber nicht hochladen,
+  löschen, sortieren oder umbenennen.
+- Notiz-Bilder gehören zum gemeinsamen Bearbeiten einer Notiz und sind nicht
+  betroffen.
+
+Der **Administrator** wird am Admin-Schlüssel erkannt, der beim Anlegen eines
+Bereichs bzw. beim Anmelden im Adminbereich auf seinem Gerät gespeichert wird.
+Die Bereichsseiten prüfen ihn einmal (`GET /api/spaces/admin-check`) und
+blenden nur dann die Werkzeuge ein; Änderungen schicken ihn als Header
+`X-Admin-Key` mit. Das Backend erzwingt die Sperre unabhängig von der
+Oberfläche (`backend/src/middleware/manage.ts`). Ein mitgeschickter, aber
+falscher Schlüssel wird mit `401` abgelehnt und läuft durch denselben
+Rate-Limiter wie die Admin-Endpunkte – der Schlüssel lässt sich darüber also
+nicht durchprobieren. Ohne Sperre bleibt alles wie bisher.
+
 ## Neue API-Endpunkte
 
 Alle Endpunkte sind mit `requireSpace` geschützt und auf `req.spaceId`
@@ -356,6 +448,17 @@ eingeschränkt. Modulrouten prüfen zusätzlich, ob das Modul aktiviert ist
 - `DELETE /api/notes/:id/attachments/:itemId`
 - Bild-Uploads über `POST /api/uploads` mit `scope: 'note'` und `noteId`.
 
+**Dokumente** (ändernde Endpunkte: mit Upload-Sperre nur mit `X-Admin-Key`)
+
+- `GET /api/documents` – aktive Dokumente in Reihenfolge (inkl. `docType`:
+  `pdf` | `audio` | `image` | `video` | `file`)
+- `GET /api/documents/deleted` – gelöschte Dokumente (nur Admin)
+- `PATCH /api/documents/order` – Body `{ "order": ["<id>", …] }`
+- `PATCH /api/documents/:id` – umbenennen, Body `{ "name": "..." }`
+- `POST /api/documents/:id/delete` – weich löschen
+- Hochladen über `POST /api/uploads` mit `scope: 'document'`
+- `GET /files/view/:id` – Datei zum Anzeigen/Abspielen (inline, nur sichere Typen)
+
 **Kalender**
 
 - `GET /api/calendar/events?from=...&to=...`
@@ -372,6 +475,10 @@ eingeschränkt. Modulrouten prüfen zusätzlich, ob das Modul aktiviert ist
 - `PATCH /api/spaces/:id/modules`
 - `PATCH /api/spaces/:id/participant-policy` – Code (PIN) für neue Identitäten
   zur Pflicht machen oder wieder freiwillig machen.
+- `PATCH /api/spaces/:id/upload-policy` – Upload-Sperre ein-/ausschalten
+  (`{ "uploadsLocked": true | false }`).
+- `GET /api/spaces/admin-check` – prüft nur den Admin-Schlüssel (für die
+  Werkzeuge auf den Bereichsseiten).
 - `GET /api/spaces/:id/participants` – alle Identitäten eines Bereichs
   (inkl. archivierter).
 - `PATCH /api/spaces/:id/participants/:participantId` – Identität umbenennen

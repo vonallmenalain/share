@@ -24,13 +24,14 @@ export function initDb(): Database.Database {
       password_hash            TEXT,
       require_participant_pin  INTEGER NOT NULL DEFAULT 0,
       skip_identity_prompt     INTEGER NOT NULL DEFAULT 0,
+      uploads_locked           INTEGER NOT NULL DEFAULT 0,
       created_at               TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS items (
       id                TEXT PRIMARY KEY,
       space_id          TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
-      kind              TEXT NOT NULL,            -- 'photo' | 'video'
+      kind              TEXT NOT NULL,            -- 'photo' | 'video' | 'document'
       status            TEXT NOT NULL,            -- 'processing' | 'ready' | 'failed'
       state             TEXT NOT NULL DEFAULT 'active', -- 'active' | 'deleted'
       state_by          TEXT,                     -- Name der Person, die zuletzt gelöscht hat
@@ -426,6 +427,13 @@ function migrate(database: Database.Database) {
     'skip_identity_prompt',
     `skip_identity_prompt INTEGER NOT NULL DEFAULT 0`,
   );
+
+  // Upload-Sperre („reiner Ansichtslink"): Ist sie aktiv, dürfen in der
+  // Galerie und bei den Dokumenten nur noch Administrator:innen (gültiger
+  // Admin-Schlüssel) Dateien hochladen, löschen oder ändern – alle anderen mit
+  // dem Link können nur ansehen, abspielen und herunterladen. Nachträglich
+  // ergänzt, daher per Migration; bestehende Bereiche bleiben offen (0).
+  addColumn('spaces', spaceCols, 'uploads_locked', `uploads_locked INTEGER NOT NULL DEFAULT 0`);
 }
 
 export function getDb(): Database.Database {
@@ -442,13 +450,16 @@ export interface SpaceRow {
   require_participant_pin: number;
   /** Ganz ohne Namensabfrage („Wer bist du?") betreten? 0 = nein, 1 = ja. */
   skip_identity_prompt: number;
+  /** Upload-Sperre: nur Admin darf hochladen/löschen/ändern? 0 = nein, 1 = ja. */
+  uploads_locked: number;
   created_at: string;
 }
 
 export interface ItemRow {
   id: string;
   space_id: string;
-  kind: 'photo' | 'video';
+  /** 'document' = Datei des Dokumente-Moduls (PDF, Audio, …) ohne Varianten. */
+  kind: 'photo' | 'video' | 'document';
   status: 'processing' | 'ready' | 'failed';
   state: 'active' | 'deleted';
   state_by: string | null;
@@ -468,10 +479,17 @@ export interface ItemRow {
   thumb_version: number;
   thumb_w: number | null;
   thumb_h: number | null;
-  scope: 'gallery' | 'note';
+  scope: ItemScope;
   note_id: string | null;
   created_at: string;
 }
+
+/**
+ * Kontext eines Mediums: 'gallery' = Fotogalerie, 'note' = Bildanhang einer
+ * Notiz, 'document' = Datei des Dokumente-Moduls. Galerie-Abfragen filtern
+ * immer auf 'gallery', damit Notiz-Bilder und Dokumente dort nie auftauchen.
+ */
+export type ItemScope = 'gallery' | 'note' | 'document';
 
 export interface AccessLogRow {
   id: string;
@@ -502,7 +520,7 @@ export interface UploadRow {
   received: string;
   status: 'open' | 'completed';
   item_id: string | null;
-  scope: 'gallery' | 'note';
+  scope: ItemScope;
   note_id: string | null;
   created_at: string;
   updated_at: string;
@@ -510,7 +528,7 @@ export interface UploadRow {
 
 // ---- Module & Ferien-/Gruppenfunktionen ------------------------------------
 
-export type ModuleKey = 'photos' | 'finance' | 'shopping' | 'notes' | 'calendar';
+export type ModuleKey = 'photos' | 'documents' | 'finance' | 'shopping' | 'notes' | 'calendar';
 
 export interface SpaceModuleRow {
   space_id: string;

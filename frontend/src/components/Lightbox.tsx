@@ -10,6 +10,8 @@ interface Props {
   token: string;
   /** Anzeigename der aktuellen Person – z. B. für das Anpassen des Vorschaubilds. */
   currentName?: string;
+  /** Admin-Schlüssel – nötig zum Anpassen des Vorschaubilds bei Upload-Sperre. */
+  adminKey?: string;
   onClose: () => void;
   onNavigate: (index: number) => void;
   onDownload: (item: Item) => void;
@@ -26,6 +28,7 @@ export default function Lightbox({
   index,
   token,
   currentName,
+  adminKey,
   onClose,
   onNavigate,
   onDownload,
@@ -268,6 +271,7 @@ export default function Lightbox({
             item={item}
             token={token}
             uploaderName={currentName}
+            adminKey={adminKey}
             onClose={() => setEditingThumb(false)}
             onSaved={(updated) => {
               onThumbUpdated(updated);

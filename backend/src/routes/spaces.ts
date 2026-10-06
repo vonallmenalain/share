@@ -72,6 +72,9 @@ function publicSpace(space: SpaceRow) {
     requireParticipantPin: space.require_participant_pin === 1,
     // Wird in diesem Bereich gar nicht nach einem Namen gefragt?
     skipIdentityPrompt: space.skip_identity_prompt === 1,
+    // Upload-Sperre: Hochladen/Löschen in Galerie & Dokumenten nur durch den
+    // Administrator – für alle anderen ein reiner Ansichtslink.
+    uploadsLocked: space.uploads_locked === 1,
   };
 }
 
@@ -107,6 +110,8 @@ router.post(
     // schliessen sich also aus.
     const skipIdentityPrompt = toBool(req.body?.skipIdentityPrompt);
     const requireParticipantPin = !skipIdentityPrompt && toBool(req.body?.requireParticipantPin);
+    // Upload-Sperre: nur der Administrator darf hochladen (reiner Ansichtslink).
+    const uploadsLocked = toBool(req.body?.uploadsLocked);
 
     const db = getDb();
     // Slug aus Name + kurzem Zufallsteil, garantiert eindeutig.
@@ -128,8 +133,8 @@ router.post(
     // Space, Module und (falls nötig) Finanzkonfiguration in einer Transaktion.
     const create = db.transaction(() => {
       db.prepare(
-        `INSERT INTO spaces (id, slug, name, password_hash, require_participant_pin, skip_identity_prompt, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO spaces (id, slug, name, password_hash, require_participant_pin, skip_identity_prompt, uploads_locked, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         id,
         slug,
@@ -137,6 +142,7 @@ router.post(
         passwordHash,
         requireParticipantPin ? 1 : 0,
         skipIdentityPrompt ? 1 : 0,
+        uploadsLocked ? 1 : 0,
         createdAt,
       );
       setEnabledModules(id, modules, db);
@@ -195,6 +201,20 @@ router.patch(
   }),
 );
 
+/**
+ * Admin: prüft nur den Admin-Schlüssel. Die Bereichsseiten nutzen das, um auf
+ * dem Gerät des Administrators die Verwaltungswerkzeuge (z. B. Hochladen in
+ * einem gesperrten Bereich) einzublenden.
+ */
+router.get(
+  '/admin-check',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json({ ok: true });
+  }),
+);
+
 /** Admin: alle Bereiche auflisten (Übersicht). */
 router.get(
   '/',
@@ -209,16 +229,21 @@ router.get(
          COALESCE(SUM(state = 'deleted'), 0)  AS deleted
        FROM items WHERE space_id = ? AND scope = 'gallery'`,
     );
+    const documentsBy = db.prepare(
+      `SELECT COUNT(*) AS n FROM items WHERE space_id = ? AND scope = 'document' AND state = 'active'`,
+    );
     const accessBy = db.prepare(
       `SELECT COUNT(*) AS total, MAX(at) AS last FROM access_logs WHERE space_id = ?`,
     );
     const result = rows.map((s) => {
       const c = countBy.get(s.id) as { active: number; deleted: number };
       const a = accessBy.get(s.id) as { total: number; last: string | null };
+      const d = documentsBy.get(s.id) as { n: number };
       return {
         ...publicSpace(s),
         itemCount: c.active,
         deletedCount: c.deleted,
+        documentCount: d.n,
         accessCount: a.total,
         lastAccessAt: a.last,
       };
@@ -503,6 +528,31 @@ router.patch(
     db.prepare(
       'UPDATE spaces SET require_participant_pin = ?, skip_identity_prompt = ? WHERE id = ?',
     ).run(requireParticipantPin ? 1 : 0, skipIdentityPrompt ? 1 : 0, space.id);
+    const updated = db.prepare('SELECT * FROM spaces WHERE id = ?').get(space.id) as SpaceRow;
+    res.json({ space: publicSpace(updated) });
+  }),
+);
+
+/**
+ * Admin: Upload-Sperre ein- oder ausschalten. Body: `{ uploadsLocked: boolean }`.
+ * Mit Sperre ist der Link für alle anderen ein reiner Ansichtslink: Galerie und
+ * Dokumente lassen sich ansehen, abspielen und herunterladen, aber nur noch der
+ * Administrator (Gerät mit gespeichertem Admin-Schlüssel) kann hochladen,
+ * löschen, sortieren oder umbenennen.
+ */
+router.patch(
+  '/:id/upload-policy',
+  adminLimiter,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const db = getDb();
+    const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.params.id) as
+      | SpaceRow
+      | undefined;
+    if (!space) throw new ApiError(404, 'Bereich nicht gefunden.');
+    const uploadsLocked =
+      req.body?.uploadsLocked === undefined ? space.uploads_locked === 1 : toBool(req.body.uploadsLocked);
+    db.prepare('UPDATE spaces SET uploads_locked = ? WHERE id = ?').run(uploadsLocked ? 1 : 0, space.id);
     const updated = db.prepare('SELECT * FROM spaces WHERE id = ?').get(space.id) as SpaceRow;
     res.json({ space: publicSpace(updated) });
   }),

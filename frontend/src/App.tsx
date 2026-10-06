@@ -10,6 +10,8 @@ import ShoppingPage from './pages/shopping/ShoppingPage';
 import NotesPage from './pages/notes/NotesPage';
 import NoteEditorPage from './pages/notes/NoteEditorPage';
 import CalendarPage from './pages/calendar/CalendarPage';
+import DocumentsPage from './pages/documents/DocumentsPage';
+import DocumentsEntry from './pages/documents/DocumentsEntry';
 
 export default function App() {
   return (
@@ -25,6 +27,12 @@ export default function App() {
         <Route path="notes" element={<NotesPage />} />
         <Route path="notes/:noteId" element={<NoteEditorPage />} />
         <Route path="calendar" element={<CalendarPage />} />
+        <Route path="docs" element={<DocumentsPage />} />
+      </Route>
+      {/* Schlanker Ansichtslink für reine Dokumente-Bereiche (eigene, neutrale
+          Link-Vorschau – siehe vite.config.ts). */}
+      <Route path="/d/:slug" element={<SpaceLayout />}>
+        <Route index element={<DocumentsEntry />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

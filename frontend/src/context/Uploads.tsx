@@ -44,6 +44,8 @@ export interface UploadTask {
   spaceId: string;
   token: string;
   uploaderName: string;
+  /** Admin-Schlüssel – nur gesetzt, wenn in einem gesperrten Bereich der Admin hochlädt. */
+  adminKey?: string;
   fingerprint: string;
   status: TaskStatus;
   uploadedBytes: number;
@@ -53,7 +55,7 @@ export interface UploadTask {
   item?: Item;
 }
 
-interface PublicTask extends Omit<UploadTask, 'file' | 'token'> {
+interface PublicTask extends Omit<UploadTask, 'file' | 'token' | 'adminKey'> {
   name: string;
 }
 
@@ -61,7 +63,7 @@ interface UploadsContextValue {
   tasks: PublicTask[];
   addFiles: (
     files: File[],
-    ctx: { spaceId: string; token: string; uploaderName: string },
+    ctx: { spaceId: string; token: string; uploaderName: string; adminKey?: string },
   ) => void;
   retry: (id: string) => void;
   retryFailed: (spaceId: string) => void;
@@ -126,7 +128,13 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
   // Aufrufer entscheidet über Wiederholung.
   const attemptUpload = useCallback(
     async (task: UploadTask, signal: AbortSignal) => {
-      const session = await createSession(task.token, task.file, task.uploaderName, signal);
+      const session = await createSession(
+        task.token,
+        task.file,
+        task.uploaderName,
+        signal,
+        task.adminKey ? { adminKey: task.adminKey } : undefined,
+      );
       patch(task.id, { uploadId: session.uploadId });
 
       pendingStore.upsert(task.spaceId, {
@@ -262,6 +270,7 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
           spaceId: ctx.spaceId,
           token: ctx.token,
           uploaderName: ctx.uploaderName,
+          adminKey: ctx.adminKey,
           fingerprint: fp,
           status: 'queued',
           uploadedBytes: 0,

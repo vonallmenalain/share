@@ -3,6 +3,7 @@ import { getDb, ItemRow } from '../db';
 import { ApiError, asyncHandler } from '../middleware/errors';
 import { requireSpace } from '../middleware/auth';
 import { requireEnabledModule } from '../middleware/module';
+import { manageGuard } from '../middleware/manage';
 import {
   fileExists,
   variantPath,
@@ -14,6 +15,9 @@ const router = Router();
 
 // Alle Routen hier betreffen ausschliesslich die Galerie (Fotos & Videos) –
 // ist dieses Modul für den Bereich abgewählt, gibt es hier nichts zu tun.
+// Ändernde Routen laufen zusätzlich durch `manageGuard`: Ist im Bereich die
+// Upload-Sperre aktiv („reiner Ansichtslink"), darf nur noch der Administrator
+// löschen, sortieren, Favoriten setzen oder Vorschaubilder anpassen.
 router.use(requireSpace, requireEnabledModule('photos'));
 
 export function publicItem(item: ItemRow) {
@@ -112,6 +116,7 @@ router.get(
  */
 router.patch(
   '/order',
+  ...manageGuard,
   asyncHandler(async (req, res) => {
     const order = req.body?.order;
     if (!Array.isArray(order)) throw new ApiError(400, 'Ungültige Reihenfolge.');
@@ -131,6 +136,7 @@ router.patch(
  */
 router.post(
   '/:id/favorite',
+  ...manageGuard,
   asyncHandler(async (req, res) => {
     const item = getOwnItem(req.params.id, req.spaceId!);
     const value = req.body?.favorite === false ? 0 : 1;
@@ -146,6 +152,7 @@ router.post(
  */
 router.post(
   '/:id/thumb',
+  ...manageGuard,
   raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: 20 * 1024 * 1024 }),
   asyncHandler(async (req, res) => {
     const item = getOwnItem(req.params.id, req.spaceId!);
@@ -178,6 +185,7 @@ router.post(
  */
 router.delete(
   '/:id/thumb',
+  ...manageGuard,
   asyncHandler(async (req, res) => {
     const item = getOwnItem(req.params.id, req.spaceId!);
     if (item.kind !== 'photo') {
@@ -209,11 +217,12 @@ router.delete(
  */
 router.post(
   '/:id/delete',
+  ...manageGuard,
   asyncHandler(async (req, res) => {
     const item = getOwnItem(req.params.id, req.spaceId!);
     // Wer gelöscht hat, wird – sofern ein Name bekannt ist – festgehalten. Ein
     // Name ist aber keine Voraussetzung mehr, damit jeder Gast löschen kann.
-    const by = uploaderNameOf(req) || 'Unbekannt';
+    const by = uploaderNameOf(req) || (req.isAdmin ? 'Admin' : 'Unbekannt');
     getDb()
       .prepare(`UPDATE items SET state='deleted', state_by=?, state_at=? WHERE id=?`)
       .run(by, new Date().toISOString(), item.id);

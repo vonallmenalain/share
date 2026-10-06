@@ -12,6 +12,7 @@ interface NavItem {
 
 const ITEMS: NavItem[] = [
   { key: 'photos', label: 'Fotos', icon: '🖼️', path: '', end: true },
+  { key: 'documents', label: 'Dokumente', icon: '📄', path: 'docs' },
   { key: 'finance', label: 'Finanzen', icon: '💰', path: 'finance' },
   { key: 'shopping', label: 'Einkauf', icon: '🛒', path: 'shopping' },
   { key: 'notes', label: 'Notizen', icon: '📝', path: 'notes' },
