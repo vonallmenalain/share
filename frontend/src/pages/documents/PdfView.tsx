@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DocumentItem } from '../../api/client';
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from '../../lib/pdf';
 import { getPdfBytes } from './docUtils';
+import { usePinchZoom } from './usePinchZoom';
 
 interface PageSize {
   w: number;
@@ -14,49 +15,27 @@ const MAX_PAGE_WIDTH = 980;
 const MAX_CANVAS_PIXELS = 10_000_000;
 
 /**
- * Zoomstufe der Seite (Zwei-Finger-Zoom des Browsers). Wird gezoomt, rendern
- * die sichtbaren Seiten nach kurzer Pause in höherer Auflösung nach, damit
- * kleine Schrift (z. B. Noten) scharf bleibt.
- */
-function useVisualZoom(): number {
-  const [zoom, setZoom] = useState(1);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    let timer: number | undefined;
-    const onResize = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        const z = Math.min(3, Math.max(1, vv.scale || 1));
-        setZoom(Math.round(z * 2) / 2);
-      }, 250);
-    };
-    vv.addEventListener('resize', onResize);
-    return () => {
-      vv.removeEventListener('resize', onResize);
-      window.clearTimeout(timer);
-    };
-  }, []);
-  return zoom;
-}
-
-/**
  * Zeigt alle Seiten eines PDFs untereinander (wie ein normaler PDF-Viewer).
  * Gerendert werden nur Seiten in der Nähe des sichtbaren Bereichs; weit
  * entfernte Seiten geben ihren Speicher wieder frei. So bleiben auch lange
- * PDFs auf dem Handy flüssig.
+ * PDFs auf dem Handy flüssig. Gezoomt wird in der Ansicht selbst (siehe
+ * usePinchZoom): Die Seiten werden grösser und lassen sich dann in alle
+ * Richtungen verschieben; die sichtbaren Seiten rendern danach scharf nach.
  */
 export default function PdfView({
   doc,
   token,
   scrollRoot,
   onDownload,
+  onZoomChange,
 }: {
   doc: DocumentItem;
   token: string;
-  /** Scroll-Container der Ansicht (für das Nachladen der Seiten). */
+  /** Scroll-Container der Ansicht (für das Nachladen der Seiten und den Zoom). */
   scrollRoot: HTMLElement | null;
   onDownload: () => void;
+  /** Meldet die Zoomstufe (1 = ganze Seitenbreite), z. B. um Wischen zu sperren. */
+  onZoomChange?: (zoom: number) => void;
 }) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [sizes, setSizes] = useState<PageSize[] | null>(null);
@@ -64,8 +43,14 @@ export default function PdfView({
   const [attempt, setAttempt] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [cssWidth, setCssWidth] = useState(0);
-  const zoom = useVisualZoom();
+  const { zoom, settledZoom } = usePinchZoom(scrollRoot, () =>
+    Array.from(wrapRef.current?.querySelectorAll<HTMLElement>('.pdf-page') ?? []),
+  );
   const docId = doc.id;
+
+  useEffect(() => {
+    onZoomChange?.(zoom);
+  }, [zoom, onZoomChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,6 +131,7 @@ export default function PdfView({
             size={size}
             cssWidth={cssWidth}
             zoom={zoom}
+            renderZoom={settledZoom}
             root={scrollRoot}
           />
         ))
@@ -160,20 +146,25 @@ function PdfPage({
   size,
   cssWidth,
   zoom,
+  renderZoom,
   root,
 }: {
   pdf: PDFDocumentProxy;
   pageNumber: number;
   size: PageSize;
+  /** Breite der Seite ohne Zoom (ganze Breite der Ansicht). */
   cssWidth: number;
+  /** Aktuelle Zoomstufe – bestimmt die angezeigte Grösse (auch mitten in der Geste). */
   zoom: number;
+  /** Zoomstufe, sobald die Geste ruht – bestimmt die Auflösung. */
+  renderZoom: number;
   root: HTMLElement | null;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  // In der Nähe (wird gerendert) bzw. tatsächlich sichtbar (darf beim Zoomen
-  // hochauflösend nachrendern). Die ersten Seiten sofort, ohne auf den
-  // Observer zu warten.
+  // In der Nähe (wird gerendert) bzw. tatsächlich sichtbar (rendert gezoomt
+  // in voller Schärfe, die übrigen in Grundauflösung – das spart Speicher).
+  // Die ersten Seiten sofort, ohne auf den Observer zu warten.
   const [near, setNear] = useState(pageNumber <= 2);
   const [visible, setVisible] = useState(pageNumber === 1);
 
@@ -198,7 +189,8 @@ function PdfPage({
     };
   }, [root]);
 
-  const quality = visible ? zoom : 1;
+  // In Viertel-Stufen, damit nicht jede kleine Zoom-Änderung neu rendert.
+  const quality = visible ? Math.max(1, Math.round(renderZoom * 4) / 4) : 1;
 
   useEffect(() => {
     const box = boxRef.current;
@@ -264,11 +256,12 @@ function PdfPage({
     [],
   );
 
+  const width = cssWidth * zoom;
   return (
     <div
       ref={boxRef}
       className="pdf-page"
-      style={{ width: cssWidth, height: Math.round((cssWidth * size.h) / size.w) }}
+      style={{ width, height: (width * size.h) / size.w }}
       aria-label={`Seite ${pageNumber}`}
     />
   );

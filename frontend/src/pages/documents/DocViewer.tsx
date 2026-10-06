@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DocumentItem } from '../../api/client';
 import PdfView from './PdfView';
+import ImageView from './ImageView';
 import { docTitle, downloadUrl, prefetchPdf, viewUrl } from './docUtils';
 import {
   ChevronDownIcon,
@@ -42,6 +43,12 @@ export default function DocViewer({
   const hasPrev = index > 0;
   const hasNext = index < docs.length - 1;
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  // Zoomstufe des offenen Dokuments (1 = ganze Breite). Ist hineingezoomt,
+  // verschieben Wischen und Pfeiltasten nur den Ausschnitt – kein Blättern.
+  const zoomRef = useRef(1);
+  const handleZoom = useCallback((z: number) => {
+    zoomRef.current = z;
+  }, []);
   // Liste aller Dokumente (Tippen auf den Titel).
   const [listOpen, setListOpen] = useState(false);
   const listRef = useRef<HTMLOListElement>(null);
@@ -72,10 +79,12 @@ export default function DocViewer({
     onNavigate(target);
   };
 
-  // Beim Blättern (Wischen, Pfeile) die Liste schliessen.
+  // Beim Blättern (Wischen, Pfeile) die Liste schliessen; das neue Dokument
+  // beginnt ungezoomt.
   const docId = doc?.id;
   useEffect(() => {
     setListOpen(false);
+    zoomRef.current = 1;
   }, [docId]);
 
   // Geöffnete Liste: aktuelles Dokument sichtbar machen.
@@ -110,6 +119,8 @@ export default function DocViewer({
       if (e.key === 'Escape') {
         if (listOpen) setListOpen(false);
         else onClose();
+      } else if (zoomRef.current > 1.01) {
+        return;
       } else if (e.key === 'ArrowLeft') prev();
       else if (e.key === 'ArrowRight') next();
     };
@@ -127,9 +138,10 @@ export default function DocViewer({
     };
   }, []);
 
-  // Wischgesten: deutlich horizontale Bewegung = blättern. Nicht, solange per
-  // Zwei-Finger-Zoom hineingezoomt ist (dann verschiebt man nur den Ausschnitt)
-  // und nicht auf den Bedienelementen eines Videos.
+  // Wischgesten: deutlich horizontale Bewegung = blättern – nur in der
+  // Ganzseiten-Ansicht. Ist hineingezoomt, verschiebt der Finger den
+  // Ausschnitt in alle Richtungen (siehe usePinchZoom). Nie auf den
+  // Bedienelementen eines Videos.
   const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
   const onTouchStart = (e: React.TouchEvent) => {
     const target = e.target as HTMLElement | null;
@@ -144,7 +156,7 @@ export default function DocViewer({
     const start = touchStart.current;
     touchStart.current = null;
     if (!start) return;
-    if ((window.visualViewport?.scale ?? 1) > 1.05) return;
+    if (zoomRef.current > 1.01 || (window.visualViewport?.scale ?? 1) > 1.05) return;
     const t = e.changedTouches[0];
     if (!t) return;
     const dx = t.clientX - start.x;
@@ -258,11 +270,20 @@ export default function DocViewer({
         onTouchEnd={onTouchEnd}
       >
         {doc.docType === 'pdf' ? (
-          <PdfView doc={doc} token={token} scrollRoot={scrollEl} onDownload={download} />
+          <PdfView
+            doc={doc}
+            token={token}
+            scrollRoot={scrollEl}
+            onDownload={download}
+            onZoomChange={handleZoom}
+          />
         ) : doc.docType === 'image' ? (
-          <div className="doc-viewer-media">
-            <img src={viewUrl(doc, token)} alt={docTitle(doc)} />
-          </div>
+          <ImageView
+            src={viewUrl(doc, token)}
+            alt={docTitle(doc)}
+            scrollRoot={scrollEl}
+            onZoomChange={handleZoom}
+          />
         ) : (
           <div className="doc-viewer-media">
             <video
