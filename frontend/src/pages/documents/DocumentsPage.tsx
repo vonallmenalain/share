@@ -96,16 +96,6 @@ export default function DocumentsPage() {
     void load();
   }, [load]);
 
-  // Titel des Browser-Tabs: nur der Name des Bereichs.
-  useEffect(() => {
-    if (!space?.name) return;
-    const previous = document.title;
-    document.title = space.name;
-    return () => {
-      document.title = previous;
-    };
-  }, [space?.name]);
-
   // ---- Abgeleitete Listen --------------------------------------------------
   const all = docs ?? [];
   const otherDocs = all.filter((d) => d.docType !== 'audio');

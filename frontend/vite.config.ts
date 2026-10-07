@@ -120,10 +120,9 @@ export default defineConfig({
       // Content-Type ausgeliefert wird.
       manifestFilename: 'manifest.webmanifest',
       manifest: {
-        name: 'share · Fotos & Videos teilen',
+        name: 'share · Teilen, planen, abrechnen',
         short_name: 'share',
-        description:
-          'Fotos & Videos einfach in einer privaten Gruppe teilen – Originale hoch- und runterladen.',
+        description: 'Ein gemeinsamer Bereich für Familie und Freunde – einfach per Link geteilt.',
         lang: 'de',
         id: '/',
         start_url: '/',

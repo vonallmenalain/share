@@ -9,7 +9,7 @@ import ParticipantGate from '../components/ParticipantGate';
 import ParticipantPinSetup from '../components/ParticipantPinSetup';
 import ParticipantPinManager from '../components/ParticipantPinManager';
 import { setSpaceManifest, resetManifest, forgetSpaceManifest } from '../lib/pwaManifest';
-import { isDocumentsOnly, spacePath, spaceShareUrl } from '../lib/spaceLinks';
+import { isDocumentsOnly, moduleSummary, spacePath, spaceShareUrl } from '../lib/spaceLinks';
 import {
   SpaceSessionProvider,
   useSpaceSessionContext,
@@ -46,22 +46,28 @@ function SpaceShell() {
   const [navOpen, setNavOpen] = useState(false);
   const [showIdentityManager, setShowIdentityManager] = useState(false);
 
-  // PWA-Manifest auf den aktuellen Bereich zeigen lassen (wie bisher). Reine
-  // Dokumente-Bereiche bekommen eine neutrale Beschreibung. Ist es schon beim
-  // Start gesetzt worden und unverändert, bleibt es, wie es ist (siehe
-  // pwaManifest) – zurück zum allgemeinen Manifest erst beim Verlassen.
+  // PWA-Manifest auf den aktuellen Bereich zeigen lassen (wie bisher); die
+  // Beschreibung nennt die aktiven Module. Ist es schon beim Start gesetzt
+  // worden und unverändert, bleibt es, wie es ist (siehe pwaManifest) – zurück
+  // zum allgemeinen Manifest erst beim Verlassen.
   useEffect(() => {
     if (!slug || !space) return;
-    setSpaceManifest(
-      slug,
-      space.name,
-      isDocumentsOnly(space.modules) ? { description: 'Geteilte Dokumente' } : {},
-    );
+    setSpaceManifest(slug, space.name, { description: moduleSummary(space.modules) || undefined });
   }, [slug, space]);
   useEffect(() => () => resetManifest(), [slug]);
   useEffect(() => {
     if (slug && phase === 'notfound') forgetSpaceManifest(slug);
   }, [slug, phase]);
+
+  // Titel des Browser-Tabs: in allen Modulen nur der Name des Bereichs.
+  useEffect(() => {
+    if (!space?.name) return;
+    const previous = document.title;
+    document.title = space.name;
+    return () => {
+      document.title = previous;
+    };
+  }, [space?.name]);
 
   // Beim Wechsel zwischen Modulen den „Vollbild"-Zustand zurücksetzen, damit
   // TopBar & Navigation auf den anderen Seiten immer sichtbar sind, und das

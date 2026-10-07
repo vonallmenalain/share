@@ -2,12 +2,28 @@ import { ModuleKey } from '../api/client';
 
 /**
  * Besteht ein Bereich nur aus dem Dokumente-Modul? Dann zeigt sein Link direkt
- * die Dokumente: ohne Navigation, ohne Profil-Menü – und mit einer neutralen
- * Link-Vorschau (z. B. in WhatsApp) statt der Foto-Vorschau (siehe
- * netlify/edge-functions/link-preview.ts).
+ * die Dokumente: ohne Navigation und ohne Profil-Menü.
  */
 export function isDocumentsOnly(modules: ModuleKey[] | undefined | null): boolean {
   return !!modules && modules.length === 1 && modules[0] === 'documents';
+}
+
+/** Namen der Module in der Reihenfolge der App (wie in der Link-Vorschau). */
+const MODULE_LABELS: Record<ModuleKey, string> = {
+  photos: 'Fotos & Videos',
+  documents: 'Dokumente',
+  finance: 'Finanzen',
+  shopping: 'Einkaufsliste',
+  notes: 'Notizen',
+  calendar: 'Kalender',
+};
+
+/** Die aktiven Module eines Bereichs in einer Zeile, z. B. „Fotos & Videos · Finanzen“. */
+export function moduleSummary(modules: ModuleKey[]): string {
+  return (Object.keys(MODULE_LABELS) as ModuleKey[])
+    .filter((key) => modules.includes(key))
+    .map((key) => MODULE_LABELS[key])
+    .join(' · ');
 }
 
 /**
