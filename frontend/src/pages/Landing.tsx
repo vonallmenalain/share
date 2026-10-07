@@ -53,9 +53,9 @@ export default function Landing() {
 
           <form onSubmit={open}>
             <div className="field">
-              <label className="label">Bereich öffnen</label>
               <input
                 className="input"
+                aria-label="Link oder Code des Bereichs"
                 placeholder="Link oder Code einfügen"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
