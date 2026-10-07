@@ -37,11 +37,10 @@ export default function Landing() {
       <TopBar />
       <div className="center-page landing-page">
         <div className="panel">
-          <span className="hero-badge">Privat · ohne Registrierung</span>
           <h1>Teilen, planen, abrechnen.</h1>
           <p className="sub">
-            Ein gemeinsamer Bereich für Familie, Freunde und Vereine – einfach per Link geteilt, auf
-            iPhone, Android und am Computer.
+            Ein gemeinsamer Bereich für Familie und Freunde – einfach per Link geteilt, auf iPhone,
+            Android und am Computer.
           </p>
           <ul className="landing-features">
             {FEATURES.map((f) => (
