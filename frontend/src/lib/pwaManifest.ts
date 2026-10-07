@@ -22,7 +22,7 @@ const ICONS = [
   { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
 ];
 
-const DEFAULT_DESCRIPTION = 'Fotos & Videos einfach in einer privaten Gruppe teilen.';
+const DEFAULT_DESCRIPTION = 'Ein gemeinsamer Bereich für Familie und Freunde – einfach per Link geteilt.';
 
 let currentBlobUrl: string | null = null;
 let currentJson: string | null = null;

@@ -360,8 +360,9 @@ dazu passende MP3s.
 Dokumente-Modul, zeigt sein Link `/s/<slug>` direkt die Dokumente – ohne
 Weiterleitung und ohne Zwischenschritt. Fragt der Bereich zusätzlich nicht nach
 einem Namen, zeigt die Kopfzeile nur das Logo – ohne Profil-/Bereichsmenü. Der
-Tab-Titel ist der Name des Bereichs. Früher wurden solche Bereiche als
-`/d/<slug>` geteilt; diese Links leiten weiterhin auf `/s/<slug>` um. Neue
+Tab-Titel ist – wie in jedem Bereich – der Name des Bereichs. Früher wurden
+solche Bereiche als `/d/<slug>` geteilt; diese Links leiten weiterhin auf
+`/s/<slug>` um. Neue
 Links verwenden bewusst wieder `/s/`: Diese Form versteht auch eine ältere, auf
 einem Gerät noch gespeicherte App-Version – mit `/d/` landete eine solche
 Version auf der Startseite („Link oder Code einfügen"), siehe
