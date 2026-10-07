@@ -1417,11 +1417,16 @@ button {
 .landing-admin .hint {
   margin: 0;
 }
-/* Startseite: Karte mittig, darunter ganz unten der Hinweis „App von alae.app“. */
+/* Startseite: Karte mittig, darunter ganz unten der Hinweis „App von alae.app“.
+   Alles soll möglichst ohne Scrollen auf einen Bildschirm passen – auch auf dem
+   Handy mit eingeblendeter Browserleiste: svh ist die sichtbare Höhe (100vh
+   wäre dort höher als der sichtbare Bereich). */
+.topbar + .landing-page {
+  min-height: calc(100svh - var(--topbar-h) - 1px);
+}
 .landing-page {
   flex-direction: column;
-  gap: 24px;
-  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  padding: 24px 16px 0;
 }
 .landing-page .panel {
   margin: auto 0;
@@ -1449,6 +1454,19 @@ button {
   font-weight: 600;
   color: var(--ink);
 }
+/* Reicht die Höhe trotzdem nicht (kleines Handy, quer), bleibt der Hinweis
+   unten am Bildschirm stehen; der Verlauf blendet die Karte darunter aus. */
+.landing-footer {
+  position: sticky;
+  bottom: 0;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  /* Über die ganze Breite (seitlicher Abstand von .landing-page). */
+  margin: 8px -16px 0;
+  padding: 16px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(rgba(246, 247, 249, 0), var(--bg) 45%);
+}
 .landing-footer a {
   display: inline-flex;
   align-items: center;
@@ -1471,6 +1489,41 @@ button {
   width: 20px;
   height: auto;
   color: var(--primary);
+}
+/* Wenig Platz (Handy, niedriges Fenster): Abstände und Schrift etwas kleiner,
+   damit Karte und Hinweis ohne Scrollen auf den Bildschirm passen. */
+@media (max-width: 480px), (max-height: 760px) {
+  .landing-page {
+    padding-top: 12px;
+  }
+  .landing-page .panel {
+    padding: 22px 20px;
+  }
+  .landing-page .panel h1 {
+    font-size: 23px;
+  }
+  .landing-page .panel p.sub {
+    font-size: 15px;
+    line-height: 1.45;
+    margin-bottom: 12px;
+  }
+  .landing-features {
+    gap: 6px;
+    margin-bottom: 18px;
+  }
+  .landing-features li {
+    padding: 4px 10px;
+    font-size: 12.5px;
+  }
+  .landing-page .field {
+    margin-bottom: 10px;
+  }
+  .landing-page .divider {
+    margin: 14px 0;
+  }
+  .landing-footer {
+    padding-top: 12px;
+  }
 }
 .banner {
   background: #fffbeb;
