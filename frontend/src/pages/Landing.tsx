@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
+import AlaeMark from '../components/AlaeMark';
+
+/** Die Module der App, kurz als Funktionsliste für die Startseite. */
+const FEATURES = [
+  { icon: '🖼️', label: 'Fotos & Videos' },
+  { icon: '📄', label: 'Dokumente & Musik' },
+  { icon: '💰', label: 'Finanzen' },
+  { icon: '🛒', label: 'Einkaufsliste' },
+  { icon: '📝', label: 'Notizen' },
+  { icon: '📅', label: 'Kalender' },
+];
 
 /** Extrahiert einen Slug aus einer eingegebenen URL oder direktem Slug. */
 function parseSlug(input: string): string {
@@ -24,15 +35,22 @@ export default function Landing() {
   return (
     <>
       <TopBar />
-      <div className="center-page">
+      <div className="center-page landing-page">
         <div className="panel">
-          <span className="hero-badge">Fotos &amp; Videos · privat geteilt</span>
-          <h1>Eure Erinnerungen, an einem Ort.</h1>
+          <span className="hero-badge">Privat · ohne Registrierung</span>
+          <h1>Teilen, planen, abrechnen.</h1>
           <p className="sub">
-            Erstellt einen privaten Bereich (z.&nbsp;B. „Ferien Tessin“), teilt den Link mit der
-            Familie und ladet eure Original-Fotos und -Videos hoch – von iPhone und Android. Schöne
-            Galerie, einfache Up- &amp; Downloads.
+            Ein gemeinsamer Bereich für Familie, Freunde und Vereine – einfach per Link geteilt, auf
+            iPhone, Android und am Computer.
           </p>
+          <ul className="landing-features">
+            {FEATURES.map((f) => (
+              <li key={f.label}>
+                <span aria-hidden="true">{f.icon}</span>
+                {f.label}
+              </li>
+            ))}
+          </ul>
 
           <form onSubmit={open}>
             <div className="field">
@@ -58,6 +76,13 @@ export default function Landing() {
             </Link>
           </div>
         </div>
+
+        <footer className="landing-footer">
+          <a href="https://alae.app" target="_blank" rel="noopener">
+            App von <AlaeMark className="landing-footer-mark" />
+            <strong>alae.app</strong>
+          </a>
+        </footer>
       </div>
     </>
   );

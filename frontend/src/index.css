@@ -1417,6 +1417,61 @@ button {
 .landing-admin .hint {
   margin: 0;
 }
+/* Startseite: Karte mittig, darunter ganz unten der Hinweis „App von alae.app“. */
+.landing-page {
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.landing-page .panel {
+  margin: auto 0;
+}
+.landing-page .panel p.sub {
+  margin-bottom: 16px;
+}
+/* Funktionsliste der Startseite als kompakte, umbrechende Chips. */
+.landing-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 26px;
+  padding: 0;
+  list-style: none;
+}
+.landing-features li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--select-bg);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.landing-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+/* Beim Hover nur „alae.app“ unterstreichen – sonst unterbricht das Logo die Linie. */
+.landing-footer a:hover {
+  text-decoration: none;
+}
+.landing-footer strong {
+  color: var(--ink);
+}
+.landing-footer a:hover strong {
+  text-decoration: underline;
+}
+.landing-footer-mark {
+  width: 20px;
+  height: auto;
+  color: var(--primary);
+}
 .banner {
   background: #fffbeb;
   border: 1px solid #fde68a;
