@@ -392,22 +392,29 @@ Datei als Webseite auf der API-Domain ausgeführt wird. Downloads enthalten den
 Dateinamen jetzt zusätzlich nach RFC 5987, sodass auch Namen mit „–" oder
 Emojis funktionieren.
 
-**Link-Vorschau mit dem Namen des Bereichs.** WhatsApp &amp; Co. lesen beim
-Teilen nur das HTML (ohne JavaScript). Für reine Dokumente-Bereiche zeigt die
-Vorschau das Dokumente-Bild (`og-docs.png`), darunter den **Namen des
-Bereichs** (z. B. „Lieder DKA 2026") und **keine Beschreibung** – ohne Bezug zur
-Foto-App. Das erledigt die Netlify Edge Function
+**Link-Vorschau je nach Modulen.** WhatsApp &amp; Co. lesen beim Teilen nur das
+HTML (ohne JavaScript). Die Vorschau eines Bereichs-Links ist bewusst knapp:
+Titel ist immer der **Name des Bereichs** (z. B. „Lieder DKA 2026").
+
+| Aktive Module | Bild | Beschreibung |
+|---|---|---|
+| genau eins | Bild des Moduls (`og-photos.png`, `og-docs.png`, `og-finance.png`, `og-shopping.png`, `og-notes.png`, `og-calendar.png`) | keine |
+| mehrere | share-Bild (`og-image.png`) | die Module, z. B. „Fotos & Videos · Finanzen · Kalender" |
+
+Das erledigt die Netlify Edge Function
 `frontend/netlify/edge-functions/link-preview.ts`: Sie läuft für `/s/*` und
 `/d/*`, aber nur für Vorschau-Programme (WhatsApp, iMessage, Telegram, Signal,
 Facebook, Slack, Suchmaschinen …) – Browser laufen ohne Umweg durch. Sie
 schlägt den Bereich beim Backend nach (`GET /api/spaces/by-slug/:slug`, mit
-`VITE_API_BASE_URL`, sonst `https://api.alae.app`; höchstens 2,5 s) und passt
-nur bei reinen Dokumente-Bereichen Titel und Bild an. Ist das Backend nicht
-erreichbar, kommt die normale Seite. Die HTML-Anpassung selbst steckt in
-`frontend/netlify/shared/linkPreview.ts` (Tests: `npm test` im Ordner
-`frontend`). Für früher geteilte `/d/`-Links entsteht beim Build zusätzlich
-`d/index.html` mit dem Titel „Dokumente" als Rückfall (Regel
-`/d/*  /d/index.html  200` in `frontend/public/_redirects`).
+`VITE_API_BASE_URL`, sonst `https://api.alae.app`; höchstens 2,5 s). Ist das
+Backend nicht erreichbar, kommt die normale Vorschau der Startseite („share",
+„Teilen, planen, abrechnen – für Familie und Freunde."). Module, Bilder und die
+HTML-Anpassung stecken in `frontend/netlify/shared/linkPreview.ts` (Tests:
+`npm test` im Ordner `frontend`). Ändert sich ein Bild, dort
+`PREVIEW_IMAGE_VERSION` und das `?v=` in `frontend/index.html` erhöhen – WhatsApp
+&amp; Co. speichern Bilder unter ihrer Adresse. Für früher geteilte `/d/`-Links
+entsteht beim Build zusätzlich `d/index.html` mit dem Titel „Dokumente" als
+Rückfall (Regel `/d/*  /d/index.html  200` in `frontend/public/_redirects`).
 
 ## Upload-Sperre (reiner Ansichtslink)
 

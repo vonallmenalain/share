@@ -13,13 +13,59 @@ export function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export interface DocumentsPreview {
+/**
+ * Module in der Reihenfolge der App (wie backend/src/lib/modules.ts), mit dem
+ * Namen für die Beschreibung und dem Vorschaubild (in frontend/public/).
+ */
+export const PREVIEW_MODULES = [
+  { key: 'photos', label: 'Fotos & Videos', image: 'og-photos.png' },
+  { key: 'documents', label: 'Dokumente', image: 'og-docs.png' },
+  { key: 'finance', label: 'Finanzen', image: 'og-finance.png' },
+  { key: 'shopping', label: 'Einkaufsliste', image: 'og-shopping.png' },
+  { key: 'notes', label: 'Notizen', image: 'og-notes.png' },
+  { key: 'calendar', label: 'Kalender', image: 'og-calendar.png' },
+];
+
+/** Vorschaubild für Bereiche mit mehreren Modulen (und die Startseite). */
+export const SHARE_IMAGE = 'og-image.png';
+
+/**
+ * Version der Vorschaubilder (`?v=…`, auch in index.html). Erhöhen, wenn sich
+ * ein Bild ändert – WhatsApp & Co. speichern Bilder unter ihrer Adresse.
+ */
+export const PREVIEW_IMAGE_VERSION = 3;
+
+export interface LinkPreview {
   /** Titel unter dem Vorschaubild – z. B. der Name des Bereichs. */
   title: string;
+  /** Kurze Beschreibung. Ohne Angabe wird sie entfernt. */
+  description?: string;
   /** Absolute URL des Vorschaubilds. */
   imageUrl: string;
+  /** Alternativtext des Vorschaubilds. */
+  imageAlt: string;
   /** Adresse der Seite (og:url). Ohne Angabe wird og:url entfernt. */
   url?: string;
+}
+
+/**
+ * Vorschau eines Bereichs je nach aktiven Modulen – bewusst knapp. Titel ist
+ * immer der Name des Bereichs. Mit einem Modul zeigt das Bild dieses Modul,
+ * eine Beschreibung braucht es dann nicht. Mit mehreren Modulen kommt das
+ * share-Bild, die Beschreibung nennt die Module („Fotos & Videos · Finanzen").
+ */
+export function spacePreview(name: string, modules: unknown, origin: string): LinkPreview {
+  const active = PREVIEW_MODULES.filter((m) => Array.isArray(modules) && modules.includes(m.key));
+  const imageUrl = (file: string) => `${origin}/${file}?v=${PREVIEW_IMAGE_VERSION}`;
+  if (active.length === 1) {
+    return { title: name, imageUrl: imageUrl(active[0].image), imageAlt: active[0].label };
+  }
+  return {
+    title: name,
+    description: active.length ? active.map((m) => m.label).join(' · ') : undefined,
+    imageUrl: imageUrl(SHARE_IMAGE),
+    imageAlt: 'share',
+  };
 }
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -33,51 +79,56 @@ function metaTagPattern(attr: 'name' | 'property', key: string): RegExp {
 }
 
 /**
- * Passt die Vorschau-Tags eines HTML-Dokuments für einen reinen
- * Dokumente-Bereich an: eigener Titel, Dokumente-Bild, keine Beschreibung
- * (WhatsApp & Co. zeigen dann nur Bild, Titel und Domain). Gibt das neue HTML
- * zurück und welche Tags darin fehlten.
+ * Setzt die Vorschau-Tags eines HTML-Dokuments: Titel, Bild, Beschreibung
+ * (oder keine) und Adresse. Fehlt ein Tag, das gesetzt werden soll, kommt es
+ * ans Ende von <head> (z. B. die Beschreibung in d/index.html). Gibt das neue
+ * HTML zurück und welche Tags im Ausgangs-HTML fehlten.
  */
-export function documentsPreviewHtml(
-  html: string,
-  preview: DocumentsPreview,
-): { html: string; missing: string[] } {
+export function previewHtml(html: string, preview: LinkPreview): { html: string; missing: string[] } {
   const title = escapeHtml(preview.title);
-  const image = escapeHtml(preview.imageUrl);
   const missing: string[] = [];
   let out = html;
 
-  const apply = (name: string, pattern: RegExp, replace: (...groups: string[]) => string) => {
-    if (!pattern.test(out)) {
-      missing.push(name);
+  const replace = (pattern: RegExp, by: (...groups: string[]) => string) => {
+    // Ersetzung als Funktion: Ein „$" im Namen des Bereichs bleibt so ein „$".
+    out = out.replace(pattern, (_match: string, ...groups: string[]) => by(...groups));
+  };
+  const setMeta = (attr: 'name' | 'property', key: string, value: string) => {
+    const pattern = metaPattern(attr, key);
+    if (pattern.test(out)) {
+      replace(pattern, (before, after) => `${before}${value}${after}`);
       return;
     }
-    // Ersetzung als Funktion: Ein „$" im Namen des Bereichs bleibt so ein „$".
-    out = out.replace(pattern, (_match: string, ...groups: string[]) => replace(...groups));
+    missing.push(key);
+    replace(/(\s*)<\/head>/, (space) => `\n    <meta ${attr}="${key}" content="${value}" />${space}</head>`);
   };
-  const setMeta = (attr: 'name' | 'property', key: string, value: string) =>
-    apply(key, metaPattern(attr, key), (before, after) => `${before}${value}${after}`);
-  const removeMeta = (attr: 'name' | 'property', key: string) =>
-    apply(key, metaTagPattern(attr, key), () => '');
+  const removeMeta = (attr: 'name' | 'property', key: string) => {
+    const pattern = metaTagPattern(attr, key);
+    if (pattern.test(out)) replace(pattern, () => '');
+    else missing.push(key);
+  };
 
-  apply('title', /<title>[^<]*<\/title>/, () => `<title>${title}</title>`);
+  if (/<title>[^<]*<\/title>/.test(out)) replace(/<title>[^<]*<\/title>/, () => `<title>${title}</title>`);
+  else missing.push('title');
   setMeta('property', 'og:title', title);
   setMeta('name', 'twitter:title', title);
-  setMeta('property', 'og:image', image);
-  setMeta('name', 'twitter:image', image);
-  setMeta('property', 'og:image:alt', 'Dokumente');
-  removeMeta('name', 'description');
-  removeMeta('property', 'og:description');
-  removeMeta('name', 'twitter:description');
+  setMeta('property', 'og:image', escapeHtml(preview.imageUrl));
+  setMeta('name', 'twitter:image', escapeHtml(preview.imageUrl));
+  setMeta('property', 'og:image:alt', escapeHtml(preview.imageAlt));
+  if (preview.description) {
+    const description = escapeHtml(preview.description);
+    setMeta('name', 'description', description);
+    setMeta('property', 'og:description', description);
+    setMeta('name', 'twitter:description', description);
+  } else {
+    removeMeta('name', 'description');
+    removeMeta('property', 'og:description');
+    removeMeta('name', 'twitter:description');
+  }
   if (preview.url) setMeta('property', 'og:url', escapeHtml(preview.url));
   else removeMeta('property', 'og:url');
 
   return { html: out, missing };
-}
-
-/** Besteht der Bereich nur aus dem Dokumente-Modul? */
-export function isDocumentsOnly(modules: unknown): boolean {
-  return Array.isArray(modules) && modules.length === 1 && modules[0] === 'documents';
 }
 
 /** Slug aus einem Bereichs-Link (`/s/<slug>` oder früher `/d/<slug>`). */

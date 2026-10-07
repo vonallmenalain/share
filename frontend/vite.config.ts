@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import { documentsPreviewHtml } from './netlify/shared/linkPreview';
+import { previewHtml, spacePreview } from './netlify/shared/linkPreview';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -90,12 +90,10 @@ function documentsEntryHtml(): Plugin {
         this.error('documents-entry-html: index.html fehlt im Build.');
       }
       const source = String(index.source);
-      const ogImage = /<meta property="og:image" content="([^"]*)og-image\.png([^"]*)"/.exec(source);
-      if (!ogImage) this.error('documents-entry-html: og:image nicht in index.html gefunden.');
-      const { html, missing } = documentsPreviewHtml(source, {
-        title: 'Dokumente',
-        imageUrl: `${ogImage[1]}og-docs.png${ogImage[2]}`,
-      });
+      // Adresse der Seite (z. B. https://share.alae.app) aus dem Vorschaubild.
+      const origin = /<meta property="og:image" content="(https?:\/\/[^/"]+)\//.exec(source)?.[1];
+      if (!origin) this.error('documents-entry-html: og:image nicht in index.html gefunden.');
+      const { html, missing } = previewHtml(source, spacePreview('Dokumente', ['documents'], origin));
       if (missing.length) {
         this.error(`documents-entry-html: ${missing.join(', ')} nicht in index.html gefunden.`);
       }
