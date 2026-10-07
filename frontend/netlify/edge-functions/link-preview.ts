@@ -1,19 +1,20 @@
-// Netlify Edge Function: Link-Vorschau für reine Dokumente-Bereiche.
+// Netlify Edge Function: Link-Vorschau für Bereichs-Links je nach Modulen.
 //
 // WhatsApp, iMessage & Co. lesen beim Teilen eines Links nur das HTML (ohne
-// JavaScript). Für einen Bereich, der nur aus dem Dokumente-Modul besteht,
-// zeigt die Vorschau dann den Namen des Bereichs (z. B. „Lieder DKA 2026"),
-// das Dokumente-Bild und keine Beschreibung. Alle anderen Links bleiben wie
-// sie sind. Browser, die eine Seite öffnen, laufen ohne Umweg durch – nur für
-// Vorschau-Programme wird der Bereich kurz beim Backend nachgeschlagen.
+// JavaScript). Für einen Bereich zeigt die Vorschau dann knapp den Namen des
+// Bereichs (z. B. „Lieder DKA 2026"): mit einem Modul dazu dessen Bild und
+// keine Beschreibung, mit mehreren das share-Bild und die Module als kurze
+// Beschreibung („Fotos & Videos · Finanzen"). Browser, die eine Seite öffnen,
+// laufen ohne Umweg durch – nur für Vorschau-Programme wird der Bereich kurz
+// beim Backend nachgeschlagen.
 //
 // Wirkt erst nach dem Veröffentlichen des Deploys (wie die übrige Seite).
 import type { Config, Context } from '@netlify/edge-functions';
 import {
-  documentsPreviewHtml,
-  isDocumentsOnly,
   isLinkPreviewRequest,
+  previewHtml,
   slugFromPath,
+  spacePreview,
 } from '../shared/linkPreview.ts';
 
 /** Backend, falls VITE_API_BASE_URL hier nicht gesetzt ist. */
@@ -50,14 +51,13 @@ export default async function linkPreview(request: Request, context: Context) {
   if (!slug) return;
 
   const [space, response] = await Promise.all([fetchSpace(slug), context.next()]);
-  if (!space || !isDocumentsOnly(space.modules)) return response;
+  if (!space) return response;
   if (!response.ok || !(response.headers.get('content-type') ?? '').includes('text/html')) {
     return response;
   }
 
-  const { html } = documentsPreviewHtml(await response.text(), {
-    title: space.name,
-    imageUrl: `${url.origin}/og-docs.png?v=2`,
+  const { html } = previewHtml(await response.text(), {
+    ...spacePreview(space.name, space.modules, url.origin),
     url: `${url.origin}${url.pathname}`,
   });
   const headers = new Headers(response.headers);

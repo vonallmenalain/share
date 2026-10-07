@@ -43,6 +43,10 @@ Alle Metadaten (auch der neuen Module) bleiben in derselben lokalen
 ## Funktionen
 
 - **Bereiche (Spaces)** mit Link und optionalem Passwort. Link teilen → reinkommen → loslegen.
+- **Link-Vorschau je nach Modulen** (z.&nbsp;B. in WhatsApp), bewusst knapp: der
+  Name des Bereichs – bei einem Modul mit dessen Bild (z.&nbsp;B. „Kalender“), bei
+  mehreren mit dem share-Bild und den Modulen in einer Zeile („Fotos &amp; Videos
+  · Finanzen“).
 - **Einfacher Upload** von Fotos *und* Videos, auch viele auf einmal, per Klick oder Drag &amp; Drop.
 - **Grosse Dateien / Videos**: Uploads werden in Teile (Chunks) zerlegt und sind
   **fortsetzbar** – ein abgebrochener Upload kann weiterlaufen (siehe
@@ -135,9 +139,7 @@ deaktiviertes Modul wird nur ausgeblendet – vorhandene Daten bleiben erhalten.
   über einem offenen PDF. Ob zuerst die Dokumente oder die Audiodateien
   erscheinen, legt man unter „Bearbeiten" fest. Besteht ein Bereich nur aus
   Dokumenten, öffnet sein Link `/s/<bereich>` direkt die Dokumente – oben nur das
-  Logo, ohne Profil-Icon (wenn nicht nach einem Namen gefragt wird) – und die
-  **Link-Vorschau** (z. B. in WhatsApp) zeigt den Namen des Bereichs statt der
-  Foto-App.
+  Logo, ohne Profil-Icon (wenn nicht nach einem Namen gefragt wird).
 - **Finanzen** – Gemeinsame Ausgaben erfassen, **gleichmässig** (unter allen
   oder ausgewählten Personen) oder mit **manuellen Beträgen** aufteilen und mit
   möglichst **wenigen Ausgleichszahlungen** abrechnen („Peter zahlt Alain
